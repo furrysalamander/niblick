@@ -189,8 +189,9 @@ It starts at the slowest fall setting and speeds up every **8 cleared
 lines**. The badge's global `Dimmer` PWM is used for line-clear flashes and
 the game-over fade.
 
-The image is close to the code-space limit: about 4004 of 4096 words and
-164 of 208 RAM nibbles. Further features need size-conscious changes.
+The image uses about 2517 of 4096 words and 164 of 208 RAM nibbles. The
+compiler's condition lowering, copy propagation, and spill elimination left
+roughly 1500 words of headroom for new features.
 
 The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
 `docs/keys.md`.

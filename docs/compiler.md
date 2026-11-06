@@ -105,6 +105,19 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Runtime stripping: only the `__bc_*` routines reachable from used builtins
   are emitted.
 - Peephole removal of redundant `MOV`s.
+- Basic-block copy propagation: a `MOV Rd,Rs` is dropped when `Rd` already
+  holds `Rs`'s value.
+- Dead register-write elimination with conservative block-boundary liveness.
+  Skip windows are protected so their word count cannot change.
+- Direct condition lowering: comparisons branch straight from `CP`/`SUB`
+  flags instead of materialising a 0/1 value. `if (!x)` and constant
+  conditions are folded, and single-operand zero tests use `OR R1,R1`.
+- Constant array indices fold to direct memory operands; constant stores
+  skip the R1/R2 staging moves.
+- Binary operands stay in registers (`R3`/`R4`) when the right operand cannot
+  clobber them, replacing RAM spill traffic.
+- Address arithmetic uses operand registers directly and drops carry
+  correction for page-aligned arrays.
 - Branch relaxation from two-word `GOTO` to one-word `JR` when in range,
   including adjustment of a preceding `SKIP` count.
 - Tail-call elimination.
@@ -113,28 +126,22 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 
 ## Planned optimizations
 
-1. Peephole pass over generated assembly (redundant moves, `INC`/`DEC`,
-   `ADD R0,N`, branch relaxation).
-2. Size-aware inlining for small functions with no static locals.
-3. Call-graph local overlay to reduce RAM.
-4. Copy propagation and dead-code elimination at the AST/IR level.
-5. Strength reduction for multiply/divide and shifts once those operators
+1. Size-aware inlining for small functions with no static locals.
+2. Call-graph local overlay to reduce RAM.
+3. Short-`if` skip fusion for bodies of four words or fewer.
+4. Strength reduction for multiply/divide and shifts once those operators
    are implemented.
-6. Runtime routine stripping based on used builtins.
+5. Loop rotation to remove the unconditional back-edge.
 
 ## Current code-size pressure
 
-The Tetris demo is around **4004 / 4096 words** and **164 / 208 RAM
-nibbles**. It fits, but there is very little headroom. Future game features
-should be paired with one of:
-
-- stronger peephole optimization,
-- more aggressive inlining/dead-code removal,
-- moving constant tables or logic into flash,
-- reducing per-frame helper calls.
+The Tetris demo is now around **2517 / 4096 words** and **164 / 208 RAM
+nibbles**, down from 4004 words before the condition-lowering and peephole
+work. That leaves roughly 1500 words for new features.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
-4096-word limit.
+4096-word limit, and `tests/test_size.py` keeps Tetris under a 2600-word
+budget.
 
 ## Error handling
 

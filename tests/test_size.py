@@ -14,6 +14,7 @@ BUDGETS = {
     "serial_echo.badge": 200,
     "flash_walk.badge": 180,
     "gpio_blink.badge": 70,
+    "tetris.badge": 2600,
 }
 
 

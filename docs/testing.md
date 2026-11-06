@@ -107,8 +107,9 @@ are measured.
 ## Tetris smoke test
 
 `examples/tetris.badge` exercises the display, keys, random pieces, PWM
-flashes, and a large amount of compiled code. It is near the code-space
-limit, so `tests/test_examples.py` is the regression guard.
+flashes, and a large amount of compiled code. `tests/test_size.py` keeps it
+under a 2600-word budget, and `tests/test_examples.py` enforces the 4096-word
+hard limit.
 
 ## Hardware loop
 

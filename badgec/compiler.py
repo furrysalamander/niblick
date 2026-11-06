@@ -1048,6 +1048,15 @@ class Compiler:
             )
 
         scale = symbol.type.ram_size
+        if scale == 1 and (base & 0xF) == 0:
+            # The array starts on a 16-nibble page boundary, so a nibble
+            # index never carries into the high address nibble.  A char
+            # index only ever adds to the high nibble.
+            self.emit(f"MOV R4, {(base >> 4) & 0xF}")
+            self.emit("MOV R5, R1")
+            if index_type is CHAR:
+                self.emit("ADD R4, R2")
+            return
         if scale == 1:
             self.emit(f"MOV R4, {(base >> 4) & 0xF}")
             self.emit(f"MOV R5, {base & 0xF}")

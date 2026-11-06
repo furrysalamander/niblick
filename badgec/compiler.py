@@ -1051,13 +1051,11 @@ class Compiler:
         if scale == 1:
             self.emit(f"MOV R4, {(base >> 4) & 0xF}")
             self.emit(f"MOV R5, {base & 0xF}")
-            self.emit("MOV R0, R1")
-            self.emit("ADD R5, R0")
+            self.emit("ADD R5, R1")
             self.emit("SKIP NC, 1")
             self.emit("INC R4")
             if index_type is CHAR:
-                self.emit("MOV R0, R2")
-                self.emit("ADD R4, R0")
+                self.emit("ADD R4, R2")
         elif scale == 2:
             self.emit("MOV R4, 0")
             self.emit("MOV R5, R1")
@@ -1104,13 +1102,11 @@ class Compiler:
             )
 
         self.emit_flashptr(symbol.flash_label)
-        self.emit("MOV R0, R4")
-        self.emit("ADD R1, R0")
+        self.emit("ADD R1, R4")
         self.emit("MOV R0, 0")
         self.emit("ADC R2, R0")
         self.emit("ADC R3, R0")
-        self.emit("MOV R0, R5")
-        self.emit("ADD R2, R0")
+        self.emit("ADD R2, R5")
         self.emit("MOV R0, 0")
         self.emit("ADC R3, R0")
 
@@ -1970,25 +1966,19 @@ class Compiler:
         left_first = op in ("<", ">=", "==", "!=")
         if common is NIBBLE:
             if left_first:
-                self.emit("MOV R0, R3")
-                self.emit("SUB R0, R1")
+                self.emit("SUB R3, R1")
             else:
-                self.emit("MOV R0, R1")
-                self.emit("SUB R0, R3")
+                self.emit("SUB R1, R3")
         else:
             if left_first:
-                self.emit("MOV R0, R4")
-                self.emit("SUB R0, R2")
+                self.emit("SUB R4, R2")
             else:
-                self.emit("MOV R0, R2")
-                self.emit("SUB R0, R4")
-            self.emit("SKIP NZ, 2")
+                self.emit("SUB R2, R4")
+            self.emit("SKIP NZ, 1")
             if left_first:
-                self.emit("MOV R0, R3")
-                self.emit("SUB R0, R1")
+                self.emit("SUB R3, R1")
             else:
-                self.emit("MOV R0, R1")
-                self.emit("SUB R0, R3")
+                self.emit("SUB R1, R3")
 
         return {"<": "NC", ">=": "C", "==": "Z", "!=": "NZ", ">": "NC", "<=": "C"}[op]
 

@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from badgec.asm_opt import copy_propagate, optimize_asm, peephole, relax_branches
+from badgec.asm_opt import (
+    copy_propagate,
+    dead_register_writes,
+    optimize_asm,
+    peephole,
+    relax_branches,
+)
 
 
 def test_peephole_removes_redundant_moves() -> None:
@@ -58,6 +64,50 @@ MOV R0, R1
         "ADD R1, R0",
         "MOV R0, R1",
     ]
+
+
+def test_dead_register_writes_remove_overwritten_move() -> None:
+    source = """\
+MOV R1, 3
+MOV R2, 4
+MOV R1, 5
+MOV [10], R1
+"""
+    result = dead_register_writes(source.splitlines())
+    assert result == ["MOV R2, 4", "MOV R1, 5", "MOV [10], R1"]
+
+
+def test_dead_register_writes_keep_live_move() -> None:
+    source = """\
+MOV R1, 3
+ADD R0, R1
+MOV R1, 5
+"""
+    result = dead_register_writes(source.splitlines())
+    assert result == ["MOV R1, 3", "ADD R0, R1", "MOV R1, 5"]
+
+
+def test_dead_register_writes_keep_memory_loads() -> None:
+    # Reading KeyStatus clears JustPress, so loads are not dead code.
+    source = """\
+MOV R0, [253]
+MOV R0, 1
+MOV [10], R0
+"""
+    result = dead_register_writes(source.splitlines())
+    assert result == ["MOV R0, [253]", "MOV R0, 1", "MOV [10], R0"]
+
+
+def test_dead_register_writes_skip_window_is_protected() -> None:
+    source = """\
+SKIP NZ, 1
+MOV R1, 3
+MOV R1, 4
+MOV [10], R1
+"""
+    result = dead_register_writes(source.splitlines())
+    # Dropping the first move would make SKIP jump into the second one.
+    assert result == source.splitlines()
 
 
 def test_branch_relaxation_uses_jr_and_adjusts_skip() -> None:

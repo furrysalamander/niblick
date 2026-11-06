@@ -199,6 +199,168 @@ def copy_propagate(lines: list[str]) -> list[str]:
     return out
 
 
+_ALL_REGS = {f"R{index}" for index in range(10)}
+
+
+def _register_effects(code: str):
+    """Return ``(reads, writes)`` for a register-level instruction.
+
+    ``None`` means the effect is unknown; callers must treat the instruction
+    as a control-flow boundary.
+    """
+
+    parts = code.split(None, 1)
+    if not parts:
+        return None
+    op = parts[0].upper()
+    args = [item.strip() for item in parts[1].split(",")] if len(parts) > 1 else []
+
+    if op == "MOV":
+        if len(args) != 2:
+            return None
+        dst, src = args
+        dst_reg = _register(dst)
+        src_reg = _register(src)
+        if dst_reg and src_reg:
+            return {src_reg}, {dst_reg}
+        if dst_reg and _IMM_RE.match(src):
+            return set(), {dst_reg}
+        if dst_reg and src.startswith("["):
+            reads = set()
+            if "R4" in src:
+                reads.add("R4")
+            if "R5" in src:
+                reads.add("R5")
+            return reads, {dst_reg}
+        if dst.startswith("[") and src_reg:
+            reads = {src_reg}
+            if "R4" in dst:
+                reads.add("R4")
+            if "R5" in dst:
+                reads.add("R5")
+            return reads, set()
+        return None
+
+    if op in ("ADD", "ADC", "SUB", "SBB", "OR", "AND", "XOR"):
+        if len(args) == 2 and _register(args[0]) and _register(args[1]):
+            return {args[0], args[1]}, {args[0]}
+        return None
+
+    if op == "CP":
+        return {arg for arg in args if _register(arg)}, set()
+
+    if op in ("INC", "DEC"):
+        if args and _register(args[0]):
+            return {args[0]}, {args[0]}
+        return None
+
+    if op == "CPL":
+        if args and _register(args[0]):
+            return {args[0]}, {args[0]}
+        return None
+
+    if op in ("BSET", "BCLR", "BTG"):
+        if args and _register(args[0]) and _register(args[0]) != "R3":
+            return {args[0]}, {args[0]}
+        return None
+
+    if op == "BIT":
+        if args and _register(args[0]) and _register(args[0]) != "R3":
+            return {args[0]}, set()
+        return None
+
+    if op in ("RRC", "LSR"):
+        if args and _register(args[0]):
+            return {args[0]}, {args[0]}
+        return None
+
+    if op in ("SL", "NEG", "RLC"):
+        if len(args) == 2 and _register(args[0]) and _register(args[1]):
+            return {args[1]}, {args[0]}
+        return None
+
+    return None
+
+
+def _is_pure_register_move(code: str) -> bool:
+    parts = code.split(None, 1)
+    if not parts or parts[0].upper() != "MOV" or len(parts) < 2:
+        return False
+    args = [item.strip() for item in parts[1].split(",")]
+    if len(args) != 2 or not _register(args[0]):
+        return False
+    # Memory loads can touch SFRs (reading KeyStatus clears JustPress), so
+    # only register-to-register and immediate moves are removed.
+    return bool(_register(args[1]) or _IMM_RE.match(args[1]))
+
+
+def _skip_protected_lines(lines: list[str]) -> set[int]:
+    """Indices of instructions inside the word window of a SKIP.
+
+    Removing one of them would change how far the SKIP jumps.
+    """
+
+    protected: set[int] = set()
+    for index, line in enumerate(lines):
+        match = _SKIP_RE.match(_code(line))
+        if not match:
+            continue
+        remaining = int(match.group(2))
+        cursor = index + 1
+        while cursor < len(lines) and remaining > 0:
+            if _code(lines[cursor]) and not _is_label(lines[cursor]):
+                protected.add(cursor)
+                remaining -= _word_size(lines[cursor])
+            cursor += 1
+    return protected
+
+
+def dead_register_writes(lines: list[str]) -> list[str]:
+    """Remove register writes whose value is never read in the same block."""
+
+    protected = _skip_protected_lines(lines)
+    remove: set[int] = set()
+    segment: list[int] = []
+
+    def flush() -> None:
+        live = set(_ALL_REGS)
+        for index in reversed(segment):
+            code = _code(lines[index])
+            if not code:
+                continue
+            effects = _register_effects(code)
+            if effects is None:
+                live = set(_ALL_REGS)
+                continue
+            reads, writes = effects
+            if (
+                index not in protected
+                and len(writes) == 1
+                and not (writes & live)
+                and _is_pure_register_move(code)
+            ):
+                remove.add(index)
+                continue
+            live = (live - writes) | reads
+
+    for index, line in enumerate(lines):
+        code = _code(line)
+        barrier = (
+            not code
+            or _is_label(line)
+            or _register_effects(code) is None
+            or code.split(None, 1)[0].upper() in _BARRIER_OPS
+        )
+        if barrier:
+            flush()
+            segment = []
+        else:
+            segment.append(index)
+    flush()
+
+    return [line for index, line in enumerate(lines) if index not in remove]
+
+
 def _word_size(line: str) -> int:
     code = _code(line)
     if not code or _is_label(line):
@@ -289,6 +451,7 @@ def optimize_asm(text: str, peephole_enabled: bool = True, relax_enabled: bool =
     if peephole_enabled:
         lines = peephole(lines)
         lines = copy_propagate(lines)
+        lines = dead_register_writes(lines)
     if relax_enabled:
         lines = relax_branches(lines)
     return "\n".join(lines).rstrip() + "\n"

@@ -1893,6 +1893,10 @@ class Compiler:
         self, left: ast.Expr, constant: int, op: str, scope: Scope, line: int
     ):
         if constant > 15:
+            # The result is independent of the operand, but the operand may
+            # still have side effects (for example a function call).
+            typ = self.compile_expr(left, scope)
+            self.coerce(typ, NIBBLE, line)
             return {
                 "<": True,
                 "<=": True,
@@ -1902,10 +1906,10 @@ class Compiler:
                 "!=": True,
             }[op]
 
-        if op == "<=" and constant == 15:
-            return True
-        if op == ">" and constant == 15:
-            return False
+        if (op == "<=" and constant == 15) or (op == ">" and constant == 15):
+            typ = self.compile_expr(left, scope)
+            self.coerce(typ, NIBBLE, line)
+            return op == "<="
 
         typ = self.compile_expr(left, scope)
         self.coerce(typ, NIBBLE, line)
@@ -1923,10 +1927,10 @@ class Compiler:
         self, left: ast.Expr, constant: int, op: str, scope: Scope, line: int
     ):
         if constant == 0:
-            if op == "<":
-                return False
-            if op == ">=":
-                return True
+            if op in ("<", ">="):
+                typ = self.compile_expr(left, scope)
+                self.coerce(typ, CHAR, line)
+                return op == ">="
             typ = self.compile_expr(left, scope)
             self.coerce(typ, CHAR, line)
             self.emit("OR R1, R2")

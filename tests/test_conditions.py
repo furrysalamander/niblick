@@ -129,6 +129,40 @@ def test_char_against_char(tmp_path: Path) -> None:
     )
 
 
+def test_condition_folding_preserves_side_effects(tmp_path: Path) -> None:
+    source = """
+nibble calls;
+
+fn nibble bump() {
+    calls = calls + 1;
+    return 5;
+}
+
+fn main() {
+    calls = 0;
+    if (bump() > 15) { }
+    if (bump() < 0) { }
+    if (bump() <= 15) { }
+    if (bump() >= 0) { }
+}
+"""
+    source_path = tmp_path / "side_effects.badge"
+    source_path.write_text(source)
+    compiler = Compiler(parse(source, str(source_path)), str(source_path))
+    asm_path = tmp_path / "side_effects.asm"
+    asm_path.write_text(compiler.compile())
+    hex_path = tmp_path / "side_effects.hex"
+    assemble_file(asm_path, hex_path)
+
+    emu = Emulator()
+    emu.load_hex(hex_path)
+    emu.run(100000)
+
+    address = compiler.globals["calls"].address
+    assert address is not None
+    assert emu.ram[address] == 4
+
+
 def test_logical_and_not_conditions(tmp_path: Path) -> None:
     cases = [
         (None, "!(a < 6)", not (5 < 6)),

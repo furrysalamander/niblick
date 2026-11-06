@@ -176,6 +176,25 @@ summary.
 The badge is a 3 V device. Use a 3.3 V USB-UART adapter or Tigard; do not
 use RS-232 voltage levels. See `docs/serial.md` and `docs/toolchain.md`.
 
+## LED-matrix demo: Tetris
+
+`examples/tetris.badge` is a playable 8×16 Tetris demo:
+
+- OPCODE `8` = left
+- OPCODE `1` = right
+- OPCODE `4` = rotate
+- OPCODE `2` = soft drop
+
+It starts at the slowest fall setting and speeds up every **8 cleared
+lines**. The badge's global `Dimmer` PWM is used for line-clear flashes and
+the game-over fade.
+
+The image is close to the code-space limit: about 4004 of 4096 words and
+164 of 208 RAM nibbles. Further features need size-conscious changes.
+
+The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
+`docs/keys.md`.
+
 ## Documentation
 
 - `docs/isa.md` — instruction set and code-generation notes
@@ -185,6 +204,7 @@ use RS-232 voltage levels. See `docs/serial.md` and `docs/toolchain.md`.
 - `docs/runtime-abi.md` — BadgeC calling convention and runtime
 - `docs/compiler.md` — compiler internals and optimization roadmap
 - `docs/testing.md` — test layers and hardware development loop
+- `docs/keys.md` — measured front-panel key codes
 - `docs/toolchain.md` — assembler/emulator usage
 - `docs/upstream/` — vendored manuals and license/provenance notes
 

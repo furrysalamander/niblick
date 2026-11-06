@@ -90,6 +90,26 @@ python3 scripts/hw_test.py /dev/ttyUSB0
 It reports `DONE pass=XX fail=YY` and returns to `READY`, so it can be
 triggered repeatedly without re-uploading.
 
+## Key mapping
+
+`examples/keymap.badge` prints the `KeyReg` and `KeyStatus` value for each
+button press:
+
+```bash
+python3 -m badgec examples/keymap.badge
+# load examples/keymap.hex, press RUN
+python3 scripts/monitor.py /dev/ttyUSB0
+```
+
+The confirmed mapping is in [keys.md](keys.md). Update it when new buttons
+are measured.
+
+## Tetris smoke test
+
+`examples/tetris.badge` exercises the display, keys, random pieces, PWM
+flashes, and a large amount of compiled code. It is near the code-space
+limit, so `tests/test_examples.py` is the regression guard.
+
 ## Hardware loop
 
 1. Compile and inspect the `.hex` size.

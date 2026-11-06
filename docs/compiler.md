@@ -122,6 +122,20 @@ Each `NIBBLE` is one word, so labels after a table are correct.
    are implemented.
 6. Runtime routine stripping based on used builtins.
 
+## Current code-size pressure
+
+The Tetris demo is around **4004 / 4096 words** and **164 / 208 RAM
+nibbles**. It fits, but there is very little headroom. Future game features
+should be paired with one of:
+
+- stronger peephole optimization,
+- more aggressive inlining/dead-code removal,
+- moving constant tables or logic into flash,
+- reducing per-frame helper calls.
+
+`tests/test_examples.py` prevents an example from silently exceeding the
+4096-word limit.
+
 ## Error handling
 
 User-facing errors carry `file:line:column` where possible. The CLI catches

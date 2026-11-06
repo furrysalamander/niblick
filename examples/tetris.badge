@@ -68,7 +68,7 @@ nibble key;
 nibble lines_cleared;
 nibble need_spawn;
 nibble tick_limit;
-nibble piece_count;
+nibble speed_counter;
 
 fn load_rows(nibble rot) {
     nibble row;
@@ -297,6 +297,17 @@ fn clear_lines() {
             y = y - 1;
         }
     }
+
+    // Every 8 cleared lines, step the fall speed down one notch.
+    if (lines_cleared > 0) {
+        speed_counter = speed_counter + lines_cleared;
+        if (speed_counter >= 8) {
+            speed_counter = speed_counter - 8;
+            if (tick_limit > 5) {
+                tick_limit = tick_limit - 1;
+            }
+        }
+    }
 }
 
 fn flash_effect() {
@@ -308,13 +319,6 @@ fn flash_effect() {
 }
 
 fn spawn_piece() {
-    piece_count = piece_count + 1;
-    if (piece_count >= 8) {
-        piece_count = 0;
-        if (tick_limit > 3) {
-            tick_limit = tick_limit - 1;
-        }
-    }
     piece_type = random() & 7;
     if (piece_type > 6) {
         piece_type = piece_type - 7;
@@ -469,8 +473,8 @@ fn main() {
         score = 0;
         game_over = 0;
         tick = 0;
-        tick_limit = 10;
-        piece_count = 0;
+        tick_limit = 15;
+        speed_counter = 0;
         need_spawn = 0;
         spawn_piece();
 
@@ -492,6 +496,7 @@ fn main() {
             }
 
             delay(15);
+            delay(10);
             tick = tick + 1;
             if (tick >= tick_limit) {
                 tick = 0;

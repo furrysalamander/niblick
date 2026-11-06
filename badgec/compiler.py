@@ -426,6 +426,16 @@ class Compiler:
 
         elif isinstance(stmt, ast.Assign):
             target_type = self.lvalue_type(stmt.target, scope)
+            if isinstance(stmt.value, ast.Number) and target_type in (NIBBLE, CHAR):
+                value = int(stmt.value.value)
+                if target_type is NIBBLE and value > 15:
+                    raise BadgeTypeError(
+                        f"{location(self.filename, stmt.line)}: cannot convert char to nibble"
+                    )
+                if 0 <= value <= 255 and self.store_constant(
+                    stmt.target, scope, target_type, value, stmt.line
+                ):
+                    return
             typ = self.compile_expr(stmt.value, scope)
             self.coerce(typ, target_type, stmt.line)
 
@@ -925,6 +935,18 @@ class Compiler:
             return NIBBLE
 
         assert symbol.address is not None
+        if isinstance(expr.index, ast.Number):
+            # A constant index addresses a fixed nibble, so no R4:R5 address
+            # calculation and no indirect access are needed.
+            address = symbol.address + int(expr.index.value) * symbol.type.ram_size
+            self.emit(f"MOV R0, [{address}]")
+            self.emit("MOV R1, R0")
+            if symbol.type is CHAR:
+                self.emit(f"MOV R0, [{address + 1}]")
+                self.emit("MOV R2, R0")
+                return CHAR
+            return NIBBLE
+
         self.compile_ram_addr(symbol, expr.index, scope, expr.line)
         if symbol.type is NIBBLE:
             self.emit("MOV R0, [R4:R5]")
@@ -1499,6 +1521,39 @@ class Compiler:
             f"{location(self.filename, target.line)}: invalid assignment target"
         )
 
+    def store_constant(
+        self, target: ast.Expr, scope: Scope, typ: Type, value: int, line: int
+    ) -> bool:
+        """Write a constant directly, skipping the R1/R2 staging moves."""
+
+        address: Optional[int] = None
+        if isinstance(target, ast.Var):
+            symbol = self.lookup(target.name, scope, target.line)
+            address = symbol.address
+        elif isinstance(target, ast.Index) and isinstance(target.base, ast.Var):
+            symbol = self.lookup(target.base.name, scope, target.line)
+            if not isinstance(target.index, ast.Number) or symbol.address is None:
+                return False
+            index = int(target.index.value)
+            assert symbol.array_len is not None
+            if index < 0 or index >= symbol.array_len:
+                raise BadgeCompileError(
+                    f"{location(self.filename, line)}: index {index} out of bounds "
+                    f"for {symbol.name}[{symbol.array_len}]"
+                )
+            address = symbol.address + index * typ.ram_size
+        else:
+            return False
+
+        if address is None:
+            return False
+        self.emit(f"MOV R0, {value & 0xF}")
+        self.emit(f"MOV [{address}], R0")
+        if typ is CHAR:
+            self.emit(f"MOV R0, {(value >> 4) & 0xF}")
+            self.emit(f"MOV [{address + 1}], R0")
+        return True
+
     def store_lvalue(self, target: ast.Expr, scope: Scope, line: int) -> None:
         if isinstance(target, ast.Var):
             symbol = self.lookup(target.name, scope, target.line)
@@ -1529,6 +1584,16 @@ class Compiler:
     ) -> None:
         assert isinstance(target.base, ast.Var)
         symbol = self.lookup(target.base.name, scope, target.line)
+        if isinstance(target.index, ast.Number) and symbol.address is not None:
+            address = symbol.address + int(target.index.value) * typ.ram_size
+            self.load_temp(typ, temp_addr)
+            self.emit("MOV R0, R1")
+            self.emit(f"MOV [{address}], R0")
+            if typ is CHAR:
+                self.emit("MOV R0, R2")
+                self.emit(f"MOV [{address + 1}], R0")
+            return
+
         self.compile_ram_addr(symbol, target.index, scope, target.line)
         self.load_temp(typ, temp_addr)
         if typ is NIBBLE:

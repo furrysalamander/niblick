@@ -1,9 +1,11 @@
 """Small, conservative assembly optimizations.
 
 The peephole pass removes redundant moves (MOV does not affect flags on this
-CPU).  The branch pass turns two-word GOTO pseudo-ops into one-word JR when
-the target is in range, adjusting a directly preceding SKIP count so the
-conditional-branch idiom remains correct.
+CPU).  Copy propagation removes ``MOV Rd,Rs`` when ``Rd`` already holds the
+value in ``Rs`` inside the same straight-line block.  The branch pass turns
+two-word GOTO pseudo-ops into one-word JR when the target is in range,
+adjusting a directly preceding SKIP count so the conditional-branch idiom
+remains correct.
 """
 
 from __future__ import annotations
@@ -13,6 +15,35 @@ import re
 _LABEL_RE = re.compile(r"^[A-Za-z_.][A-Za-z0-9_.]*:\s*$")
 _SKIP_RE = re.compile(r"^SKIP\s+([A-Za-z]+)\s*,\s*(\d+)\s*$", re.IGNORECASE)
 _MOV_RE = re.compile(r"^MOV\s+([A-Za-z0-9]+)\s*,\s*([A-Za-z0-9]+)\s*$", re.IGNORECASE)
+_REG_RE = re.compile(r"^R([0-9])$", re.IGNORECASE)
+_IMM_RE = re.compile(r"^#?[0-9]+$")
+
+# Control transfers and instructions with non-obvious register effects end a
+# straight-line block.  Clearing the whole map is cheap and conservative.
+_BARRIER_OPS = {"GOTO", "GOSUB", "JR", "RET", "SKIP", "DSZ", "EXR"}
+# These read registers but write none.
+_READ_ONLY_OPS = {"CP", "BIT"}
+# These write their first register operand.
+_WRITE_FIRST_OPS = {
+    "ADD",
+    "ADC",
+    "SUB",
+    "SBB",
+    "OR",
+    "AND",
+    "XOR",
+    "INC",
+    "DEC",
+    "CPL",
+    "SL",
+    "NEG",
+    "LSR",
+    "RRC",
+    "RLC",
+    "BSET",
+    "BCLR",
+    "BTG",
+}
 
 
 def _code(line: str) -> str:
@@ -60,6 +91,111 @@ def peephole(lines: list[str]) -> list[str]:
             if out and _code(out[-1]).upper() == code.upper():
                 continue
         out.append(line)
+    return out
+
+
+def _register(name: str) -> str | None:
+    name = name.strip().upper()
+    return name if _REG_RE.match(name) else None
+
+
+def copy_propagate(lines: list[str]) -> list[str]:
+    """Drop ``MOV Rd,Rs`` when ``Rd`` is known to already equal ``Rs``.
+
+    Values are tracked by identity inside a basic block.  Labels, branches,
+    skips and anything with unknown register effects clear the map, so the
+    pass never reasons across a control-flow edge.
+    """
+
+    known: dict[str, int] = {}
+    next_value = 0
+    out: list[str] = []
+
+    def value_of(reg: str) -> int:
+        # At a block boundary a register has an arbitrary value.  Give it a
+        # private id on first use; a later MOV can still prove that two
+        # registers hold that same (unknown) value.
+        nonlocal next_value
+        if reg not in known:
+            next_value += 1
+            known[reg] = next_value
+        return known[reg]
+
+    def fresh(reg: str) -> None:
+        nonlocal next_value
+        next_value += 1
+        known[reg] = next_value
+
+    for line in lines:
+        stripped = line.strip()
+        if _is_label(stripped):
+            known.clear()
+            out.append(line)
+            continue
+
+        code = _code(line)
+        if not code:
+            out.append(line)
+            continue
+
+        parts = code.split(None, 1)
+        op = parts[0].upper()
+        args = parts[1].strip() if len(parts) > 1 else ""
+
+        if op in _BARRIER_OPS:
+            known.clear()
+            out.append(line)
+            continue
+
+        if op == "MOV":
+            operands = [item.strip() for item in args.split(",", 1)]
+            if len(operands) != 2:
+                known.clear()
+                out.append(line)
+                continue
+            dst_text, src_text = operands
+            dst = _register(dst_text)
+            src = _register(src_text)
+
+            if dst is None and dst_text.strip().upper() in ("PC", "PCL", "PCH", "PCM", "JSR"):
+                # Writing the program counter ends the block.
+                known.clear()
+                out.append(line)
+                continue
+
+            if dst is not None and src is not None:
+                if known.get(dst) is not None and known.get(dst) == value_of(src):
+                    continue
+                known[dst] = value_of(src)
+            elif dst is not None:
+                # Immediate or memory load into a register: the old value is
+                # gone, and the new one has no known relationship to another
+                # register.
+                fresh(dst)
+
+            out.append(line)
+            continue
+
+        if op in _READ_ONLY_OPS:
+            out.append(line)
+            continue
+
+        if op in _WRITE_FIRST_OPS and args:
+            first_text = args.split(",", 1)[0].strip()
+            first = _register(first_text)
+            if first is not None:
+                # BSET/BCLR/BTG on R3 address the I/O port, not a register.
+                if op in ("BSET", "BCLR", "BTG") and first == "R3":
+                    known.clear()
+                else:
+                    fresh(first)
+            out.append(line)
+            continue
+
+        # Unknown mnemonic or directive: be conservative.
+        known.clear()
+        out.append(line)
+
     return out
 
 
@@ -152,6 +288,7 @@ def optimize_asm(text: str, peephole_enabled: bool = True, relax_enabled: bool =
     lines = text.splitlines()
     if peephole_enabled:
         lines = peephole(lines)
+        lines = copy_propagate(lines)
     if relax_enabled:
         lines = relax_branches(lines)
     return "\n".join(lines).rstrip() + "\n"

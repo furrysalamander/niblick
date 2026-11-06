@@ -77,6 +77,47 @@ def test_char_array_and_char_arithmetic(tmp_path: Path) -> None:
     assert (emu.ram[base + 2], emu.ram[base + 3]) == (2, 4)  # 0x42
 
 
+def test_char_binary_operands(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        char a;
+        char b;
+        char add;
+        char sub;
+        char band;
+        char bor;
+        char bxor;
+        char addc;
+        char subc;
+        fn main() {
+            a = 71;
+            b = 2;
+            add = a + b;
+            sub = a - b;
+            band = a & b;
+            bor = a | b;
+            bxor = a ^ b;
+            addc = a + 3;
+            subc = a - 3;
+        }
+        """,
+    )
+    emu = run(hex_path)
+
+    def value(name: str) -> int:
+        base = ram_nibble(compiler, name)
+        return emu.ram[base] | (emu.ram[base + 1] << 4)
+
+    assert value("add") == 73
+    assert value("sub") == 69
+    assert value("band") == 2
+    assert value("bor") == 71
+    assert value("bxor") == 69
+    assert value("addc") == 74
+    assert value("subc") == 68
+
+
 def test_functions_and_tail_recursion(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,

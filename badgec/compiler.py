@@ -112,6 +112,7 @@ RUNTIME_ENTRY = {
 _COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
 _FLAG_INVERSE = {"C": "NC", "NC": "C", "Z": "NZ", "NZ": "Z"}
 _FLAG_SWAP = {"<": ">", "<=": ">=", ">": "<", ">=": "<=", "==": "==", "!=": "!="}
+_NIBBLE_BINARY = {"+": "ADD", "-": "SUB", "&": "AND", "|": "OR", "^": "XOR"}
 
 
 @dataclass
@@ -862,6 +863,51 @@ class Compiler:
                 self.emit("ADC R2, R0" if expr.op == "+" else "SBB R2, R0")
             return common
 
+        # Keep the left operand in R3/R4 instead of spilling it to RAM when
+        # the right operand cannot clobber those registers.
+        if common is NIBBLE and isinstance(expr.right, ast.Number) and int(expr.right.value) <= 15:
+            typ = self.compile_expr(expr.left, scope)
+            self.coerce(typ, common, expr.line)
+            self.emit(f"MOV R2, {int(expr.right.value)}")
+            self.emit(f"{_NIBBLE_BINARY[expr.op]} R1, R2")
+            return common
+
+        if common is CHAR and isinstance(expr.right, ast.Number):
+            value = int(expr.right.value)
+            typ = self.compile_expr(expr.left, scope)
+            self.coerce(typ, common, expr.line)
+            self.emit(f"MOV R3, {value & 0xF}")
+            self.emit(f"MOV R4, {(value >> 4) & 0xF}")
+            self._emit_char_binary(expr.op)
+            return common
+
+        if self._is_leaf(expr.right):
+            typ = self.compile_expr(expr.left, scope)
+            self.coerce(typ, common, expr.line)
+            if common is NIBBLE:
+                self.emit("MOV R3, R1")
+            else:
+                self.emit("MOV R3, R1")
+                self.emit("MOV R4, R2")
+            typ = self.compile_expr(expr.right, scope)
+            self.coerce(typ, common, expr.line)
+            if expr.op == "-":
+                # Left is in R3, right in R1: subtract right from left and
+                # move the result back to the expression registers.
+                if common is NIBBLE:
+                    self.emit("SUB R3, R1")
+                    self.emit("MOV R1, R3")
+                else:
+                    self.emit("SUB R3, R1")
+                    self.emit("SBB R4, R2")
+                    self.emit("MOV R1, R3")
+                    self.emit("MOV R2, R4")
+            elif common is NIBBLE:
+                self.emit(f"{_NIBBLE_BINARY[expr.op]} R1, R3")
+            else:
+                self._emit_char_binary(expr.op)
+            return common
+
         mark = self.temp.mark()
         temp_addr = self.temp.alloc(common.ram_size, "expression", self.filename, expr.line)
 
@@ -905,6 +951,29 @@ class Compiler:
 
         self.temp.reset(mark)
         return common
+
+    def _emit_char_binary(self, op: str) -> None:
+        """Combine R1:R2 with R3:R4 (low:high) into R1:R2."""
+
+        if op == "+":
+            self.emit("ADD R1, R3")
+            self.emit("ADC R2, R4")
+        elif op == "-":
+            self.emit("SUB R1, R3")
+            self.emit("SBB R2, R4")
+        elif op == "&":
+            self.emit("AND R1, R3")
+            self.emit("AND R2, R4")
+        elif op == "|":
+            self.emit("OR R1, R3")
+            self.emit("OR R2, R4")
+        elif op == "^":
+            self.emit("XOR R1, R3")
+            self.emit("XOR R2, R4")
+        else:
+            raise BadgeCompileError(
+                f"{self.filename}: unsupported char operator {op!r}"
+            )
 
     def compile_index(self, expr: ast.Index, scope: Scope) -> Type:
         if not isinstance(expr.base, ast.Var):

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "badgec"
+version = "0.1.0"
+description = "A small C-like compiler for the Hackaday Supercon.6 (Voja4) 4-bit badge"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyserial>=3.5"]
+
+[project.scripts]
+badgec = "badgec.cli:main"
+
+[tool.setuptools]
+packages = ["badgec"]
+
+[tool.setuptools.package-data]
+badgec = ["runtime/*.asm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

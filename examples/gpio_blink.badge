@@ -1,0 +1,11 @@
+// Toggle the four GPIO output pins in a simple pattern.
+// `delay` is an approximate busy loop; its real duration depends on Clock.
+
+fn main() {
+    while (1) {
+        gpio_write(5);
+        delay(4);
+        gpio_write(10);
+        delay(4);
+    }
+}

@@ -1,0 +1,26 @@
+// Press each front-panel button once.  This prints the KeyReg code and
+// KeyStatus over UART so BadgeC can map physical buttons reliably.
+
+fn puthex(nibble v) {
+    if (v < 10) {
+        uart_putc('0' + v);
+    } else {
+        uart_putc('A' + v - 10);
+    }
+}
+
+fn main() {
+    uart_route(1);
+    uart_init(3);
+    uart_puts("KEYMAP READY\n");
+
+    while (1) {
+        if (key_just()) {
+            uart_puts("KEY=");
+            puthex(key_code());
+            uart_puts(" STATUS=");
+            puthex(key_status());
+            uart_putc('\n');
+        }
+    }
+}

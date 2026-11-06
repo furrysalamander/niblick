@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.asm
+*.hex
+!vendor/**/*.hex
+
+# Generated at runtime / by the demo
+captures/
+badge-backup/
+epaper_badge/data/app_list
+epaper_badge/data/user_apps.py
+epaper_badge/data/graphics/supercon_photo*.png

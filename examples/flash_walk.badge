@@ -1,0 +1,21 @@
+const char message[] = "ABC";
+const nibble digits[] = { 1, 2, 3, 4 };
+
+flashptr p;
+char c;
+nibble count;
+nibble digit;
+
+fn main() {
+    count = 0;
+    p = message;
+    while (1) {
+        c = flash_next(&p);
+        if (c == 0xFF) {
+            break;
+        }
+        count = count + 1;
+    }
+
+    digit = digits[2];
+}

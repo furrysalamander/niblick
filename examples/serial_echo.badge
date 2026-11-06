@@ -1,0 +1,16 @@
+const char banner[] = "BadgeC serial echo ready\n";
+
+char c;
+
+fn main() {
+    uart_route(1);         // application UART on the main I/O header
+    uart_init(3);          // 9600 baud
+    uart_puts(banner);
+
+    while (1) {
+        while (uart_available() == 0) {
+        }
+        c = uart_getc();
+        uart_putc(c);
+    }
+}

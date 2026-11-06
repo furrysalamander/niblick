@@ -109,6 +109,10 @@ RUNTIME_ENTRY = {
     "delay": "__bc_delay",
 }
 
+_COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
+_FLAG_INVERSE = {"C": "NC", "NC": "C", "Z": "NZ", "NZ": "Z"}
+_FLAG_SWAP = {"<": ">", "<=": ">=", ">": "<", ">=": "<=", "==": "==", "!=": "!="}
+
 
 @dataclass
 class VarSymbol:
@@ -711,10 +715,8 @@ class Compiler:
         end_label = self.new_label("logicend")
         if expr.op == "&&":
             false_label = self.new_label("andfalse")
-            typ = self.compile_expr(expr.left, scope)
-            self.emit_branch_if_value_false(typ, false_label)
-            typ = self.compile_expr(expr.right, scope)
-            self.emit_branch_if_value_false(typ, false_label)
+            self._emit_cond_branch(expr.left, false_label, when_true=False, scope=scope)
+            self._emit_cond_branch(expr.right, false_label, when_true=False, scope=scope)
             self.emit("MOV R1, 1")
             self.emit(f"GOTO {end_label}")
             self.emit(f"{false_label}:")
@@ -724,10 +726,8 @@ class Compiler:
             return NIBBLE
 
         true_label = self.new_label("ortrue")
-        typ = self.compile_expr(expr.left, scope)
-        self.emit_branch_if_value_true(typ, true_label)
-        typ = self.compile_expr(expr.right, scope)
-        self.emit_branch_if_value_true(typ, true_label)
+        self._emit_cond_branch(expr.left, true_label, when_true=True, scope=scope)
+        self._emit_cond_branch(expr.right, true_label, when_true=True, scope=scope)
         self.emit("MOV R1, 0")
         self.emit(f"GOTO {end_label}")
         self.emit(f"{true_label}:")
@@ -1661,32 +1661,222 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def emit_jump_if_false(self, expr: ast.Expr, label: str, scope: Scope) -> None:
-        typ = self.compile_expr(expr, scope)
-        self.emit_branch_if_value_false(typ, label)
+        self._emit_cond_branch(expr, label, when_true=False, scope=scope)
 
     def emit_jump_if_true(self, expr: ast.Expr, label: str, scope: Scope) -> None:
+        self._emit_cond_branch(expr, label, when_true=True, scope=scope)
+
+    def _emit_cond_branch(
+        self, expr: ast.Expr, label: str, when_true: bool, scope: Scope
+    ) -> None:
+        """Branch directly from flags instead of materialising a 0/1 value."""
+
+        if isinstance(expr, ast.Number):
+            if (expr.value != 0) == when_true:
+                self.emit(f"GOTO {label}")
+            return
+
+        if isinstance(expr, ast.Unary) and expr.op == "!":
+            self._emit_cond_branch(expr.operand, label, not when_true, scope)
+            return
+
+        if isinstance(expr, ast.Binary) and expr.op in _COMPARE_OPS:
+            flag = self._compare_flag(expr, scope)
+            if flag is True:
+                if when_true:
+                    self.emit(f"GOTO {label}")
+                return
+            if flag is False:
+                if not when_true:
+                    self.emit(f"GOTO {label}")
+                return
+            if flag is not None:
+                self._branch_on_flag(flag if when_true else _FLAG_INVERSE[flag], label)
+                return
+
         typ = self.compile_expr(expr, scope)
-        self.emit_branch_if_value_true(typ, label)
+        if when_true:
+            self.emit_branch_if_value_true(typ, label)
+        else:
+            self.emit_branch_if_value_false(typ, label)
+
+    def _branch_on_flag(self, flag: str, label: str) -> None:
+        # SKIP the two-word GOTO when the flag is clear.  Keeping the SKIP
+        # directly before the GOTO lets branch relaxation shorten it to JR.
+        self.emit(f"SKIP {_FLAG_INVERSE[flag]}, 2")
+        self.emit(f"GOTO {label}")
+
+    def _compare_flag(self, expr: ast.Binary, scope: Scope):
+        """Leave C/Z set for a comparison and return its true flag.
+
+        Returns ``True``/``False`` when the comparison folds to a constant and
+        ``None`` when the shape is not handled (the caller then falls back to
+        materialising the value).
+        """
+
+        op = expr.op
+        left, right = expr.left, expr.right
+
+        if isinstance(left, ast.Number) and isinstance(right, ast.Number):
+            a, b = int(left.value), int(right.value)
+            return {
+                "==": a == b,
+                "!=": a != b,
+                "<": a < b,
+                "<=": a <= b,
+                ">": a > b,
+                ">=": a >= b,
+            }[op]
+
+        # Normalise ``constant OP expr`` to ``expr OP constant``.
+        if isinstance(left, ast.Number) and not isinstance(right, ast.Number):
+            left, right = right, left
+            op = _FLAG_SWAP[op]
+
+        if isinstance(right, ast.Number):
+            constant = int(right.value)
+            typ = self.infer_type(left, scope)
+            if typ is NIBBLE:
+                return self._compare_nibble_imm(left, constant, op, scope, expr.line)
+            if typ is CHAR:
+                return self._compare_char_imm(left, constant, op, scope, expr.line)
+            return None
+
+        left_type = self.infer_type(left, scope)
+        right_type = self.infer_type(right, scope)
+        if left_type not in (NIBBLE, CHAR) or right_type not in (NIBBLE, CHAR):
+            return None
+        if not self._is_leaf(right):
+            return None
+        return self._compare_regs(left, right, op, left_type, right_type, scope, expr.line)
+
+    def _compare_nibble_imm(
+        self, left: ast.Expr, constant: int, op: str, scope: Scope, line: int
+    ):
+        if constant > 15:
+            return {
+                "<": True,
+                "<=": True,
+                ">": False,
+                ">=": False,
+                "==": False,
+                "!=": True,
+            }[op]
+
+        if op == "<=" and constant == 15:
+            return True
+        if op == ">" and constant == 15:
+            return False
+
+        typ = self.compile_expr(left, scope)
+        self.coerce(typ, NIBBLE, line)
+        self.emit("MOV R0, R1")
+
+        if op in ("<", ">=", "==", "!="):
+            self.emit(f"CP R0, {constant}")
+            return {"<": "NC", ">=": "C", "==": "Z", "!=": "NZ"}[op]
+
+        # > and <= compare against constant + 1.
+        self.emit(f"CP R0, {constant + 1}")
+        return {"<": "NC", ">=": "C", ">": "C", "<=": "NC"}[op]
+
+    def _compare_char_imm(
+        self, left: ast.Expr, constant: int, op: str, scope: Scope, line: int
+    ):
+        if constant == 0:
+            if op == "<":
+                return False
+            if op == ">=":
+                return True
+            typ = self.compile_expr(left, scope)
+            self.coerce(typ, CHAR, line)
+            self.emit("OR R1, R2")
+            return "Z" if op in ("==", "<=") else "NZ"
+
+        if constant == 16 and op in ("<", ">="):
+            typ = self.compile_expr(left, scope)
+            self.coerce(typ, CHAR, line)
+            self.emit("MOV R0, R2")
+            self.emit("CP R0, 0")
+            return "Z" if op == "<" else "NZ"
+
+        if constant == 15 and op in (">", "<="):
+            typ = self.compile_expr(left, scope)
+            self.coerce(typ, CHAR, line)
+            self.emit("MOV R0, R2")
+            self.emit("CP R0, 0")
+            return "NZ" if op == ">" else "Z"
+
+        return None
+
+    def _compare_regs(
+        self,
+        left: ast.Expr,
+        right: ast.Expr,
+        op: str,
+        left_type: Type,
+        right_type: Type,
+        scope: Scope,
+        line: int,
+    ) -> str:
+        common = CHAR if CHAR in (left_type, right_type) else NIBBLE
+        typ = self.compile_expr(left, scope)
+        self.coerce(typ, common, line)
+        if common is NIBBLE:
+            self.emit("MOV R3, R1")
+        else:
+            self.emit("MOV R3, R1")
+            self.emit("MOV R4, R2")
+
+        typ = self.compile_expr(right, scope)
+        self.coerce(typ, common, line)
+
+        # left-right for <, >=, ==, !=; right-left for >, <= so that a single
+        # C or NC test is enough.
+        left_first = op in ("<", ">=", "==", "!=")
+        if common is NIBBLE:
+            if left_first:
+                self.emit("MOV R0, R3")
+                self.emit("SUB R0, R1")
+            else:
+                self.emit("MOV R0, R1")
+                self.emit("SUB R0, R3")
+        else:
+            if left_first:
+                self.emit("MOV R0, R4")
+                self.emit("SUB R0, R2")
+            else:
+                self.emit("MOV R0, R2")
+                self.emit("SUB R0, R4")
+            self.emit("SKIP NZ, 2")
+            if left_first:
+                self.emit("MOV R0, R3")
+                self.emit("SUB R0, R1")
+            else:
+                self.emit("MOV R0, R1")
+                self.emit("SUB R0, R3")
+
+        return {"<": "NC", ">=": "C", "==": "Z", "!=": "NZ", ">": "NC", "<=": "C"}[op]
+
+    def _is_leaf(self, expr: ast.Expr) -> bool:
+        # A leaf cannot clobber R3/R4, which hold the left operand.
+        return isinstance(expr, (ast.Number, ast.Var, ast.AddressOf))
 
     def emit_branch_if_value_false(self, typ: Type, label: str) -> None:
         if typ is NIBBLE:
-            self.emit("MOV R0, R1")
-            self.emit("CP R0, 0")
+            # OR R1,R1 leaves R1 unchanged but sets Z when it is zero.
+            self.emit("OR R1, R1")
             self.emit("SKIP NZ, 2")
             self.emit(f"GOTO {label}")
             return
         if typ is CHAR:
-            self.emit("MOV R0, R1")
-            self.emit("OR R0, R2")
-            self.emit("CP R0, 0")
+            self.emit("OR R1, R2")
             self.emit("SKIP NZ, 2")
             self.emit(f"GOTO {label}")
             return
         if typ is FLASHPTR:
-            self.emit("MOV R0, R1")
-            self.emit("OR R0, R2")
-            self.emit("OR R0, R3")
-            self.emit("CP R0, 0")
+            self.emit("OR R1, R2")
+            self.emit("OR R1, R3")
             self.emit("SKIP NZ, 2")
             self.emit(f"GOTO {label}")
             return
@@ -1694,23 +1884,18 @@ class Compiler:
 
     def emit_branch_if_value_true(self, typ: Type, label: str) -> None:
         if typ is NIBBLE:
-            self.emit("MOV R0, R1")
-            self.emit("CP R0, 0")
+            self.emit("OR R1, R1")
             self.emit("SKIP Z, 2")
             self.emit(f"GOTO {label}")
             return
         if typ is CHAR:
-            self.emit("MOV R0, R1")
-            self.emit("OR R0, R2")
-            self.emit("CP R0, 0")
+            self.emit("OR R1, R2")
             self.emit("SKIP Z, 2")
             self.emit(f"GOTO {label}")
             return
         if typ is FLASHPTR:
-            self.emit("MOV R0, R1")
-            self.emit("OR R0, R2")
-            self.emit("OR R0, R3")
-            self.emit("CP R0, 0")
+            self.emit("OR R1, R2")
+            self.emit("OR R1, R3")
             self.emit("SKIP Z, 2")
             self.emit(f"GOTO {label}")
             return

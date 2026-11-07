@@ -250,8 +250,10 @@ The water therefore sloshes around the box instead of settling permanently.
 
 The 8×16 grid uses two bits per cell (water and a "moved this frame" bit) in
 64 nibbles. The visible page is updated one pixel at a time, without clearing
-the whole screen, so there is no full-frame blank. The demo is about 1910
-words and 139 RAM nibbles.
+the whole screen, so there is no full-frame blank. A small spring-damper
+"tilt" state carries horizontal momentum between gravity changes and biases
+sideways flow, which adds sloshing. The demo is about 2616 words and 153 RAM
+nibbles.
 
 ## Library modules
 

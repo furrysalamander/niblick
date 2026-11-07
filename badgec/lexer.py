@@ -11,6 +11,7 @@ KEYWORDS = {
     "fn",
     "nibble",
     "char",
+    "word",
     "flashptr",
     "void",
     "const",

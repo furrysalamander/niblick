@@ -78,11 +78,12 @@ def _inline_expr(
             elif uses > 1 and not _is_pure(arg):
                 allowed = False
                 break
-            # Preserve char width when a literal or nibble-typed argument is
-            # substituted into a char parameter.
+            # Preserve parameter width when a literal or narrower argument is
+            # substituted, so char/word arithmetic does not become nibble
+            # arithmetic after inlining.
             mapping[param.name] = (
-                ast.ToChar(arg, line=getattr(arg, "line", 0))
-                if param.type.name == "char"
+                ast.ToType(param.type, arg, line=getattr(arg, "line", 0))
+                if param.type.name in ("char", "word")
                 else arg
             )
 

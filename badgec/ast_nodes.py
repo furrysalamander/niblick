@@ -69,14 +69,18 @@ class AddressOf(Expr):
 
 
 @dataclass
-class ToChar(Expr):
-    """Widen a value to char without changing its value.
+class ToType(Expr):
+    """Internal width-preserving cast inserted by the inliner."""
 
-    The inliner inserts this around arguments passed to char parameters so a
-    substituted literal keeps char-width semantics (for example ``15 << 1``
-    must be 30, not a wrapped nibble).
-    """
+    type: Type = None  # type: ignore[assignment]
+    operand: Expr = field(default_factory=Expr)
 
+
+@dataclass
+class Cast(Expr):
+    """Explicit ``(word)expr`` style conversion."""
+
+    type: Type = None  # type: ignore[assignment]
     operand: Expr = field(default_factory=Expr)
 
 

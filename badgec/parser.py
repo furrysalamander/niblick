@@ -10,7 +10,7 @@ from .lexer import Token, tokenize
 from .types import Type, type_from_name
 
 
-TYPE_NAMES = {"nibble", "char", "flashptr", "void"}
+TYPE_NAMES = {"nibble", "char", "word", "flashptr", "void"}
 
 # Binding powers.  Assignment is handled at statement level, not here.
 BINARY_PRECEDENCE = {
@@ -413,6 +413,20 @@ class Parser:
             if token.value == "&":
                 return ast.AddressOf(operand, line=token.line)
             return ast.Unary(str(token.value), operand, line=token.line)
+
+        # (type) expr cast.  A type keyword after '(' cannot start any other
+        # expression, so it is unambiguous.
+        if (
+            token.kind == "punct"
+            and token.value == "("
+            and self.peek(1).kind == "keyword"
+            and self.peek(1).value in TYPE_NAMES
+        ):
+            self.advance()
+            target = self.expect_type()
+            self.expect(")")
+            return ast.Cast(target, self.parse_unary(), line=token.line)
+
         return self.parse_postfix()
 
     def parse_postfix(self) -> ast.Expr:

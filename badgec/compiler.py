@@ -22,13 +22,25 @@ from .asm_opt import optimize_asm
 from .inline import optimize as optimize_program
 from .runtime_linker import link_runtime, reachable_labels
 from .errors import BadgeCompileError, BadgeTypeError, location
-from .types import CHAR, FLASHPTR, NIBBLE, VOID, Type, is_comparable, is_integer
+from .types import (
+    CHAR,
+    FLASHPTR,
+    NIBBLE,
+    VOID,
+    WORD,
+    Type,
+    is_comparable,
+    is_integer,
+    promoted_mul_type,
+    wider,
+)
 
 
 RAM_START = 0x40
 RAM_END = 0xF0
 TEMP_START = 0x20
-TEMP_END = 0x40
+# 0x38..0x3F is reserved for the 16-bit multiply/divide runtime scratch.
+TEMP_END = 0x38
 
 BUILTINS = {
     "uart_init": VOID,
@@ -117,6 +129,8 @@ _COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
 _FLAG_INVERSE = {"C": "NC", "NC": "C", "Z": "NZ", "NZ": "Z"}
 _FLAG_SWAP = {"<": ">", "<=": ">=", ">": "<", ">=": "<=", "==": "==", "!=": "!="}
 _NIBBLE_BINARY = {"+": "ADD", "-": "SUB", "&": "AND", "|": "OR", "^": "XOR"}
+_REGS = {1: ("R1",), 2: ("R1", "R2"), 4: ("R1", "R2", "R3", "R4")}
+_SAVED_REGS = {1: ("R3",), 2: ("R3", "R4"), 4: ("R5", "R6", "R7", "R8")}
 
 
 @dataclass
@@ -335,6 +349,7 @@ class Compiler:
                 )
 
     def constant_flash_values(self, decl: ast.GlobalDecl) -> list[int]:
+        mask = (1 << (4 * max(decl.type.ram_size, 1))) - 1
         values: list[int] = []
         if decl.init_string is not None:
             values = [ord(ch) & 0xFF for ch in decl.init_string]
@@ -345,7 +360,7 @@ class Compiler:
                     raise BadgeCompileError(
                         f"{location(self.filename, expr.line)}: flash array initializers must be integer literals"
                     )
-                values.append(int(expr.value) & 0xFF)
+                values.append(int(expr.value) & mask)
         else:
             values = [0] * (decl.array_len or 0)
 
@@ -436,13 +451,14 @@ class Compiler:
 
         elif isinstance(stmt, ast.Assign):
             target_type = self.lvalue_type(stmt.target, scope)
-            if isinstance(stmt.value, ast.Number) and target_type in (NIBBLE, CHAR):
+            if isinstance(stmt.value, ast.Number) and target_type in (NIBBLE, CHAR, WORD):
                 value = int(stmt.value.value)
-                if target_type is NIBBLE and value > 15:
+                limit = {NIBBLE: 15, CHAR: 255, WORD: 0xFFFF}[target_type]
+                if value > limit:
                     raise BadgeTypeError(
-                        f"{location(self.filename, stmt.line)}: cannot convert char to nibble"
+                        f"{location(self.filename, stmt.line)}: cannot convert value {value} to {target_type}"
                     )
-                if 0 <= value <= 255 and self.store_constant(
+                if 0 <= value <= limit and self.store_constant(
                     stmt.target, scope, target_type, value, stmt.line
                 ):
                     return
@@ -602,16 +618,20 @@ class Compiler:
 
     def compile_expr(self, expr: ast.Expr, scope: Scope) -> Type:
         if isinstance(expr, ast.Number):
-            if expr.value < 0 or expr.value > 255:
+            if expr.value < 0 or expr.value > 0xFFFF:
                 raise BadgeCompileError(
-                    f"{location(self.filename, expr.line)}: integer {expr.value} does not fit in a char"
+                    f"{location(self.filename, expr.line)}: integer {expr.value} does not fit in a word"
                 )
             if expr.value <= 15:
                 self.emit(f"MOV R1, {expr.value}")
                 return NIBBLE
-            self.emit(f"MOV R1, {expr.value & 0xF}")
-            self.emit(f"MOV R2, {(expr.value >> 4) & 0xF}")
-            return CHAR
+            if expr.value <= 255:
+                self.emit(f"MOV R1, {expr.value & 0xF}")
+                self.emit(f"MOV R2, {(expr.value >> 4) & 0xF}")
+                return CHAR
+            for index in range(4):
+                self.emit(f"MOV R{index + 1}, {(expr.value >> (4 * index)) & 0xF}")
+            return WORD
 
         if isinstance(expr, ast.StringLiteral):
             label = self.new_flash_string(expr.value)
@@ -645,10 +665,20 @@ class Compiler:
         if isinstance(expr, ast.AddressOf):
             return self.compile_address_of(expr, scope)
 
-        if isinstance(expr, ast.ToChar):
+        if isinstance(expr, (ast.ToType, ast.Cast)):
+            target = expr.type
+            if not is_integer(target):
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: casts are only supported between integer types"
+                )
             typ = self.compile_expr(expr.operand, scope)
-            self.coerce(typ, CHAR, expr.line)
-            return CHAR
+            if not is_integer(typ):
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: cannot cast {typ} to {target}"
+                )
+            if typ.ram_size < target.ram_size:
+                self.coerce(typ, target, expr.line)
+            return target
 
         raise BadgeCompileError(
             f"{location(self.filename, getattr(expr, 'line', 0))}: unsupported expression {type(expr).__name__}"
@@ -660,7 +690,7 @@ class Compiler:
 
         typ = self.compile_expr(expr.operand, scope)
         if expr.op == "!":
-            if typ not in (NIBBLE, CHAR):
+            if not is_integer(typ):
                 raise BadgeTypeError(
                     f"{location(self.filename, expr.line)}: ! requires an integer operand"
                 )
@@ -675,29 +705,39 @@ class Compiler:
 
         if expr.op == "~":
             if typ is NIBBLE:
-                self.emit("CPL R1")
+                self._emit_complement(("R1",))
                 return NIBBLE
             if typ is CHAR:
-                self.emit("CPL R1")
-                self.emit("CPL R2")
+                self._emit_complement(("R1", "R2"))
                 return CHAR
+            if typ is WORD:
+                self._emit_complement(("R1", "R2", "R3", "R4"))
+                return WORD
             raise BadgeTypeError(
                 f"{location(self.filename, expr.line)}: ~ requires an integer operand"
             )
 
         if expr.op == "-":
             if typ is NIBBLE:
-                self.emit("CPL R1")
+                self._emit_complement(("R1",))
                 self.emit("INC R1")
                 return NIBBLE
             if typ is CHAR:
-                self.emit("CPL R1")
-                self.emit("CPL R2")
+                self._emit_complement(("R1", "R2"))
                 self.emit("MOV R0, 1")
                 self.emit("ADD R1, R0")
                 self.emit("MOV R0, 0")
                 self.emit("ADC R2, R0")
                 return CHAR
+            if typ is WORD:
+                self._emit_complement(("R1", "R2", "R3", "R4"))
+                self.emit("MOV R0, 1")
+                self.emit("ADD R1, R0")
+                self.emit("MOV R0, 0")
+                self.emit("ADC R2, R0")
+                self.emit("ADC R3, R0")
+                self.emit("ADC R4, R0")
+                return WORD
             raise BadgeTypeError(
                 f"{location(self.filename, expr.line)}: unary - requires an integer operand"
             )
@@ -705,6 +745,13 @@ class Compiler:
         raise BadgeCompileError(
             f"{location(self.filename, expr.line)}: unsupported unary operator {expr.op!r}"
         )
+
+    def _emit_complement(self, regs: tuple[str, ...]) -> None:
+        # CPL RX,RY = MOV RX,#15; SUB RX,RY.  RX must differ from RY, so
+        # park the original in R0 first.
+        for reg in regs:
+            self.emit(f"MOV R0, {reg}")
+            self.emit(f"CPL {reg}, R0")
 
     def compile_address_of(self, expr: ast.AddressOf, scope: Scope) -> Type:
         if not isinstance(expr.operand, ast.Var):
@@ -730,10 +777,10 @@ class Compiler:
             return self.compile_arithmetic(expr, scope)
         if op in ("<<", ">>"):
             return self.compile_shift(expr, scope)
-        if op in ("*", "/", "%"):
-            raise BadgeCompileError(
-                f"{location(self.filename, expr.line)}: operator {op!r} is not implemented yet"
-            )
+        if op == "*":
+            return self.compile_mul(expr, scope)
+        if op in ("/", "%"):
+            return self.compile_divmod(expr, scope)
         raise BadgeCompileError(
             f"{location(self.filename, expr.line)}: unsupported binary operator {op!r}"
         )
@@ -781,6 +828,16 @@ class Compiler:
             self.emit(f"MOV R1, {1 if result else 0}")
             self.emit("MOV R2, 0")
             return NIBBLE
+        left_type = self.infer_type(left, scope)
+        right_type = self.infer_type(right, scope)
+        if not is_comparable(left_type) or not is_comparable(right_type):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: comparisons require integer operands"
+            )
+        common = wider(left_type, right_type)
+        if common is WORD:
+            return self._compile_word_comparison(left, right, op, scope, expr.line)
+
         materialize = op
         if op == "<=":
             left, right = right, left
@@ -788,14 +845,6 @@ class Compiler:
         elif op == ">":
             left, right = right, left
             materialize = "<"
-
-        left_type = self.infer_type(left, scope)
-        right_type = self.infer_type(right, scope)
-        if not is_comparable(left_type) or not is_comparable(right_type):
-            raise BadgeTypeError(
-                f"{location(self.filename, expr.line)}: comparisons require integer operands"
-            )
-        common = CHAR if CHAR in (left_type, right_type) else NIBBLE
 
         mark = self.temp.mark()
         temp_addr = self.temp.alloc(common.ram_size, "comparison", self.filename, expr.line)
@@ -839,6 +888,16 @@ class Compiler:
     def compile_arithmetic(self, expr: ast.Binary, scope: Scope) -> Type:
         left_type = self.infer_type(expr.left, scope)
         right_type = self.infer_type(expr.right, scope)
+        if not is_integer(left_type) or not is_integer(right_type):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: arithmetic requires integer operands"
+            )
+
+        common = wider(left_type, right_type)
+        width = common.ram_size
+        mask = (1 << (4 * width)) - 1
+        dest = _REGS[width]
+        saved = _SAVED_REGS[width]
 
         if isinstance(expr.left, ast.Number) and isinstance(expr.right, ast.Number):
             a, b = int(expr.left.value), int(expr.right.value)
@@ -849,19 +908,8 @@ class Compiler:
                 "|": a | b,
                 "^": a ^ b,
             }[expr.op]
-            if CHAR in (left_type, right_type):
-                result &= 0xFF
-                self.emit(f"MOV R1, {result & 0xF}")
-                self.emit(f"MOV R2, {(result >> 4) & 0xF}")
-                return CHAR
-            # Nibble arithmetic wraps to four bits.
-            self.emit(f"MOV R1, {result & 0xF}")
-            return NIBBLE
-        if not is_integer(left_type) or not is_integer(right_type):
-            raise BadgeTypeError(
-                f"{location(self.filename, expr.line)}: arithmetic requires integer operands"
-            )
-        common = CHAR if CHAR in (left_type, right_type) else NIBBLE
+            self._emit_immediate(result & mask, dest)
+            return common
 
         if (
             expr.op in ("+", "-")
@@ -872,56 +920,40 @@ class Compiler:
             self.coerce(typ, common, expr.line)
             if common is NIBBLE:
                 self.emit("INC R1" if expr.op == "+" else "DEC R1")
+            elif common is CHAR:
+                self.emit("MOV R0, 1")
+                self.emit("ADD R1, R0" if expr.op == "+" else "SUB R1, R0")
+                self.emit("MOV R0, 0")
+                self.emit("ADC R2, R0" if expr.op == "+" else "SBB R2, R0")
             else:
                 self.emit("MOV R0, 1")
                 self.emit("ADD R1, R0" if expr.op == "+" else "SUB R1, R0")
                 self.emit("MOV R0, 0")
                 self.emit("ADC R2, R0" if expr.op == "+" else "SBB R2, R0")
+                self.emit("ADC R3, R0" if expr.op == "+" else "SBB R3, R0")
+                self.emit("ADC R4, R0" if expr.op == "+" else "SBB R4, R0")
             return common
 
-        # Keep the left operand in R3/R4 instead of spilling it to RAM when
-        # the right operand cannot clobber those registers.
-        if common is NIBBLE and isinstance(expr.right, ast.Number) and int(expr.right.value) <= 15:
+        if isinstance(expr.right, ast.Number):
             typ = self.compile_expr(expr.left, scope)
             self.coerce(typ, common, expr.line)
-            self.emit(f"MOV R2, {int(expr.right.value)}")
-            self.emit(f"{_NIBBLE_BINARY[expr.op]} R1, R2")
-            return common
-
-        if common is CHAR and isinstance(expr.right, ast.Number):
-            value = int(expr.right.value)
-            typ = self.compile_expr(expr.left, scope)
-            self.coerce(typ, common, expr.line)
-            self.emit(f"MOV R3, {value & 0xF}")
-            self.emit(f"MOV R4, {(value >> 4) & 0xF}")
-            self._emit_char_binary(expr.op)
+            self._emit_immediate(int(expr.right.value) & mask, saved)
+            self._emit_binary(expr.op, dest, saved)
             return common
 
         if self._is_leaf(expr.right):
             typ = self.compile_expr(expr.left, scope)
             self.coerce(typ, common, expr.line)
-            if common is NIBBLE:
-                self.emit("MOV R3, R1")
-            else:
-                self.emit("MOV R3, R1")
-                self.emit("MOV R4, R2")
+            self._move(dest, saved)
             typ = self.compile_expr(expr.right, scope)
             self.coerce(typ, common, expr.line)
             if expr.op == "-":
-                # Left is in R3, right in R1: subtract right from left and
-                # move the result back to the expression registers.
-                if common is NIBBLE:
-                    self.emit("SUB R3, R1")
-                    self.emit("MOV R1, R3")
-                else:
-                    self.emit("SUB R3, R1")
-                    self.emit("SBB R4, R2")
-                    self.emit("MOV R1, R3")
-                    self.emit("MOV R2, R4")
-            elif common is NIBBLE:
-                self.emit(f"{_NIBBLE_BINARY[expr.op]} R1, R3")
+                # Left is in the saved registers and right in the result
+                # registers; subtract in place and move the result back.
+                self._emit_binary("-", saved, dest)
+                self._move(saved, dest)
             else:
-                self._emit_char_binary(expr.op)
+                self._emit_binary(expr.op, dest, saved)
             return common
 
         mark = self.temp.mark()
@@ -933,40 +965,35 @@ class Compiler:
 
         typ = self.compile_expr(expr.right, scope)
         self.coerce(typ, common, expr.line)
-        if common is NIBBLE:
-            self.emit("MOV R2, R1")
-        else:
-            self.emit("MOV R3, R1")
-            self.emit("MOV R4, R2")
-
+        self._move(dest, saved)
         self.load_temp(common, temp_addr)
-
-        if common is NIBBLE:
-            instruction = {"+": "ADD", "-": "SUB", "&": "AND", "|": "OR", "^": "XOR"}[expr.op]
-            self.emit(f"{instruction} R1, R2")
-        else:
-            if expr.op == "+":
-                self.emit("ADD R1, R3")
-                self.emit("ADC R2, R4")
-            elif expr.op == "-":
-                self.emit("SUB R1, R3")
-                self.emit("SBB R2, R4")
-            elif expr.op == "&":
-                self.emit("AND R1, R3")
-                self.emit("AND R2, R4")
-            elif expr.op == "|":
-                self.emit("OR R1, R3")
-                self.emit("OR R2, R4")
-            elif expr.op == "^":
-                self.emit("XOR R1, R3")
-                self.emit("XOR R2, R4")
-            else:
-                raise BadgeCompileError(
-                    f"{location(self.filename, expr.line)}: unsupported char operator {expr.op!r}"
-                )
-
+        self._emit_binary(expr.op, dest, saved)
         self.temp.reset(mark)
         return common
+
+    def _emit_immediate(self, value: int, regs: tuple[str, ...]) -> None:
+        for index, reg in enumerate(regs):
+            self.emit(f"MOV {reg}, {(value >> (4 * index)) & 0xF}")
+
+    def _move(self, source: tuple[str, ...], target: tuple[str, ...]) -> None:
+        for src, dst in zip(source, target):
+            self.emit(f"MOV {dst}, {src}")
+
+    def _emit_binary(
+        self, op: str, dest: tuple[str, ...], source: tuple[str, ...]
+    ) -> None:
+        if op == "+":
+            self.emit(f"ADD {dest[0]}, {source[0]}")
+            for index in range(1, len(dest)):
+                self.emit(f"ADC {dest[index]}, {source[index]}")
+        elif op == "-":
+            self.emit(f"SUB {dest[0]}, {source[0]}")
+            for index in range(1, len(dest)):
+                self.emit(f"SBB {dest[index]}, {source[index]}")
+        else:
+            instruction = _NIBBLE_BINARY[op]
+            for dst, src in zip(dest, source):
+                self.emit(f"{instruction} {dst}, {src}")
 
     def compile_shift(self, expr: ast.Binary, scope: Scope) -> Type:
         """Shift by a constant count, unrolled.
@@ -976,7 +1003,7 @@ class Compiler:
         """
 
         left_type = self.infer_type(expr.left, scope)
-        if left_type not in (NIBBLE, CHAR):
+        if not is_integer(left_type):
             raise BadgeTypeError(
                 f"{location(self.filename, expr.line)}: shifts require an integer operand"
             )
@@ -986,72 +1013,210 @@ class Compiler:
             )
 
         count = int(expr.right.value)
-        width = 4 if left_type is NIBBLE else 8
+        width = 4 * left_type.ram_size
         mask = (1 << width) - 1
+        regs = _REGS[left_type.ram_size]
 
         if isinstance(expr.left, ast.Number):
             value = int(expr.left.value)
             result = ((value << count) & mask) if expr.op == "<<" else ((value >> count) & mask)
-            if left_type is CHAR:
-                self.emit(f"MOV R1, {result & 0xF}")
-                self.emit(f"MOV R2, {(result >> 4) & 0xF}")
-                return CHAR
-            self.emit(f"MOV R1, {result & 0xF}")
-            return NIBBLE
+            self._emit_immediate(result, regs)
+            return left_type
 
         typ = self.compile_expr(expr.left, scope)
         self.coerce(typ, left_type, expr.line)
         if count == 0:
             return left_type
 
-        if left_type is NIBBLE:
-            if count >= 4:
-                self.emit("MOV R1, 0")
-            elif expr.op == "<<":
-                for _ in range(count):
-                    self.emit("ADD R1, R1")
-            else:
-                for _ in range(count):
-                    self.emit("ADD R0, 0")   # clear carry
-                    self.emit("RRC R1")
-            return NIBBLE
-
-        if count >= 8:
-            self.emit("MOV R1, 0")
-            self.emit("MOV R2, 0")
+        if count >= width:
+            self._emit_immediate(0, regs)
         elif expr.op == "<<":
             for _ in range(count):
-                self.emit("ADD R1, R1")
-                self.emit("ADC R2, R2")
+                self.emit(f"ADD {regs[0]}, {regs[0]}")
+                for reg in regs[1:]:
+                    self.emit(f"ADC {reg}, {reg}")
         else:
             for _ in range(count):
                 self.emit("ADD R0, 0")       # clear carry
-                self.emit("RRC R2")
-                self.emit("RRC R1")
-        return CHAR
+                for reg in reversed(regs):
+                    self.emit(f"RRC {reg}")
+        return left_type
 
-    def _emit_char_binary(self, op: str) -> None:
-        """Combine R1:R2 with R3:R4 (low:high) into R1:R2."""
+    def _emit_shift_left(self, typ: Type, count: int) -> None:
+        regs = _REGS[typ.ram_size]
+        for _ in range(count):
+            self.emit(f"ADD {regs[0]}, {regs[0]}")
+            for reg in regs[1:]:
+                self.emit(f"ADC {reg}, {reg}")
 
-        if op == "+":
-            self.emit("ADD R1, R3")
-            self.emit("ADC R2, R4")
-        elif op == "-":
-            self.emit("SUB R1, R3")
-            self.emit("SBB R2, R4")
-        elif op == "&":
-            self.emit("AND R1, R3")
-            self.emit("AND R2, R4")
-        elif op == "|":
-            self.emit("OR R1, R3")
-            self.emit("OR R2, R4")
-        elif op == "^":
-            self.emit("XOR R1, R3")
-            self.emit("XOR R2, R4")
-        else:
-            raise BadgeCompileError(
-                f"{self.filename}: unsupported char operator {op!r}"
+    def _emit_shift_right(self, typ: Type, count: int) -> None:
+        regs = _REGS[typ.ram_size]
+        for _ in range(count):
+            self.emit("ADD R0, 0")
+            for reg in reversed(regs):
+                self.emit(f"RRC {reg}")
+
+    def _emit_mask(self, typ: Type, mask: int) -> None:
+        dest = _REGS[typ.ram_size]
+        saved = _SAVED_REGS[typ.ram_size]
+        self._emit_immediate(mask, saved)
+        self._emit_binary("&", dest, saved)
+
+    def compile_mul(self, expr: ast.Binary, scope: Scope) -> Type:
+        left_type = self.infer_type(expr.left, scope)
+        right_type = self.infer_type(expr.right, scope)
+        if not is_integer(left_type) or not is_integer(right_type):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: multiplication requires integer operands"
             )
+        common = wider(left_type, right_type)
+        result = promoted_mul_type(common)
+        mask = (1 << (4 * result.ram_size)) - 1
+
+        left, right = expr.left, expr.right
+        if isinstance(left, ast.Number) and not isinstance(right, ast.Number):
+            left, right = right, left
+
+        if isinstance(left, ast.Number) and isinstance(right, ast.Number):
+            self._emit_immediate(
+                (int(left.value) * int(right.value)) & mask, _REGS[result.ram_size]
+            )
+            return result
+
+        if isinstance(right, ast.Number):
+            constant = int(right.value)
+            if constant == 0:
+                typ = self.compile_expr(left, scope)
+                self.coerce(typ, common, expr.line)
+                self._emit_immediate(0, _REGS[result.ram_size])
+                return result
+            if constant == 1:
+                typ = self.compile_expr(left, scope)
+                self.coerce(typ, common, expr.line)
+                self.coerce(common, result, expr.line)
+                return result
+            if constant & (constant - 1) == 0:
+                typ = self.compile_expr(left, scope)
+                self.coerce(typ, common, expr.line)
+                self.coerce(common, result, expr.line)
+                self._emit_shift_left(result, constant.bit_length() - 1)
+                return result
+
+        mark = self.temp.mark()
+        temp_addr = self.temp.alloc(common.ram_size, "multiply", self.filename, expr.line)
+        typ = self.compile_expr(left, scope)
+        self.coerce(typ, common, expr.line)
+        self.store_temp(common, temp_addr)
+
+        typ = self.compile_expr(right, scope)
+        self.coerce(typ, common, expr.line)
+        if common is NIBBLE:
+            self.emit("MOV R2, R1")
+            self.load_temp(NIBBLE, temp_addr)
+            self.used_runtime.add("__bc_mul4")
+            self.emit("GOSUB __bc_mul4")
+        elif common is CHAR:
+            self._move(("R1", "R2"), ("R3", "R4"))
+            self.load_temp(CHAR, temp_addr)
+            self.used_runtime.add("__bc_mul8")
+            self.emit("GOSUB __bc_mul8")
+        else:
+            self._move(("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8"))
+            self.load_temp(WORD, temp_addr)
+            self.used_runtime.add("__bc_mul16")
+            self.emit("GOSUB __bc_mul16")
+        self.temp.reset(mark)
+        return result
+
+    def compile_divmod(self, expr: ast.Binary, scope: Scope) -> Type:
+        left_type = self.infer_type(expr.left, scope)
+        right_type = self.infer_type(expr.right, scope)
+        if not is_integer(left_type) or not is_integer(right_type):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: division requires integer operands"
+            )
+        common = wider(left_type, right_type)
+        width = common.ram_size
+        mask = (1 << (4 * width)) - 1
+        is_div = expr.op == "/"
+
+        if isinstance(expr.left, ast.Number) and isinstance(expr.right, ast.Number):
+            a, b = int(expr.left.value), int(expr.right.value)
+            value = 0 if b == 0 else (a // b if is_div else a % b)
+            self._emit_immediate(value & mask, _REGS[width])
+            return common
+
+        if isinstance(expr.right, ast.Number):
+            constant = int(expr.right.value)
+            if constant == 0:
+                typ = self.compile_expr(expr.left, scope)
+                self.coerce(typ, common, expr.line)
+                self._emit_immediate(0, _REGS[width])
+                return common
+            if constant == 1:
+                typ = self.compile_expr(expr.left, scope)
+                self.coerce(typ, common, expr.line)
+                if not is_div:
+                    self._emit_immediate(0, _REGS[width])
+                return common
+            if constant & (constant - 1) == 0:
+                shift = constant.bit_length() - 1
+                typ = self.compile_expr(expr.left, scope)
+                self.coerce(typ, common, expr.line)
+                if is_div:
+                    self._emit_shift_right(common, shift)
+                else:
+                    self._emit_mask(common, constant - 1)
+                return common
+
+        mark = self.temp.mark()
+        if common is NIBBLE:
+            temp_common = CHAR
+        else:
+            temp_common = common
+        temp_addr = self.temp.alloc(
+            temp_common.ram_size, "divide", self.filename, expr.line
+        )
+
+        typ = self.compile_expr(expr.left, scope)
+        self.coerce(typ, common, expr.line)
+        self.coerce(common, temp_common, expr.line)
+        self.store_temp(temp_common, temp_addr)
+
+        typ = self.compile_expr(expr.right, scope)
+        self.coerce(typ, common, expr.line)
+        self.coerce(common, temp_common, expr.line)
+
+        if common is NIBBLE:
+            self._move(("R1", "R2"), ("R3", "R4"))
+            self.load_temp(CHAR, temp_addr)
+            self.used_runtime.add("__bc_divmod8")
+            self.emit("GOSUB __bc_divmod8")
+            if is_div:
+                self.temp.reset(mark)
+                return NIBBLE
+            self.emit("MOV R1, R3")
+            self.temp.reset(mark)
+            return NIBBLE
+
+        if common is CHAR:
+            self._move(("R1", "R2"), ("R3", "R4"))
+            self.load_temp(CHAR, temp_addr)
+            self.used_runtime.add("__bc_divmod8")
+            self.emit("GOSUB __bc_divmod8")
+            if not is_div:
+                self._move(("R3", "R4"), ("R1", "R2"))
+            self.temp.reset(mark)
+            return CHAR
+
+        self._move(("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8"))
+        self.load_temp(WORD, temp_addr)
+        self.used_runtime.add("__bc_divmod16")
+        self.emit("GOSUB __bc_divmod16")
+        if not is_div:
+            self._move(("R5", "R6", "R7", "R8"), ("R1", "R2", "R3", "R4"))
+        self.temp.reset(mark)
+        return WORD
 
     def compile_index(self, expr: ast.Index, scope: Scope) -> Type:
         if not isinstance(expr.base, ast.Var):
@@ -1077,22 +1242,23 @@ class Compiler:
                 self.used_runtime.add("__bc_flash_read_char")
                 self.emit("GOSUB __bc_flash_read_char")
                 return CHAR
+            if symbol.type is WORD:
+                self.used_runtime.add("__bc_flash_read_word")
+                self.emit("GOSUB __bc_flash_read_word")
+                return WORD
             self.used_runtime.add("__bc_flash_read_nibble")
             self.emit("GOSUB __bc_flash_read_nibble")
             return NIBBLE
 
         assert symbol.address is not None
         if isinstance(expr.index, ast.Number):
-            # A constant index addresses a fixed nibble, so no R4:R5 address
+            # A constant index addresses fixed nibbles, so no R4:R5 address
             # calculation and no indirect access are needed.
             address = symbol.address + int(expr.index.value) * symbol.type.ram_size
-            self.emit(f"MOV R0, [{address}]")
-            self.emit("MOV R1, R0")
-            if symbol.type is CHAR:
-                self.emit(f"MOV R0, [{address + 1}]")
-                self.emit("MOV R2, R0")
-                return CHAR
-            return NIBBLE
+            for index in range(symbol.type.ram_size):
+                self.emit(f"MOV R0, [{address + index}]")
+                self.emit(f"MOV R{index + 1}, R0")
+            return symbol.type
 
         self.compile_ram_addr(symbol, expr.index, scope, expr.line)
         if symbol.type is NIBBLE:
@@ -1108,6 +1274,19 @@ class Compiler:
             self.emit("MOV R0, [R4:R5]")
             self.emit("MOV R2, R0")
             return CHAR
+        if symbol.type is WORD:
+            # Copy the address away from R4:R5 first: R4 is also the word's
+            # high nibble.
+            self.emit("MOV R6, R4")
+            self.emit("MOV R7, R5")
+            for index in range(4):
+                self.emit("MOV R0, [R6:R7]")
+                self.emit(f"MOV R{index + 1}, R0")
+                if index != 3:
+                    self.emit("INC R7")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R6")
+            return WORD
         raise BadgeTypeError(
             f"{location(self.filename, expr.line)}: cannot index {symbol.type} array {symbol.name!r}"
         )
@@ -1126,6 +1305,11 @@ class Compiler:
             )
 
         scale = symbol.type.ram_size
+        if scale & (scale - 1):
+            raise BadgeCompileError(
+                f"{location(self.filename, line)}: unsupported array element size {scale}"
+            )
+
         if scale == 1 and (base & 0xF) == 0:
             # The array starts on a 16-nibble page boundary, so a nibble
             # index never carries into the high address nibble.  A char
@@ -1135,34 +1319,25 @@ class Compiler:
             if index_type is CHAR:
                 self.emit("ADD R4, R2")
             return
-        if scale == 1:
-            self.emit(f"MOV R4, {(base >> 4) & 0xF}")
-            self.emit(f"MOV R5, {base & 0xF}")
-            self.emit("ADD R5, R1")
-            self.emit("SKIP NC, 1")
-            self.emit("INC R4")
-            if index_type is CHAR:
-                self.emit("ADD R4, R2")
-        elif scale == 2:
+
+        # Offset = index * scale in R4:R5.  scale is a power of two.
+        self.emit("MOV R5, R1")
+        if index_type is CHAR:
+            self.emit("MOV R4, R2")
+        else:
             self.emit("MOV R4, 0")
-            self.emit("MOV R5, R1")
+        for _ in range(scale.bit_length() - 1):
+            self.emit("ADD R4, R4")
             self.emit("ADD R5, R5")
             self.emit("SKIP NC, 1")
             self.emit("INC R4")
-            if index_type is CHAR:
-                self.emit("MOV R0, R2")
-                self.emit("ADD R0, R0")
-                self.emit("ADD R4, R0")
-            self.emit(f"MOV R0, {base & 0xF}")
-            self.emit("ADD R5, R0")
-            self.emit("SKIP NC, 1")
-            self.emit("INC R4")
-            self.emit(f"MOV R0, {(base >> 4) & 0xF}")
-            self.emit("ADD R4, R0")
-        else:
-            raise BadgeCompileError(
-                f"{location(self.filename, line)}: unsupported array element size {scale}"
-            )
+
+        self.emit(f"MOV R0, {base & 0xF}")
+        self.emit("ADD R5, R0")
+        self.emit("SKIP NC, 1")
+        self.emit("INC R4")
+        self.emit(f"MOV R0, {(base >> 4) & 0xF}")
+        self.emit("ADD R4, R0")
 
     def compile_flash_addr(self, symbol: VarSymbol, index: ast.Expr, scope: Scope, line: int) -> None:
         assert symbol.flash_label is not None
@@ -1173,20 +1348,20 @@ class Compiler:
             )
 
         scale = symbol.type.flash_size
+        if scale < 1 or scale & (scale - 1):
+            raise BadgeCompileError(
+                f"{location(self.filename, line)}: unsupported flash element size {scale}"
+            )
         self.emit("MOV R4, R1")
         if index_type is CHAR:
             self.emit("MOV R5, R2")
         else:
             self.emit("MOV R5, 0")
-        if scale == 2:
+        for _ in range(scale.bit_length() - 1):
             self.emit("ADD R5, R5")
             self.emit("ADD R4, R4")
             self.emit("SKIP NC, 1")
             self.emit("INC R5")
-        elif scale != 1:
-            raise BadgeCompileError(
-                f"{location(self.filename, line)}: unsupported flash element size {scale}"
-            )
 
         self.emit_flashptr(symbol.flash_label)
         self.emit("ADD R1, R4")
@@ -1745,11 +1920,9 @@ class Compiler:
 
         if address is None:
             return False
-        self.emit(f"MOV R0, {value & 0xF}")
-        self.emit(f"MOV [{address}], R0")
-        if typ is CHAR:
-            self.emit(f"MOV R0, {(value >> 4) & 0xF}")
-            self.emit(f"MOV [{address + 1}], R0")
+        for index in range(typ.ram_size):
+            self.emit(f"MOV R0, {(value >> (4 * index)) & 0xF}")
+            self.emit(f"MOV [{address + index}], R0")
         return True
 
     def store_lvalue(self, target: ast.Expr, scope: Scope, line: int) -> None:
@@ -1785,14 +1958,15 @@ class Compiler:
         if isinstance(target.index, ast.Number) and symbol.address is not None:
             address = symbol.address + int(target.index.value) * typ.ram_size
             self.load_temp(typ, temp_addr)
-            self.emit("MOV R0, R1")
-            self.emit(f"MOV [{address}], R0")
-            if typ is CHAR:
-                self.emit("MOV R0, R2")
-                self.emit(f"MOV [{address + 1}], R0")
+            for index in range(typ.ram_size):
+                self.emit(f"MOV R0, R{index + 1}")
+                self.emit(f"MOV [{address + index}], R0")
             return
 
         self.compile_ram_addr(symbol, target.index, scope, target.line)
+        if typ is WORD:
+            self.emit("MOV R6, R4")
+            self.emit("MOV R7, R5")
         self.load_temp(typ, temp_addr)
         if typ is NIBBLE:
             self.emit("MOV R0, R1")
@@ -1806,6 +1980,15 @@ class Compiler:
             self.emit("INC R4")
             self.emit("MOV R0, R2")
             self.emit("MOV [R4:R5], R0")
+            return
+        if typ is WORD:
+            for index in range(4):
+                self.emit(f"MOV R0, R{index + 1}")
+                self.emit("MOV [R6:R7], R0")
+                if index != 3:
+                    self.emit("INC R7")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R6")
             return
         raise BadgeTypeError(
             f"{location(self.filename, line)}: cannot store to {typ} array"
@@ -1832,6 +2015,10 @@ class Compiler:
             self.emit("MOV R2, R0")
             self.emit(f"MOV R0, [{addr + 2}]")
             self.emit("MOV R3, R0")
+        elif symbol.type is WORD:
+            for index in range(4):
+                self.emit(f"MOV R0, [{addr + index}]")
+                self.emit(f"MOV R{index + 1}, R0")
         else:
             raise BadgeTypeError(
                 f"{location(self.filename, line)}: cannot load {symbol.type} value"
@@ -1862,6 +2049,10 @@ class Compiler:
             self.emit(f"MOV [{addr + 1}], R0")
             self.emit("MOV R0, R3")
             self.emit(f"MOV [{addr + 2}], R0")
+        elif symbol.type is WORD:
+            for index in range(4):
+                self.emit(f"MOV R0, R{index + 1}")
+                self.emit(f"MOV [{addr + index}], R0")
         else:
             raise BadgeTypeError(
                 f"{location(self.filename, line)}: cannot store {symbol.type} value"
@@ -1883,6 +2074,10 @@ class Compiler:
             self.emit(f"MOV [{address + 1}], R0")
             self.emit("MOV R0, R3")
             self.emit(f"MOV [{address + 2}], R0")
+        elif typ is WORD:
+            for index in range(4):
+                self.emit(f"MOV R0, R{index + 1}")
+                self.emit(f"MOV [{address + index}], R0")
         else:
             raise BadgeCompileError(f"cannot spill {typ}")
 
@@ -1902,19 +2097,26 @@ class Compiler:
             self.emit("MOV R2, R0")
             self.emit(f"MOV R0, [{address + 2}]")
             self.emit("MOV R3, R0")
+        elif typ is WORD:
+            for index in range(4):
+                self.emit(f"MOV R0, [{address + index}]")
+                self.emit(f"MOV R{index + 1}, R0")
         else:
             raise BadgeCompileError(f"cannot reload {typ}")
 
     def coerce(self, source: Type, target: Type, line: int) -> None:
         if source is target:
             return
-        if source is NIBBLE and target is CHAR:
-            self.emit("MOV R2, 0")
-            return
         if source is VOID:
             raise BadgeTypeError(
                 f"{location(self.filename, line)}: expression has no value"
             )
+        if is_integer(source) and is_integer(target) and source.ram_size < target.ram_size:
+            # Zero-extend: the low source.ram_size nibbles already hold the
+            # value in R1, R2, ...
+            for index in range(source.ram_size, target.ram_size):
+                self.emit(f"MOV R{index + 1}, 0")
+            return
         raise BadgeTypeError(
             f"{location(self.filename, line)}: cannot convert {source} to {target}"
         )
@@ -2003,14 +2205,18 @@ class Compiler:
                 return self._compare_nibble_imm(left, constant, op, scope, expr.line)
             if typ is CHAR:
                 return self._compare_char_imm(left, constant, op, scope, expr.line)
+            if typ is WORD:
+                return self._compare_word_imm(left, constant, op, scope, expr.line)
             return None
 
         left_type = self.infer_type(left, scope)
         right_type = self.infer_type(right, scope)
-        if left_type not in (NIBBLE, CHAR) or right_type not in (NIBBLE, CHAR):
+        if not is_comparable(left_type) or not is_comparable(right_type):
             return None
         if not self._is_leaf(right):
             return None
+        if WORD in (left_type, right_type):
+            return self._compare_word_regs(left, right, op, scope, expr.line)
         return self._compare_regs(left, right, op, left_type, right_type, scope, expr.line)
 
     def _compare_nibble_imm(
@@ -2088,6 +2294,95 @@ class Compiler:
 
         return None
 
+    def _compile_word_comparison(
+        self,
+        left: ast.Expr,
+        right: ast.Expr,
+        op: str,
+        scope: Scope,
+        line: int,
+    ) -> Type:
+        mark = self.temp.mark()
+        temp_addr = self.temp.alloc(WORD.ram_size, "comparison", self.filename, line)
+
+        typ = self.compile_expr(left, scope)
+        self.coerce(typ, WORD, line)
+        self.store_temp(WORD, temp_addr)
+
+        typ = self.compile_expr(right, scope)
+        self.coerce(typ, WORD, line)
+        self._move(("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8"))
+        self.load_temp(WORD, temp_addr)
+
+        flag = self._word_compare_flag(
+            op, ("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8")
+        )
+        self.emit("MOV R1, 0")
+        self.emit(f"SKIP {_FLAG_INVERSE[flag]}, 1")
+        self.emit("INC R1")
+        self.emit("MOV R2, 0")
+        self.temp.reset(mark)
+        return NIBBLE
+
+    def _word_compare_flag(
+        self,
+        op: str,
+        left_regs: tuple[str, ...],
+        right_regs: tuple[str, ...],
+    ) -> str:
+        if op in ("==", "!="):
+            self.emit("MOV R9, 0")
+            for left_reg, right_reg in zip(left_regs, right_regs):
+                self.emit(f"MOV R0, {left_reg}")
+                self.emit(f"XOR R0, {right_reg}")
+                self.emit("OR R9, R0")
+            self.emit("MOV R0, R9")
+            self.emit("CP R0, 0")
+            return "Z" if op == "==" else "NZ"
+
+        if op in ("<", ">="):
+            self.emit(f"SUB {left_regs[0]}, {right_regs[0]}")
+            for left_reg, right_reg in zip(left_regs[1:], right_regs[1:]):
+                self.emit(f"SBB {left_reg}, {right_reg}")
+            return "NC" if op == "<" else "C"
+
+        self.emit(f"SUB {right_regs[0]}, {left_regs[0]}")
+        for left_reg, right_reg in zip(left_regs[1:], right_regs[1:]):
+            self.emit(f"SBB {right_reg}, {left_reg}")
+        return "NC" if op == ">" else "C"
+
+    def _compare_word_imm(
+        self, left: ast.Expr, constant: int, op: str, scope: Scope, line: int
+    ) -> str:
+        typ = self.compile_expr(left, scope)
+        self.coerce(typ, WORD, line)
+        if op in ("==", "!="):
+            self.emit("MOV R9, 0")
+            for index in range(4):
+                self.emit(f"MOV R0, R{index + 1}")
+                self.emit(f"XOR R0, {(constant >> (4 * index)) & 0xF}")
+                self.emit("OR R9, R0")
+            self.emit("MOV R0, R9")
+            self.emit("CP R0, 0")
+            return "Z" if op == "==" else "NZ"
+
+        self._emit_immediate(constant & 0xFFFF, ("R5", "R6", "R7", "R8"))
+        return self._word_compare_flag(
+            op, ("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8")
+        )
+
+    def _compare_word_regs(
+        self, left: ast.Expr, right: ast.Expr, op: str, scope: Scope, line: int
+    ) -> str:
+        typ = self.compile_expr(left, scope)
+        self.coerce(typ, WORD, line)
+        self._move(("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8"))
+        typ = self.compile_expr(right, scope)
+        self.coerce(typ, WORD, line)
+        return self._word_compare_flag(
+            op, ("R5", "R6", "R7", "R8"), ("R1", "R2", "R3", "R4")
+        )
+
     def _compare_regs(
         self,
         left: ast.Expr,
@@ -2147,6 +2442,13 @@ class Compiler:
             self.emit("SKIP NZ, 2")
             self.emit(f"GOTO {label}")
             return
+        if typ is WORD:
+            self.emit("OR R1, R2")
+            self.emit("OR R1, R3")
+            self.emit("OR R1, R4")
+            self.emit("SKIP NZ, 2")
+            self.emit(f"GOTO {label}")
+            return
         if typ is FLASHPTR:
             self.emit("OR R1, R2")
             self.emit("OR R1, R3")
@@ -2166,6 +2468,13 @@ class Compiler:
             self.emit("SKIP Z, 2")
             self.emit(f"GOTO {label}")
             return
+        if typ is WORD:
+            self.emit("OR R1, R2")
+            self.emit("OR R1, R3")
+            self.emit("OR R1, R4")
+            self.emit("SKIP Z, 2")
+            self.emit(f"GOTO {label}")
+            return
         if typ is FLASHPTR:
             self.emit("OR R1, R2")
             self.emit("OR R1, R3")
@@ -2182,6 +2491,13 @@ class Compiler:
             self.emit("OR R0, R2")
             self.emit("MOV R1, R0")
             return
+        if typ is WORD:
+            self.emit("MOV R0, R1")
+            self.emit("OR R0, R2")
+            self.emit("OR R0, R3")
+            self.emit("OR R0, R4")
+            self.emit("MOV R1, R0")
+            return
         if typ is FLASHPTR:
             self.emit("MOV R0, R1")
             self.emit("OR R0, R2")
@@ -2196,7 +2512,11 @@ class Compiler:
 
     def infer_type(self, expr: ast.Expr, scope: Scope) -> Type:
         if isinstance(expr, ast.Number):
-            return NIBBLE if expr.value <= 15 else CHAR
+            if expr.value <= 15:
+                return NIBBLE
+            if expr.value <= 255:
+                return CHAR
+            return WORD
         if isinstance(expr, ast.StringLiteral):
             return FLASHPTR
         if isinstance(expr, ast.Var):
@@ -2232,7 +2552,9 @@ class Compiler:
                 return self.infer_type(expr.left, scope)
             left = self.infer_type(expr.left, scope)
             right = self.infer_type(expr.right, scope)
-            return CHAR if CHAR in (left, right) else NIBBLE
+            if expr.op == "*":
+                return promoted_mul_type(wider(left, right))
+            return wider(left, right)
         if isinstance(expr, ast.Call):
             if expr.name in BUILTINS:
                 return BUILTINS[expr.name]
@@ -2244,8 +2566,8 @@ class Compiler:
             return fn.decl.return_type
         if isinstance(expr, ast.AddressOf):
             return CHAR
-        if isinstance(expr, ast.ToChar):
-            return CHAR
+        if isinstance(expr, (ast.ToType, ast.Cast)):
+            return expr.type
         raise BadgeCompileError(
             f"{location(self.filename, expr.line)}: cannot infer type of {type(expr).__name__}"
         )
@@ -2284,6 +2606,10 @@ class Compiler:
                 for value in item.values:
                     self.emit(f"NIBBLE 0x{value & 0xF:X}")
                     self.emit(f"NIBBLE 0x{(value >> 4) & 0xF:X}")
+            elif item.type is WORD:
+                for value in item.values:
+                    for index in range(4):
+                        self.emit(f"NIBBLE 0x{(value >> (4 * index)) & 0xF:X}")
             else:
                 raise BadgeCompileError(f"unsupported flash data type {item.type}")
             self.emit("")

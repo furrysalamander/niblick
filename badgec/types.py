@@ -26,18 +26,32 @@ class Type:
     def __str__(self) -> str:
         return self.name
 
+    def __copy__(self) -> "Type":
+        return self
+
+    def __deepcopy__(self, memo: object) -> "Type":
+        # Types are immutable singletons; copying them would break the
+        # identity checks used throughout code generation.
+        return self
+
 
 NIBBLE = Type("nibble", ram_size=1, flash_size=1)
 CHAR = Type("char", ram_size=2, flash_size=2)
+WORD = Type("word", ram_size=4, flash_size=4)
 FLASHPTR = Type("flashptr", ram_size=3, flash_size=0)
 VOID = Type("void", ram_size=0, flash_size=0, is_scalar=False)
 
 SCALAR_TYPES = {
     "nibble": NIBBLE,
     "char": CHAR,
+    "word": WORD,
     "flashptr": FLASHPTR,
     "void": VOID,
 }
+
+# Widening order for integer types.  ram_size is also the register width in
+# nibbles, so the index is a convenient width code.
+INTEGER_TYPES = (NIBBLE, CHAR, WORD)
 
 
 def type_from_name(name: str) -> Type:
@@ -48,8 +62,26 @@ def type_from_name(name: str) -> Type:
 
 
 def is_integer(t: Type) -> bool:
-    return t in (NIBBLE, CHAR)
+    return t in INTEGER_TYPES
 
 
 def is_comparable(t: Type) -> bool:
-    return t in (NIBBLE, CHAR)
+    return t in INTEGER_TYPES
+
+
+def wider(a: Type, b: Type) -> Type:
+    """Return the wider of two integer types (or *a* when one is not integer)."""
+
+    if a not in INTEGER_TYPES:
+        return b
+    if b not in INTEGER_TYPES:
+        return a
+    return a if a.ram_size >= b.ram_size else b
+
+
+def promoted_mul_type(t: Type) -> Type:
+    """Result type of ``a * b`` after both operands are promoted to *t*."""
+
+    if t is NIBBLE:
+        return CHAR
+    return WORD

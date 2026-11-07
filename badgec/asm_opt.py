@@ -256,7 +256,8 @@ def _register_effects(code: str):
 
     if op == "CPL":
         if args and _register(args[0]):
-            return {args[0]}, {args[0]}
+            reads = {arg for arg in args if _register(arg)}
+            return reads, {args[0]}
         return None
 
     if op in ("BSET", "BCLR", "BTG"):

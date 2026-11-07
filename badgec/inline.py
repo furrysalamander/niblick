@@ -154,8 +154,110 @@ def _collect_calls_stmt(stmt: ast.Stmt, calls: set[str]) -> None:
                     _collect_calls_stmt(item, calls)
 
 
+def _collect_vars_expr(expr: ast.Expr, names: set[str]) -> None:
+    if isinstance(expr, ast.Var):
+        names.add(expr.name)
+    for field in dataclasses.fields(expr):
+        value = getattr(expr, field.name)
+        if isinstance(value, ast.Expr):
+            _collect_vars_expr(value, names)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, ast.Expr):
+                    _collect_vars_expr(item, names)
+
+
+def _collect_vars_stmt(stmt: ast.Stmt, names: set[str]) -> None:
+    for field in dataclasses.fields(stmt):
+        value = getattr(stmt, field.name)
+        if isinstance(value, ast.Expr):
+            _collect_vars_expr(value, names)
+        elif isinstance(value, ast.Block):
+            for child in value.statements:
+                _collect_vars_stmt(child, names)
+        elif isinstance(value, ast.Stmt):
+            _collect_vars_stmt(value, names)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, ast.Expr):
+                    _collect_vars_expr(item, names)
+                elif isinstance(item, ast.Stmt):
+                    _collect_vars_stmt(item, names)
+
+
+def _initializers(decl: ast.GlobalDecl) -> list[ast.Expr]:
+    exprs: list[ast.Expr] = []
+    if decl.init is not None:
+        exprs.append(decl.init)
+    if decl.init_list is not None:
+        exprs.extend(decl.init_list)
+    return exprs
+
+
+def _global_has_side_effects(decl: ast.GlobalDecl) -> bool:
+    for expr in _initializers(decl):
+        calls: set[str] = set()
+        _collect_calls_expr(expr, calls)
+        if calls:
+            return True
+    return False
+
+
+def _eliminate_dead(program: ast.Program) -> None:
+    """Remove unreachable functions and unreferenced pure globals.
+
+    Functions and globals are analysed together: a kept global's initializer
+    can keep a function alive, and a reachable function can keep a global
+    alive.  Globals with side-effecting initializers are always kept.
+    """
+
+    by_function = {fn.name: fn for fn in program.functions}
+    by_global = {decl.name: decl for decl in program.globals}
+
+    kept_globals: set[str] = {
+        decl.name for decl in program.globals if _global_has_side_effects(decl)
+    }
+    reachable: set[str] = set()
+    function_worklist: list[str] = ["main"] if "main" in by_function else []
+    global_worklist: list[str] = list(kept_globals)
+
+    while function_worklist or global_worklist:
+        while function_worklist:
+            name = function_worklist.pop()
+            if name in reachable or name not in by_function:
+                continue
+            reachable.add(name)
+
+            calls: set[str] = set()
+            names: set[str] = set()
+            for stmt in by_function[name].body.statements:
+                _collect_calls_stmt(stmt, calls)
+                _collect_vars_stmt(stmt, names)
+            function_worklist.extend(calls - reachable)
+            global_worklist.extend(names - kept_globals)
+
+        while global_worklist:
+            name = global_worklist.pop()
+            if name in kept_globals:
+                continue
+            kept_globals.add(name)
+            decl = by_global.get(name)
+            if decl is None:
+                continue
+            for expr in _initializers(decl):
+                calls: set[str] = set()
+                names: set[str] = set()
+                _collect_calls_expr(expr, calls)
+                _collect_vars_expr(expr, names)
+                function_worklist.extend(calls - reachable)
+                global_worklist.extend(names - kept_globals)
+
+    program.functions = [fn for fn in program.functions if fn.name in reachable]
+    program.globals = [decl for decl in program.globals if decl.name in kept_globals]
+
+
 def optimize(program: ast.Program) -> None:
-    """Inline tiny return-only functions and remove unreachable functions."""
+    """Inline tiny return-only functions and remove dead declarations."""
     candidates: dict[str, ast.FunctionDecl] = {}
     for fn in program.functions:
         if fn.name == "main":
@@ -166,40 +268,17 @@ def optimize(program: ast.Program) -> None:
         if isinstance(stmt, ast.Return) and stmt.value is not None:
             candidates[fn.name] = fn
 
-    if not candidates:
-        return
+    if candidates:
+        for fn in program.functions:
+            _inline_block(fn.body, candidates, set())
+        for decl in program.globals:
+            if decl.init is not None:
+                decl.init = _inline_expr(decl.init, candidates, set())
+            if decl.init_list is not None:
+                decl.init_list = [
+                    _inline_expr(item, candidates, set()) for item in decl.init_list
+                ]
 
-    for fn in program.functions:
-        _inline_block(fn.body, candidates, set())
-    for decl in program.globals:
-        if decl.init is not None:
-            decl.init = _inline_expr(decl.init, candidates, set())
-        if decl.init_list is not None:
-            decl.init_list = [_inline_expr(item, candidates, set()) for item in decl.init_list]
-
-    # Remove functions that are no longer reachable from main or a global
-    # initializer (global initialization code is emitted at the start of main).
-    by_name = {fn.name: fn for fn in program.functions}
-    reachable: set[str] = set()
-    worklist = ["main"] if "main" in by_name else []
-    for decl in program.globals:
-        exprs = []
-        if decl.init is not None:
-            exprs.append(decl.init)
-        if decl.init_list:
-            exprs.extend(decl.init_list)
-        for expr in exprs:
-            calls: set[str] = set()
-            _collect_calls_expr(expr, calls)
-            worklist.extend(calls)
-    while worklist:
-        name = worklist.pop()
-        if name in reachable or name not in by_name:
-            continue
-        reachable.add(name)
-        calls: set[str] = set()
-        for stmt in by_name[name].body.statements:
-            _collect_calls_stmt(stmt, calls)
-        worklist.extend(calls - reachable)
-
-    program.functions = [fn for fn in program.functions if fn.name in reachable]
+    # This must run even when there was nothing to inline: imported library
+    # modules rely on unused functions and tables disappearing.
+    _eliminate_dead(program)

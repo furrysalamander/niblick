@@ -21,6 +21,7 @@ BUDGETS = {
     "math32_test.badge": 2800,
     "cube.badge": 2100,
     "wave.badge": 1200,
+    "water.badge": 1900,
 }
 
 

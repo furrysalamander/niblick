@@ -13,6 +13,7 @@
 | `tetris.badge` | LED-matrix Tetris; OPCODE 8/1/4/2 = left/right/rotate/soft drop |
 | `cube.badge` | Spinning 3D wireframe cube on the LED matrix |
 | `wave.badge` | 4×8 signed-nibble wave field from `lib/signed.badge` |
+| `water.badge` | Falling-water cellular automaton with changing gravity |
 | `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, bits, keys, clock, and display |
 | `word_math.badge` | 16-bit words, casts, and `* / %` |
 | `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |

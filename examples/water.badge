@@ -1,0 +1,256 @@
+// Water in a closed 8x16 box, with periodically changing gravity.
+//
+// This is a falling-sand style cellular automaton: each cell is either empty
+// or water.  Water falls in the current gravity direction, slides diagonally
+// when blocked, and spreads sideways when it piles up.  The display edges are
+// the only boundaries.  There are no drawn walls or platforms, and water is
+// simply a lit LED.
+//
+// The amount of water is fixed at startup: the bottom five rows.  Gravity
+// cycles through down, left, up, and right, so the pool sloshes around and
+// never settles permanently.
+//
+// The 8x16 grid is packed one bit per cell into 32 nibbles.
+
+nibble screen[32];
+nibble grid[32];
+nibble pixel_masks[4];
+char frame;
+nibble dir;
+
+fn nibble water_get(char i) {
+    nibble v;
+    v = grid[i >> 2];
+    v = v >> (i & 3);
+    return v & 1;
+}
+
+fn void water_set(char i, nibble v) {
+    char byte;
+    nibble shift;
+    nibble mask;
+    nibble old;
+
+    byte = i >> 2;
+    shift = (nibble)(i & 3);
+    mask = 1 << shift;
+    old = grid[byte];
+    grid[byte] = (old & (mask ^ 15)) | (v << shift);
+}
+
+fn void water_move(char from, char to) {
+    water_set(from, 0);
+    water_set(to, 1);
+}
+
+fn void put_pixel(nibble x, char y) {
+    char addr;
+    nibble bit;
+
+    if (x < 4) {
+        addr = 16 + y;
+    } else {
+        addr = y;
+    }
+    bit = pixel_masks[x & 3];
+    screen[addr] = screen[addr] | bit;
+}
+
+// Try to move one water cell in the current gravity direction.
+// dir: 0 = down, 1 = left, 2 = up, 3 = right.
+fn void update_cell(char i, nibble x, nibble y, nibble dir) {
+    char target;
+
+    target = 255;
+
+    if (dir == 0) {
+        if (y < 15) {
+            if (water_get(i + 8) == 0) {
+                target = i + 8;
+            } else if (x > 0 && water_get(i + 7) == 0) {
+                target = i + 7;
+            } else if (x < 7 && water_get(i + 9) == 0) {
+                target = i + 9;
+            } else if (x > 0 && water_get(i - 1) == 0) {
+                target = i - 1;
+            } else if (x < 7 && water_get(i + 1) == 0) {
+                target = i + 1;
+            }
+        }
+    } else if (dir == 1) {
+        if (x > 0) {
+            if (water_get(i - 1) == 0) {
+                target = i - 1;
+            } else if (y > 0 && water_get(i - 9) == 0) {
+                target = i - 9;
+            } else if (y < 15 && water_get(i + 7) == 0) {
+                target = i + 7;
+            } else if (y > 0 && water_get(i - 8) == 0) {
+                target = i - 8;
+            } else if (y < 15 && water_get(i + 8) == 0) {
+                target = i + 8;
+            }
+        }
+    } else if (dir == 2) {
+        if (y > 0) {
+            if (water_get(i - 8) == 0) {
+                target = i - 8;
+            } else if (x > 0 && water_get(i - 9) == 0) {
+                target = i - 9;
+            } else if (x < 7 && water_get(i - 7) == 0) {
+                target = i - 7;
+            } else if (x > 0 && water_get(i - 1) == 0) {
+                target = i - 1;
+            } else if (x < 7 && water_get(i + 1) == 0) {
+                target = i + 1;
+            }
+        }
+    } else {
+        if (x < 7) {
+            if (water_get(i + 1) == 0) {
+                target = i + 1;
+            } else if (y > 0 && water_get(i - 7) == 0) {
+                target = i - 7;
+            } else if (y < 15 && water_get(i + 9) == 0) {
+                target = i + 9;
+            } else if (y > 0 && water_get(i - 8) == 0) {
+                target = i - 8;
+            } else if (y < 15 && water_get(i + 8) == 0) {
+                target = i + 8;
+            }
+        }
+    }
+
+    if (target != 255) {
+        water_move(i, target);
+    }
+}
+
+// Scan one row.  Right-gravity scans right-to-left so a cell that just moved
+// right is not visited again in the same pass.  The other directions use
+// left-to-right, which is already correct for left gravity.
+fn void process_row(nibble y, nibble dir) {
+    char i;
+    nibble x;
+
+    if (dir == 3) {
+        x = 7;
+        while (1) {
+            i = ((char)y << 3) + x;
+            if (water_get(i) != 0) {
+                update_cell(i, x, y, dir);
+            }
+            if (x == 0) {
+                break;
+            }
+            x = x - 1;
+        }
+    } else {
+        x = 0;
+        while (x < 8) {
+            i = ((char)y << 3) + x;
+            if (water_get(i) != 0) {
+                update_cell(i, x, y, dir);
+            }
+            x = x + 1;
+        }
+    }
+}
+
+fn main() {
+    char i;
+    nibble x;
+    nibble y;
+
+    dimmer(15);
+    leds_enable(1);
+    matrix_enable(1);
+    display_page(4);
+
+    pixel_masks[0] = 8;
+    pixel_masks[1] = 4;
+    pixel_masks[2] = 2;
+    pixel_masks[3] = 1;
+
+    i = 0;
+    while (i < 32) {
+        screen[i] = 0;
+        grid[i] = 0;
+        i = i + 1;
+    }
+
+    // Fixed amount of water: the bottom five rows.
+    y = 11;
+    while (1) {
+        x = 0;
+        while (x < 8) {
+            i = ((char)y << 3) + x;
+            water_set(i, 1);
+            x = x + 1;
+        }
+        if (y == 15) {
+            break;
+        }
+        y = y + 1;
+    }
+
+    dir = 0;
+    frame = 0;
+    while (1) {
+        // Up gravity scans top-down so rising water is not visited twice.
+        // The other directions scan bottom-up.
+        if (dir == 2) {
+            y = 0;
+            while (1) {
+                process_row(y, dir);
+                if (y == 15) {
+                    break;
+                }
+                y = y + 1;
+            }
+        } else {
+            y = 15;
+            while (1) {
+                process_row(y, dir);
+                if (y == 0) {
+                    break;
+                }
+                y = y - 1;
+            }
+        }
+
+        // Render every water cell as one lit LED.
+        i = 0;
+        while (i < 32) {
+            screen[i] = 0;
+            i = i + 1;
+        }
+
+        y = 0;
+        while (1) {
+            x = 0;
+            while (x < 8) {
+                i = ((char)y << 3) + x;
+                if (water_get(i) != 0) {
+                    put_pixel(x, y);
+                }
+                x = x + 1;
+            }
+            if (y == 15) {
+                break;
+            }
+            y = y + 1;
+        }
+
+        display_page(4);
+        frame = frame + 1;
+        if (frame == 32) {
+            frame = 0;
+            dir = dir + 1;
+            if (dir == 4) {
+                dir = 0;
+            }
+        }
+        delay(1);
+    }
+}

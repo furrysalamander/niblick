@@ -237,6 +237,20 @@ It is about 1027 words and 164 RAM nibbles. This is the small-scale prototype
 for deciding whether native signed types are worth adding; the helpers are
 currently sufficient.
 
+## LED-matrix demo: falling water
+
+`examples/water.badge` is a falling-sand style water cellular automaton on the
+full 8×16 matrix. Each cell is empty or water, water falls in the current
+gravity direction, slides diagonally when blocked, and spreads sideways when
+it piles up. Water is just a lit LED; the display edges are the only walls.
+
+The amount of water is fixed at startup (the bottom five rows), and gravity
+cycles through down, left, up, and right every 32 simulation frames. The water
+therefore sloshes around the box instead of settling permanently.
+
+The 8×16 grid is packed one bit per cell into 32 nibbles. The demo is about
+1731 words and 108 RAM nibbles.
+
 ## Library modules
 
 `lib/` contains opt-in BadgeC modules for UART formatting, strings, math,

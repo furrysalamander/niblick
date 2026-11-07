@@ -62,6 +62,10 @@ BUILTINS = {
     "random": NIBBLE,
     "seed": VOID,
     "dimmer": VOID,
+    "peek8": CHAR,
+    "poke8": VOID,
+    "high_nibble": NIBBLE,
+    "low_nibble": NIBBLE,
     "key_status": NIBBLE,
     "key_code": NIBBLE,
     "key_any": NIBBLE,
@@ -719,7 +723,9 @@ class Compiler:
             return self.compile_comparison(expr, scope)
         if op in ("+", "-", "&", "|", "^"):
             return self.compile_arithmetic(expr, scope)
-        if op in ("*", "/", "%", "<<", ">>"):
+        if op in ("<<", ">>"):
+            return self.compile_shift(expr, scope)
+        if op in ("*", "/", "%"):
             raise BadgeCompileError(
                 f"{location(self.filename, expr.line)}: operator {op!r} is not implemented yet"
             )
@@ -956,6 +962,68 @@ class Compiler:
 
         self.temp.reset(mark)
         return common
+
+    def compile_shift(self, expr: ast.Binary, scope: Scope) -> Type:
+        """Shift by a constant count, unrolled.
+
+        Variable counts would need a loop; they are rejected for now so the
+        library can rely on compact, predictable code.
+        """
+
+        left_type = self.infer_type(expr.left, scope)
+        if left_type not in (NIBBLE, CHAR):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: shifts require an integer operand"
+            )
+        if not isinstance(expr.right, ast.Number):
+            raise BadgeCompileError(
+                f"{location(self.filename, expr.line)}: variable shift counts are not implemented yet"
+            )
+
+        count = int(expr.right.value)
+        width = 4 if left_type is NIBBLE else 8
+        mask = (1 << width) - 1
+
+        if isinstance(expr.left, ast.Number):
+            value = int(expr.left.value)
+            result = ((value << count) & mask) if expr.op == "<<" else ((value >> count) & mask)
+            if left_type is CHAR:
+                self.emit(f"MOV R1, {result & 0xF}")
+                self.emit(f"MOV R2, {(result >> 4) & 0xF}")
+                return CHAR
+            self.emit(f"MOV R1, {result & 0xF}")
+            return NIBBLE
+
+        typ = self.compile_expr(expr.left, scope)
+        self.coerce(typ, left_type, expr.line)
+        if count == 0:
+            return left_type
+
+        if left_type is NIBBLE:
+            if count >= 4:
+                self.emit("MOV R1, 0")
+            elif expr.op == "<<":
+                for _ in range(count):
+                    self.emit("ADD R1, R1")
+            else:
+                for _ in range(count):
+                    self.emit("ADD R0, 0")   # clear carry
+                    self.emit("RRC R1")
+            return NIBBLE
+
+        if count >= 8:
+            self.emit("MOV R1, 0")
+            self.emit("MOV R2, 0")
+        elif expr.op == "<<":
+            for _ in range(count):
+                self.emit("ADD R1, R1")
+                self.emit("ADC R2, R2")
+        else:
+            for _ in range(count):
+                self.emit("ADD R0, 0")       # clear carry
+                self.emit("RRC R2")
+                self.emit("RRC R1")
+        return CHAR
 
     def _emit_char_binary(self, op: str) -> None:
         """Combine R1:R2 with R3:R4 (low:high) into R1:R2."""
@@ -1544,6 +1612,52 @@ class Compiler:
             self.temp.reset(mark)
             return VOID
 
+        if name == "peek8":
+            self.require_args(expr, 1)
+            typ = self.compile_expr(expr.args[0], scope)
+            self.coerce(typ, CHAR, expr.line)
+            self.emit("MOV R4, R2")
+            self.emit("MOV R5, R1")
+            self.emit("MOV R0, [R4:R5]")
+            self.emit("MOV R1, R0")
+            self.emit("INC R5")
+            self.emit("SKIP NC, 1")
+            self.emit("INC R4")
+            self.emit("MOV R0, [R4:R5]")
+            self.emit("MOV R2, R0")
+            return CHAR
+
+        if name == "poke8":
+            self.require_args(expr, 2)
+            mark = self.temp.mark()
+            temp_addr = self.temp.alloc(2, "poke8 value", self.filename, expr.line)
+            typ = self.compile_expr(expr.args[1], scope)
+            self.coerce(typ, CHAR, expr.line)
+            self.store_temp(CHAR, temp_addr)
+
+            typ = self.compile_expr(expr.args[0], scope)
+            self.coerce(typ, CHAR, expr.line)
+            self.emit("MOV R4, R2")
+            self.emit("MOV R5, R1")
+            self.load_temp(CHAR, temp_addr)
+            self.emit("MOV R0, R1")
+            self.emit("MOV [R4:R5], R0")
+            self.emit("INC R5")
+            self.emit("SKIP NC, 1")
+            self.emit("INC R4")
+            self.emit("MOV R0, R2")
+            self.emit("MOV [R4:R5], R0")
+            self.temp.reset(mark)
+            return VOID
+
+        if name in ("high_nibble", "low_nibble"):
+            self.require_args(expr, 1)
+            typ = self.compile_expr(expr.args[0], scope)
+            self.coerce(typ, CHAR, expr.line)
+            if name == "high_nibble":
+                self.emit("MOV R1, R2")
+            return NIBBLE
+
         raise BadgeCompileError(
             f"{location(self.filename, expr.line)}: unsupported builtin {name!r}"
         )
@@ -2097,6 +2211,8 @@ class Compiler:
         if isinstance(expr, ast.Binary):
             if expr.op in ("==", "!=", "<", "<=", ">", ">=", "&&", "||"):
                 return NIBBLE
+            if expr.op in ("<<", ">>"):
+                return self.infer_type(expr.left, scope)
             left = self.infer_type(expr.left, scope)
             right = self.infer_type(expr.right, scope)
             return CHAR if CHAR in (left, right) else NIBBLE

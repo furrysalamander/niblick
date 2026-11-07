@@ -118,6 +118,75 @@ def test_char_binary_operands(tmp_path: Path) -> None:
     assert value("subc") == 68
 
 
+def test_nibble_and_byte_helpers(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        char value;
+        nibble high;
+        nibble low;
+        char buf[2];
+        char readback;
+        fn main() {
+            value = 171;
+            high = high_nibble(value);
+            low = low_nibble(value);
+            poke8(&buf, 165);
+            readback = peek8(&buf);
+        }
+        """,
+    )
+    emu = run(hex_path)
+    assert emu.ram[ram_nibble(compiler, "high")] == 0xA
+    assert emu.ram[ram_nibble(compiler, "low")] == 0xB
+    base = ram_nibble(compiler, "readback")
+    assert (emu.ram[base] | (emu.ram[base + 1] << 4)) == 0xA5
+
+
+def test_constant_shifts(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        nibble n;
+        char c;
+        nibble left;
+        nibble right;
+        nibble far_left;
+        char cleft;
+        char cright;
+        char cfar;
+        nibble folded;
+        fn main() {
+            n = 5;
+            left = n << 1;
+            right = n >> 1;
+            far_left = n << 4;
+            c = 129;
+            cleft = c << 1;
+            cright = c >> 1;
+            cfar = c << 8;
+            folded = 3 << 2;
+        }
+        """,
+    )
+    emu = run(hex_path)
+
+    def value(name: str) -> int:
+        base = ram_nibble(compiler, name)
+        symbol = compiler.globals[name]
+        if symbol.type.name == "nibble":
+            return emu.ram[base]
+        return emu.ram[base] | (emu.ram[base + 1] << 4)
+
+    assert value("left") == 10
+    assert value("right") == 2
+    assert value("far_left") == 0
+    assert value("cleft") == 0x02
+    assert value("cright") == 0x40
+    assert value("cfar") == 0
+    assert value("folded") == 12
+
+
 def test_functions_and_tail_recursion(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,

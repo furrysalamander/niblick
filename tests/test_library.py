@@ -56,6 +56,24 @@ def test_uart_formatting(tmp_path: Path) -> None:
     assert bytes(emu.uart_tx) == b"AB 234 10100101\n"
 
 
+def test_uart_16bit_formatting(tmp_path: Path) -> None:
+    _, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+        fn main() {
+            uart_route(1);
+            uart_init(3);
+            uart_print_hex16(0x9088);
+            uart_putc(' ');
+            uart_print_dec16(37000);
+            uart_nl();
+        }
+        """,
+    )
+    assert bytes(emu.uart_tx) == b"9088 37000\n"
+
+
 def test_string_module(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,

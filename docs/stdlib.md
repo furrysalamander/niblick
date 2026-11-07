@@ -197,6 +197,27 @@ These operate on **nibbles**, one address step per element.
 | `mem_bit_set/clear/toggle(addr, bit)` | Bit operations |
 | `mem_popcount(v)` | Number of set bits in a nibble |
 
+### `lib/display.badge`
+
+Page helpers write directly to the 16-nibble display pages. Framebuffer
+helpers treat a 32-nibble RAM array as 8×16 pixels, two nibbles per row,
+row-major; pass `&screen` as the base address.
+
+| Call | Notes |
+|---|---|
+| `display_fill(page, value)` | Fill all 16 nibbles of a page |
+| `display_clear(page)` / `display_invert(page)` | Clear / invert a page |
+| `display_copy(src, dst)` | Copy one page to another |
+| `pixel_get(base, x, y)` | `1` when the pixel is set |
+| `pixel_set(base, x, y, on)` | Set or clear a pixel |
+| `pixel_toggle(base, x, y)` / `pixel_clear(base, x, y)` | Pixel edits |
+| `hline(base, x0, x1, y, on)` / `vline(...)` | Row / column |
+| `fill_rect(base, x0, y0, x1, y1, on)` | Filled rectangle |
+| `clear_screen(base)` | Zero all 32 nibbles |
+
+`display_page(high_nibble(&screen))` selects the page that contains the
+buffer, which is useful when the allocator chooses the address.
+
 ### `lib/key.badge`
 
 | Call | Notes |
@@ -228,5 +249,5 @@ These operate on **nibbles**, one address step per element.
 - `malloc` / free
 - Interrupt-driven UART
 - A calibrated millisecond delay
-- A higher-level display/font library
+- A font/text drawing library on top of `lib/display.badge`
 - Bit-banged I2C/SPI helpers

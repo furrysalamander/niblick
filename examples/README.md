@@ -11,7 +11,7 @@
 | `hello_loop.badge` | Repeating UART hello, useful for link checks |
 | `sao_hello.badge` | UART hello routed to the SAO header |
 | `tetris.badge` | LED-matrix Tetris; OPCODE 8/1/4/2 = left/right/rotate/soft drop |
-| `stdlib_demo.badge` | Imports `lib/` modules for UART formatting, strings, math, bits, keys, and clock |
+| `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, bits, keys, clock, and display |
 
 Compile one with:
 

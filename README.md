@@ -249,9 +249,9 @@ gravity cycles through down, left, up, and right every 16 simulation frames.
 The water therefore sloshes around the box instead of settling permanently.
 
 The 8×16 grid uses two bits per cell (water and a "moved this frame" bit) in
-64 nibbles. Two 32-nibble screen buffers are alternated so the visible page is
-never cleared and redrawn in place. The demo is about 1931 words and 170 RAM
-nibbles.
+64 nibbles. The visible page is updated one pixel at a time, without clearing
+the whole screen, so there is no full-frame blank. The demo is about 1910
+words and 139 RAM nibbles.
 
 ## Library modules
 

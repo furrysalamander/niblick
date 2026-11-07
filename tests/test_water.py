@@ -21,11 +21,7 @@ def _water_count(emu: Emulator, grid: int) -> int:
 
 
 def _screen_bits(emu: Emulator, screen: int) -> int:
-    first = sum(bin(emu.ram[screen + index]).count("1") for index in range(32))
-    second = sum(
-        bin(emu.ram[screen + 32 + index]).count("1") for index in range(32)
-    )
-    return max(first, second)
+    return sum(bin(emu.ram[screen + index]).count("1") for index in range(32))
 
 
 def test_water_conserves_cells_and_changes_gravity(tmp_path: Path) -> None:

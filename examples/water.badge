@@ -16,15 +16,14 @@
 //
 // The moved bit prevents a cell from moving right and then being moved back
 // by a later scan step, which previously produced a stable staircase under
-// upward gravity.  Two 32-nibble screen buffers are alternated so the visible
-// page is never cleared and redrawn in place.
+// upward gravity.  The visible page is updated one pixel at a time, without
+// clearing the whole screen, so there is no full-frame blank.
 
-nibble screen[64];
+nibble screen[32];
 nibble grid[64];
 nibble pixel_masks[4];
 char frame;
 nibble dir;
-char screen_base;
 
 fn nibble cell_get(char i) {
     nibble v;
@@ -44,7 +43,7 @@ fn void cell_write(char i, nibble v) {
     grid[byte] = (grid[byte] & (mask ^ 15)) | (v << shift);
 }
 
-fn void put_pixel(nibble x, char y) {
+fn void put_pixel(nibble x, char y, nibble on) {
     char addr;
     nibble bit;
 
@@ -53,9 +52,12 @@ fn void put_pixel(nibble x, char y) {
     } else {
         addr = y;
     }
-    addr = addr + screen_base;
     bit = pixel_masks[x & 3];
-    screen[addr] = screen[addr] | bit;
+    if (on != 0) {
+        screen[addr] = screen[addr] | bit;
+    } else {
+        screen[addr] = screen[addr] & (bit ^ 15);
+    }
 }
 
 // Try to move one water cell in the current gravity direction.
@@ -83,10 +85,10 @@ fn void update_cell(char i, nibble x, nibble y, nibble dir) {
         if (x > 0) {
             if ((cell_get(i - 1) & 1) == 0) {
                 target = i - 1;
-            } else if (y > 0 && (cell_get(i - 9) & 1) == 0) {
-                target = i - 9;
             } else if (y < 15 && (cell_get(i + 7) & 1) == 0) {
                 target = i + 7;
+            } else if (y > 0 && (cell_get(i - 9) & 1) == 0) {
+                target = i - 9;
             } else if (y < 15 && (cell_get(i + 8) & 1) == 0) {
                 target = i + 8;
             } else if (y > 0 && (cell_get(i - 8) & 1) == 0) {
@@ -111,10 +113,10 @@ fn void update_cell(char i, nibble x, nibble y, nibble dir) {
         if (x < 7) {
             if ((cell_get(i + 1) & 1) == 0) {
                 target = i + 1;
-            } else if (y > 0 && (cell_get(i - 7) & 1) == 0) {
-                target = i - 7;
             } else if (y < 15 && (cell_get(i + 9) & 1) == 0) {
                 target = i + 9;
+            } else if (y > 0 && (cell_get(i - 7) & 1) == 0) {
+                target = i - 7;
             } else if (y < 15 && (cell_get(i + 8) & 1) == 0) {
                 target = i + 8;
             } else if (y > 0 && (cell_get(i - 8) & 1) == 0) {
@@ -165,6 +167,7 @@ fn void process_row(nibble y, nibble dir) {
 
 fn main() {
     char i;
+    char phase_limit;
     nibble x;
     nibble y;
 
@@ -178,8 +181,12 @@ fn main() {
     pixel_masks[3] = 1;
 
     i = 0;
-    while (i < 64) {
+    while (i < 32) {
         screen[i] = 0;
+        i = i + 1;
+    }
+    i = 0;
+    while (i < 64) {
         grid[i] = 0;
         i = i + 1;
     }
@@ -201,10 +208,17 @@ fn main() {
 
     dir = 0;
     frame = 0;
-    screen_base = 32;
     display_page(4);
 
     while (1) {
+        // Sideways settling needs more time than the 8-column width suggests
+        // because the water has to build up a vertical wall in the 16-row box.
+        if (dir == 1 || dir == 3) {
+            phase_limit = 24;
+        } else {
+            phase_limit = 16;
+        }
+
         // Clear the previous frame's moved bits; water bits are preserved.
         i = 0;
         while (i < 64) {
@@ -234,20 +248,17 @@ fn main() {
             }
         }
 
-        // Render every water cell as one lit LED into the back buffer.
-        i = 0;
-        while (i < 32) {
-            screen[screen_base + i] = 0;
-            i = i + 1;
-        }
-
+        // Update each pixel in place: no full-screen clear, so the visible
+        // page never blanks between frames.
         y = 0;
         while (1) {
             x = 0;
             while (x < 8) {
                 i = ((char)y << 3) + x;
                 if ((cell_get(i) & 1) != 0) {
-                    put_pixel(x, y);
+                    put_pixel(x, y, 1);
+                } else {
+                    put_pixel(x, y, 0);
                 }
                 x = x + 1;
             }
@@ -257,10 +268,9 @@ fn main() {
             y = y + 1;
         }
 
-        display_page((nibble)(4 + (screen_base >> 4)));
-        screen_base = 32 - screen_base;
+        display_page(4);
         frame = frame + 1;
-        if (frame == 16) {
+        if (frame == phase_limit) {
             frame = 0;
             dir = dir + 1;
             if (dir == 4) {

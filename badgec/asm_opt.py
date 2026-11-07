@@ -380,6 +380,38 @@ def _word_size(line: str) -> int:
     return 1
 
 
+def asm_word_count(asm: str) -> int:
+    """Return the number of words the assembler will emit for *asm*."""
+    return sum(_word_size(line) for line in asm.splitlines())
+
+
+def word_sizes(
+    asm: str,
+    labels: set[str],
+    total_words: int | None = None,
+) -> dict[str, int]:
+    """Return the word size of each entry label in *labels*.
+
+    Entry labels must be emitted in source order and must not overlap.  The
+    size of an entry runs up to the next entry label (or the end of the
+    program).  Internal labels inside a routine stay in that routine.
+    """
+
+    lines = asm.splitlines()
+    addresses = _addresses(lines)
+    if total_words is None:
+        total_words = sum(_word_size(line) for line in lines)
+
+    present = sorted(
+        (addresses[label], label) for label in set(labels) if label in addresses
+    )
+    sizes: dict[str, int] = {}
+    for index, (address, label) in enumerate(present):
+        end = present[index + 1][0] if index + 1 < len(present) else total_words
+        sizes[label] = max(0, end - address)
+    return sizes
+
+
 def _addresses(lines: list[str]) -> dict[str, int]:
     addresses: dict[str, int] = {}
     address = 0

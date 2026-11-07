@@ -86,6 +86,22 @@ word mid = (word)wide;       // low word
 dword again = (dword)mid;    // zero-extended
 ```
 
+Scalar `const` values are compile-time immediates, so pin names can be used
+directly in the fast GPIO path:
+
+```c
+const nibble EPD_SER   = 1;
+const nibble EPD_SRCLK = 2;
+const nibble EPD_DATA  = 4;
+const nibble EPD_CLOCK = EPD_SRCLK | EPD_DATA;
+
+gpio_set(EPD_SER);
+gpio_toggle(EPD_CLOCK);   // lowers to BTG R3,1 / BTG R3,2
+```
+
+They consume no RAM. The initializer can use literals, other scalar consts,
+casts, arithmetic, shifts, bitwise operators, and comparisons.
+
 | Call | Returns | Notes |
 |---|---|---|
 | `high_nibble(c)` | `nibble` | High nibble of a char |

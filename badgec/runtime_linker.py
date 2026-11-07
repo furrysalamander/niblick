@@ -12,6 +12,8 @@ import re
 
 LABEL_RE = re.compile(r"^(__bc_[A-Za-z0-9_]+):\s*$")
 REF_RE = re.compile(r"\b(__bc_[A-Za-z0-9_]+)\b")
+GOSUB_RE = re.compile(r"\bGOSUB\s+(__bc_[A-Za-z0-9_]+)\b", re.IGNORECASE)
+JSR_RE = re.compile(r"\bMOV\s+JSR\b", re.IGNORECASE)
 
 # First label of each independently-linkable runtime routine.  Internal labels
 # (loop targets, retry labels, ...) deliberately do not appear here.
@@ -128,6 +130,63 @@ def link_runtime(text: str, entries: set[str]) -> str:
             lines.extend(groups[label])
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def routine_labels(text: str) -> list[str]:
+    """Return every independently-linkable runtime entry label, in order."""
+    return _parse(text)[1]
+
+
+def runtime_stack_costs(text: str) -> dict[str, int]:
+    """Return the worst-case hardware stack cost of each runtime routine.
+
+    A call from user code costs one entry for the ``GOSUB``, then any nested
+    ``GOSUB`` or flash-table ``MOV JSR`` inside the routine.  The values are
+    therefore the number of stack entries used *including* the caller's
+    ``GOSUB``.
+    """
+
+    _, group_order, groups, _ = _parse(text)
+
+    label_to_group: dict[str, str] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        match = LABEL_RE.match(line.strip())
+        if not match:
+            continue
+        label = match.group(1)
+        if label in ROUTINE_LABELS or current is None:
+            current = label
+        label_to_group[label] = current
+
+    calls: dict[str, set[str]] = {group: set() for group in group_order}
+    has_jsr = {group: False for group in group_order}
+    for group in group_order:
+        for line in groups[group]:
+            code = line.split(";", 1)[0]
+            if JSR_RE.search(code):
+                has_jsr[group] = True
+            for ref in GOSUB_RE.findall(code):
+                child = label_to_group.get(ref)
+                if child is not None and child != group:
+                    calls[group].add(child)
+
+    memo: dict[str, int] = {}
+
+    def depth(group: str, visiting: set[str]) -> int:
+        if group in memo:
+            return memo[group]
+        if group in visiting:
+            return 0
+        visiting.add(group)
+        best = 1 if has_jsr[group] else 0
+        for child in calls[group]:
+            best = max(best, 1 + depth(child, visiting))
+        visiting.remove(group)
+        memo[group] = best
+        return best
+
+    return {group: 1 + depth(group, set()) for group in group_order}
 
 
 def reachable_labels(text: str, entries: set[str]) -> set[str]:

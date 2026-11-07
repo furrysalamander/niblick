@@ -425,8 +425,8 @@ def test_constant_folding_reduces_code(tmp_path: Path) -> None:
         """,
     )
     asm = (tmp_path / "prog.asm").read_text()
-    assert "MOV R1, 7" in asm
-    assert "MOV R1, 0" in asm
+    assert "MOV R0, 7" in asm
+    assert "MOV R0, 0" in asm
     emu = run(hex_path)
     assert emu.ram[ram_nibble(compiler, "x")] == 7
     assert emu.ram[ram_nibble(compiler, "y")] == 0

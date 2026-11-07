@@ -160,6 +160,20 @@ class Parser:
         self.expect("const", "keyword")
         type_ = self.expect_type()
         name = self.expect_ident()
+
+        if not self.check("["):
+            # Scalar constant, e.g. ``const nibble PIN = 1;``.
+            self.expect("=")
+            init = self.parse_expression()
+            self.expect(";")
+            return ast.GlobalDecl(
+                name=name,
+                type=type_,
+                init=init,
+                is_const=True,
+                line=line,
+            )
+
         self.expect("[")
         array_len: Optional[int] = None
         if not self.check("]"):

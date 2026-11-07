@@ -41,9 +41,39 @@ The emulator now also models:
 - the visible display pages (`display_pages()`)
 - UART FIFO, `Received`, and the `SerCtrl` error bit
 - instruction/cycle counts and an estimated elapsed time from the `Clock` SFR
+- I/O-port tracing through `trace_io()`, and fake inputs through
+  `set_input(value, bank=None)`
+
+`set_input` writes both `IN` (`0x0B`) and `INB` (`0xFB`) by default; pass
+`bank=0` or `bank=1` to target the bank selected by `WrFlags.IOPos`.
 
 It still does not model LED brightness, real-time clock accuracy, or
 electrical behavior. Validate those on hardware.
+
+## I/O tracing and fake inputs
+
+For bit-banged drivers, record the OUT/OUTB/IN/INB stream before touching
+hardware:
+
+```python
+emu = Emulator()
+emu.load_hex("driver.hex")
+emu.set_input(0)          # fake BUSY bits
+emu.trace_io(limit=2000)
+emu.run(5_000_000)
+for event in emu.io_trace:
+    print(event.kind, hex(event.address), event.bit, event.before, event.after)
+```
+
+Events are `write`, `bit`, or `read` and include the fetched PC and event
+number. `io_trace_total` keeps counting past the limit. From the CLI:
+
+```bash
+python3 -m badgec driver.badge --run --trace-io --io-trace-limit 200
+```
+
+A 595 decoder is deliberately not part of the emulator; wiring choices
+differ between builds.
 
 ## Adding a compiler test
 
@@ -65,14 +95,18 @@ addresses) plus the `.hex` path. `run()` loads and executes it.
 
 ```bash
 python3 -m badgec example.badge --run --trace --trace-limit 20
-python3 -m badgec example.badge --symbols --callgraph
+python3 -m badgec example.badge --symbols --callgraph --stack
 python3 -m badgec example.badge --map-json build/example.map.json
+python3 -m badgec example.badge --run --trace-io --io-trace-limit 200
 python3 -m badgec example.badge --run --dump-ram --dump-uart --dump-sfr
 ```
 
 `--trace` prints the PC, raw instruction word, decoded instruction, selected
-registers, stack pointer, and flags. The emulator also reports instruction
-and cycle counts and an estimated elapsed time at the current `Clock` setting.
+registers, stack pointer, and flags. `--symbols` prints per-function sizes
+and the runtime/flash/total breakdown. `--stack` prints the user call depth,
+the deepest path, and every runtime call's stack cost. The emulator also
+reports instruction and cycle counts and an estimated elapsed time at the
+current `Clock` setting.
 
 ## Hardware self-test
 

@@ -15,7 +15,7 @@ it is a normal 8-bit machine.
 Working today:
 
 - `nibble` (u4), `char` (u8), `word` (u16), `dword` (u32), and `flashptr` (12-bit code address)
-- Globals, locals, fixed-size RAM arrays, and `const` flash arrays
+- Globals, locals, fixed-size RAM arrays, `const` flash arrays, and scalar `const` values folded to immediates
 - Functions, parameters, returns, and tail-call optimization
 - `if`/`else`, `while`, `for`, `break`, `continue`
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
@@ -28,7 +28,7 @@ Working today:
 - GPIO: `gpio_read`, `gpio_write`, `gpio_set`, `gpio_clear`, `gpio_toggle`, `gpio_test`, `gpio_alt`, `uart_route`
 - System/SFR helpers: `display_page`, `display_poke`, `display_peek`, `random`, `seed`, `dimmer`, `key_status`, `key_code`, `key_any`, `key_alt`, `key_just`, `key_last`, `leds_enable`, `matrix_enable`
 - Rejection of non-tail recursion with a compile-time error
-- Code/RAM size reporting and a headless emulator test harness
+- Code/RAM size reporting, per-function sizes, stack-cost reports, I/O tracing, and a headless emulator test harness
 
 Not implemented yet:
 
@@ -67,13 +67,17 @@ Diagnostics:
 
 ```bash
 python3 -m badgec examples/hello.badge --run --trace --trace-limit 20 --dump-uart
-python3 -m badgec examples/hello.badge --symbols --callgraph --map-json hello.map.json
+python3 -m badgec examples/hello.badge --symbols --callgraph --stack
+python3 -m badgec examples/hello.badge --run --trace-io --io-trace-limit 200
+python3 -m badgec examples/hello.badge --map-json hello.map.json
 ```
 
 ## Language sketch
 
 ```c
 const char greeting[] = "Hello, Supercon!\n";
+const nibble LED_CLOCK = 1;
+const nibble LED_DATA  = 2;
 
 char rxbuf[16];
 nibble count;

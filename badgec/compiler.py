@@ -18,9 +18,14 @@ from pathlib import Path
 from typing import Optional
 
 from . import ast_nodes as ast
-from .asm_opt import optimize_asm
+from .asm_opt import asm_word_count, optimize_asm, word_sizes
 from .inline import optimize as optimize_program
-from .runtime_linker import link_runtime, reachable_labels
+from .runtime_linker import (
+    link_runtime,
+    reachable_labels,
+    routine_labels,
+    runtime_stack_costs,
+)
 from .errors import BadgeCompileError, BadgeTypeError, location
 from .types import (
     CHAR,
@@ -150,6 +155,9 @@ class VarSymbol:
     is_global: bool = False
     is_param: bool = False
     line: int = 0
+    # Scalar ``const`` values are folded to immediates and have no RAM
+    # storage.  ``address`` stays None for these symbols.
+    const_value: Optional[int] = None
 
 
 @dataclass
@@ -260,8 +268,18 @@ class Compiler:
         self.current_function: Optional[FunctionSymbol] = None
         self.loop_stack: list[tuple[str, str]] = []  # (break label, continue label)
         self.calls: list[tuple[str, str, bool, int]] = []  # caller, callee, tail, line
+        self.runtime_calls: list[tuple[str, str, int]] = []  # caller, runtime entry, line
+        self.function_depths: dict[str, int] = {}
+        self.deepest_path: list[str] = []
+        self.stack_call_sites: list[dict] = []
+        self.stack_warnings: list[str] = []
+        self.runtime_costs: dict[str, int] = {}
+        self.const_globals: dict[str, tuple[int, Type]] = {}
         self.max_call_depth = 0
         self.d32_scratch_addr: Optional[int] = None
+        self.asm_text = ""
+        self.runtime_text = ""
+        self.linked_runtime: set[str] = set()
 
     # ------------------------------------------------------------------
     # Entry point
@@ -284,9 +302,14 @@ class Compiler:
         for fn in self.program.functions:
             self.compile_function(self.functions[fn.name])
         self.emit("")
-        runtime_text = Path(__file__).with_name("runtime").joinpath("runtime.asm").read_text()
+        runtime_full = Path(__file__).with_name("runtime").joinpath("runtime.asm").read_text()
+        self.runtime_text = runtime_full
         if self.strip_runtime:
-            runtime_text = link_runtime(runtime_text, self.used_runtime)
+            self.linked_runtime = reachable_labels(runtime_full, self.used_runtime)
+            runtime_text = link_runtime(runtime_full, self.used_runtime)
+        else:
+            self.linked_runtime = set(routine_labels(runtime_full))
+            runtime_text = runtime_full
         base = self.d32_scratch_addr if self.d32_scratch_addr is not None else 0
         for index in range(24):
             token = f"__D32_{index:02d}"
@@ -297,6 +320,7 @@ class Compiler:
         asm = "\n".join(self.lines) + "\n"
         if self.asm_optimize:
             asm = optimize_asm(asm)
+        self.asm_text = asm
         return asm
 
     # ------------------------------------------------------------------
@@ -312,12 +336,230 @@ class Compiler:
         self.label_counter += 1
         return f"{hint}{self.label_counter}"
 
+    def use_runtime(self, entry: str, line: int) -> None:
+        """Record a runtime helper call for linking and stack reporting."""
+
+        self.used_runtime.add(entry)
+        if self.current_function is not None:
+            self.runtime_calls.append((self.current_function.name, entry, line))
+
+    @staticmethod
+    def _width_mask(typ: Type) -> int:
+        return (1 << (4 * max(typ.ram_size, 1))) - 1
+
+    def fold_const_decl(
+        self,
+        target: Type,
+        init: ast.Expr,
+        scope: Optional[Scope],
+        line: int,
+    ) -> Optional[int]:
+        """Fold a scalar const initializer, or return None if it is dynamic."""
+
+        folded = self.eval_const(init, scope)
+        if folded is None:
+            return None
+        value, typ = folded
+        if typ.ram_size > target.ram_size:
+            raise BadgeTypeError(
+                f"{location(self.filename, line)}: cannot convert {typ} value {value} "
+                f"to {target}"
+            )
+        return value & self._width_mask(target)
+
+    def eval_const(
+        self, expr: ast.Expr, scope: Optional[Scope]
+    ) -> Optional[tuple[int, Type]]:
+        """Return ``(value, type)`` when *expr* is a compile-time integer.
+
+        The rules mirror :meth:`infer_type` and the runtime arithmetic, so a
+        folded expression produces exactly the same bits as the generated
+        code would.  Anything with a side effect or unknown value returns
+        ``None`` and is compiled normally.
+        """
+
+        if isinstance(expr, ast.Number):
+            value = int(expr.value)
+            if value < 0 or value > 0xFFFFFFFF:
+                raise BadgeCompileError(
+                    f"{location(self.filename, expr.line)}: integer {value} does not fit in a dword"
+                )
+            if value <= 15:
+                return value, NIBBLE
+            if value <= 255:
+                return value, CHAR
+            if value <= 0xFFFF:
+                return value, WORD
+            return value, DWORD
+
+        if isinstance(expr, ast.Var):
+            symbol = scope.lookup(expr.name) if scope is not None else None
+            if symbol is not None:
+                if symbol.const_value is None:
+                    return None
+                return symbol.const_value & self._width_mask(symbol.type), symbol.type
+            if expr.name in self.const_globals:
+                value, typ = self.const_globals[expr.name]
+                return value & self._width_mask(typ), typ
+            symbol = self.globals.get(expr.name)
+            if symbol is not None and symbol.const_value is not None:
+                return symbol.const_value & self._width_mask(symbol.type), symbol.type
+            return None
+
+        if isinstance(expr, (ast.ToType, ast.Cast)):
+            target = expr.type
+            if not is_integer(target):
+                return None
+            folded = self.eval_const(expr.operand, scope)
+            if folded is None:
+                return None
+            value, _ = folded
+            return value & self._width_mask(target), target
+
+        if isinstance(expr, ast.Unary):
+            if expr.op == "&":
+                return None
+            folded = self.eval_const(expr.operand, scope)
+            if folded is None:
+                return None
+            value, typ = folded
+            if expr.op == "!":
+                return (0 if value else 1), NIBBLE
+            if expr.op == "~":
+                return (~value) & self._width_mask(typ), typ
+            if expr.op == "-":
+                return (-value) & self._width_mask(typ), typ
+            return None
+
+        if isinstance(expr, ast.Binary):
+            left = self.eval_const(expr.left, scope)
+            right = self.eval_const(expr.right, scope)
+            if left is None or right is None:
+                return None
+            left_value, left_type = left
+            right_value, right_type = right
+
+            if expr.op in ("==", "!=", "<", "<=", ">", ">="):
+                result = {
+                    "==": left_value == right_value,
+                    "!=": left_value != right_value,
+                    "<": left_value < right_value,
+                    "<=": left_value <= right_value,
+                    ">": left_value > right_value,
+                    ">=": left_value >= right_value,
+                }[expr.op]
+                return (1 if result else 0), NIBBLE
+
+            if expr.op in ("&&", "||"):
+                result = (
+                    bool(left_value) and bool(right_value)
+                    if expr.op == "&&"
+                    else bool(left_value) or bool(right_value)
+                )
+                return (1 if result else 0), NIBBLE
+
+            if expr.op in ("<<", ">>"):
+                width = 4 * left_type.ram_size
+                if right_value >= width:
+                    return 0, left_type
+                value = (
+                    (left_value << right_value)
+                    if expr.op == "<<"
+                    else (left_value >> right_value)
+                )
+                return value & self._width_mask(left_type), left_type
+
+            if expr.op == "*":
+                result_type = promoted_mul_type(wider(left_type, right_type))
+                return (
+                    (left_value * right_value) & self._width_mask(result_type),
+                    result_type,
+                )
+
+            if expr.op in ("/", "%"):
+                result_type = wider(left_type, right_type)
+                if right_value == 0:
+                    value = 0
+                elif expr.op == "/":
+                    value = left_value // right_value
+                else:
+                    value = left_value % right_value
+                return value & self._width_mask(result_type), result_type
+
+            if expr.op in ("+", "-", "&", "|", "^"):
+                result_type = wider(left_type, right_type)
+                value = {
+                    "+": left_value + right_value,
+                    "-": left_value - right_value,
+                    "&": left_value & right_value,
+                    "|": left_value | right_value,
+                    "^": left_value ^ right_value,
+                }[expr.op]
+                return value & self._width_mask(result_type), result_type
+
+        return None
+
+    def prepare_const_globals(self) -> None:
+        """Resolve scalar const globals before allocating any RAM.
+
+        The fixpoint lets a const refer to another const declared later.
+        Scalars that cannot be resolved are rejected by :meth:`prepare_globals`
+        with a clear error rather than becoming silently mutable storage.
+        """
+
+        pending = [
+            decl
+            for decl in self.program.globals
+            if decl.is_const
+            and decl.array_len is None
+            and decl.init is not None
+            and is_integer(decl.type)
+        ]
+        if not pending:
+            return
+
+        while True:
+            progress = False
+            for decl in pending:
+                if decl.name in self.const_globals:
+                    continue
+                value = self.fold_const_decl(decl.type, decl.init, None, decl.line)
+                if value is None:
+                    continue
+                self.const_globals[decl.name] = (value, decl.type)
+                progress = True
+            if not progress:
+                break
+
     def prepare_globals(self) -> None:
+        self.prepare_const_globals()
         for decl in self.program.globals:
             if decl.name in self.globals:
                 raise BadgeCompileError(
                     f"{location(self.filename, decl.line)}: duplicate global {decl.name!r}"
                 )
+
+            if decl.is_const and decl.array_len is None:
+                if not is_integer(decl.type):
+                    raise BadgeTypeError(
+                        f"{location(self.filename, decl.line)}: scalar const "
+                        f"{decl.name!r} must have an integer type"
+                    )
+                if decl.name not in self.const_globals:
+                    raise BadgeTypeError(
+                        f"{location(self.filename, decl.line)}: initializer for const "
+                        f"{decl.name!r} must be a compile-time constant"
+                    )
+                value, _ = self.const_globals[decl.name]
+                self.globals[decl.name] = VarSymbol(
+                    name=decl.name,
+                    type=decl.type,
+                    is_const=True,
+                    is_global=True,
+                    line=decl.line,
+                    const_value=value,
+                )
+                continue
 
             if decl.is_const and decl.array_len is not None:
                 label = self.new_flash_label()
@@ -462,17 +704,36 @@ class Compiler:
 
         elif isinstance(stmt, ast.Assign):
             target_type = self.lvalue_type(stmt.target, scope)
-            if isinstance(stmt.value, ast.Number) and target_type in (NIBBLE, CHAR, WORD, DWORD):
-                value = int(stmt.value.value)
+            if target_type in (NIBBLE, CHAR, WORD, DWORD):
                 limit = {NIBBLE: 15, CHAR: 255, WORD: 0xFFFF, DWORD: 0xFFFFFFFF}[target_type]
-                if value > limit:
-                    raise BadgeTypeError(
-                        f"{location(self.filename, stmt.line)}: cannot convert value {value} to {target_type}"
-                    )
-                if 0 <= value <= limit and self.store_constant(
-                    stmt.target, scope, target_type, value, stmt.line
-                ):
-                    return
+                if isinstance(stmt.value, ast.Number):
+                    value = int(stmt.value.value)
+                    if value > limit:
+                        raise BadgeTypeError(
+                            f"{location(self.filename, stmt.line)}: cannot convert value {value} to {target_type}"
+                        )
+                    if 0 <= value <= limit and self.store_constant(
+                        stmt.target, scope, target_type, value, stmt.line
+                    ):
+                        return
+                else:
+                    folded = self.eval_const(stmt.value, scope)
+                    if folded is not None:
+                        value, value_type = folded
+                        if value_type.ram_size > target_type.ram_size:
+                            raise BadgeTypeError(
+                                f"{location(self.filename, stmt.line)}: cannot convert {value_type} "
+                                f"value {value} to {target_type}"
+                            )
+                        if value > limit:
+                            raise BadgeTypeError(
+                                f"{location(self.filename, stmt.line)}: cannot convert value {value} "
+                                f"to {target_type}"
+                            )
+                        if self.store_constant(
+                            stmt.target, scope, target_type, value, stmt.line
+                        ):
+                            return
             typ = self.compile_expr(stmt.value, scope)
             self.coerce(typ, target_type, stmt.line)
 
@@ -538,6 +799,34 @@ class Compiler:
             raise BadgeCompileError(
                 f"{location(self.filename, stmt.line)}: duplicate local {stmt.name!r}"
             )
+        if stmt.is_const and stmt.array_len is None:
+            if not is_integer(stmt.type):
+                raise BadgeTypeError(
+                    f"{location(self.filename, stmt.line)}: scalar const "
+                    f"{stmt.name!r} must have an integer type"
+                )
+            if stmt.init is None:
+                raise BadgeTypeError(
+                    f"{location(self.filename, stmt.line)}: const {stmt.name!r} "
+                    f"requires an initializer"
+                )
+            value = self.fold_const_decl(stmt.type, stmt.init, scope, stmt.line)
+            if value is None:
+                raise BadgeTypeError(
+                    f"{location(self.filename, stmt.line)}: initializer for const "
+                    f"{stmt.name!r} must be a compile-time constant"
+                )
+            scope.define(
+                VarSymbol(
+                    name=stmt.name,
+                    type=stmt.type,
+                    is_const=True,
+                    line=stmt.line,
+                    const_value=value,
+                ),
+                self.filename,
+            )
+            return
         size = (stmt.array_len or 1) * stmt.type.ram_size
         address = self.mem.alloc(size, stmt.name, self.filename, stmt.line)
         symbol = VarSymbol(
@@ -628,6 +917,13 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def compile_expr(self, expr: ast.Expr, scope: Scope) -> Type:
+        if not isinstance(expr, ast.Number):
+            folded = self.eval_const(expr, scope)
+            if folded is not None:
+                value, typ = folded
+                self._emit_immediate(value, _REGS[typ.ram_size])
+                return typ
+
         if isinstance(expr, ast.Number):
             if expr.value < 0 or expr.value > 0xFFFFFFFF:
                 raise BadgeCompileError(
@@ -785,6 +1081,11 @@ class Compiler:
                 f"{location(self.filename, expr.line)}: & is only supported on simple variables"
             )
         symbol = self.lookup(expr.operand.name, scope, expr.line)
+        if symbol.const_value is not None:
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: cannot take the address of const "
+                f"{symbol.name!r}"
+            )
         if symbol.address is None:
             raise BadgeTypeError(
                 f"{location(self.filename, expr.line)}: cannot take the address of {symbol.name!r}"
@@ -1247,17 +1548,17 @@ class Compiler:
         if common is NIBBLE:
             self.emit("MOV R2, R1")
             self.load_temp(NIBBLE, temp_addr)
-            self.used_runtime.add("__bc_mul4")
+            self.use_runtime("__bc_mul4", expr.line)
             self.emit("GOSUB __bc_mul4")
         elif common is CHAR:
             self._move(("R1", "R2"), ("R3", "R4"))
             self.load_temp(CHAR, temp_addr)
-            self.used_runtime.add("__bc_mul8")
+            self.use_runtime("__bc_mul8", expr.line)
             self.emit("GOSUB __bc_mul8")
         else:
             self._move(("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8"))
             self.load_temp(WORD, temp_addr)
-            self.used_runtime.add("__bc_mul16")
+            self.use_runtime("__bc_mul16", expr.line)
             self.emit("GOSUB __bc_mul16")
         self.temp.reset(mark)
         return result
@@ -1280,7 +1581,7 @@ class Compiler:
         self.emit(f"MOV R5, {left_addr & 0xF}")
         self.emit(f"MOV R6, {(right_addr >> 4) & 0xF}")
         self.emit(f"MOV R7, {right_addr & 0xF}")
-        self.used_runtime.add("__bc_mul32")
+        self.use_runtime("__bc_mul32", line)
         self.emit("GOSUB __bc_mul32")
         self.temp.reset(mark)
         return DWORD
@@ -1350,7 +1651,7 @@ class Compiler:
         if common is NIBBLE:
             self._move(("R1", "R2"), ("R3", "R4"))
             self.load_temp(CHAR, temp_addr)
-            self.used_runtime.add("__bc_divmod8")
+            self.use_runtime("__bc_divmod8", expr.line)
             self.emit("GOSUB __bc_divmod8")
             if is_div:
                 self.temp.reset(mark)
@@ -1362,7 +1663,7 @@ class Compiler:
         if common is CHAR:
             self._move(("R1", "R2"), ("R3", "R4"))
             self.load_temp(CHAR, temp_addr)
-            self.used_runtime.add("__bc_divmod8")
+            self.use_runtime("__bc_divmod8", expr.line)
             self.emit("GOSUB __bc_divmod8")
             if not is_div:
                 self._move(("R3", "R4"), ("R1", "R2"))
@@ -1371,7 +1672,7 @@ class Compiler:
 
         self._move(("R1", "R2", "R3", "R4"), ("R5", "R6", "R7", "R8"))
         self.load_temp(WORD, temp_addr)
-        self.used_runtime.add("__bc_divmod16")
+        self.use_runtime("__bc_divmod16", expr.line)
         self.emit("GOSUB __bc_divmod16")
         if not is_div:
             self._move(("R5", "R6", "R7", "R8"), ("R1", "R2", "R3", "R4"))
@@ -1396,7 +1697,7 @@ class Compiler:
         self.emit(f"MOV R5, {left_addr & 0xF}")
         self.emit(f"MOV R6, {(right_addr >> 4) & 0xF}")
         self.emit(f"MOV R7, {right_addr & 0xF}")
-        self.used_runtime.add("__bc_divmod32")
+        self.use_runtime("__bc_divmod32", line)
         self.emit("GOSUB __bc_divmod32")
         self.load_temp(DWORD, left_addr if is_div else right_addr)
         self.temp.reset(mark)
@@ -1423,19 +1724,19 @@ class Compiler:
         if symbol.flash_label is not None:
             self.compile_flash_addr(symbol, expr.index, scope, expr.line)
             if symbol.type is CHAR:
-                self.used_runtime.add("__bc_flash_read_char")
+                self.use_runtime("__bc_flash_read_char", expr.line)
                 self.emit("GOSUB __bc_flash_read_char")
                 return CHAR
             if symbol.type is WORD:
-                self.used_runtime.add("__bc_flash_read_word")
+                self.use_runtime("__bc_flash_read_word", expr.line)
                 self.emit("GOSUB __bc_flash_read_word")
                 return WORD
             if symbol.type is DWORD:
                 self.ensure_d32_scratch()
-                self.used_runtime.add("__bc_flash_read_dword")
+                self.use_runtime("__bc_flash_read_dword", expr.line)
                 self.emit("GOSUB __bc_flash_read_dword")
                 return DWORD
-            self.used_runtime.add("__bc_flash_read_nibble")
+            self.use_runtime("__bc_flash_read_nibble", expr.line)
             self.emit("GOSUB __bc_flash_read_nibble")
             return NIBBLE
 
@@ -1633,11 +1934,13 @@ class Compiler:
         self.temp.reset(mark)
         return fn.decl.return_type
 
-    def _constant_nibble(self, expr: ast.Expr) -> Optional[int]:
-        while isinstance(expr, (ast.ToType, ast.Cast)):
-            expr = expr.operand
-        if isinstance(expr, ast.Number) and 0 <= int(expr.value) <= 15:
-            return int(expr.value)
+    def _constant_nibble(self, expr: ast.Expr, scope: Scope) -> Optional[int]:
+        folded = self.eval_const(expr, scope)
+        if folded is None:
+            return None
+        value, typ = folded
+        if typ is NIBBLE and 0 <= value <= 15:
+            return value
         return None
 
     def compile_builtin(self, expr: ast.Call, scope: Scope) -> Type:
@@ -1646,12 +1949,12 @@ class Compiler:
 
         constant_mask = None
         if name in ("gpio_set", "gpio_clear", "gpio_toggle", "gpio_test") and len(expr.args) == 1:
-            constant_mask = self._constant_nibble(expr.args[0])
+            constant_mask = self._constant_nibble(expr.args[0], scope)
         fast_gpio = constant_mask is not None and (
             name != "gpio_test" or constant_mask.bit_count() <= 1
         )
         if entry is not None and not fast_gpio:
-            self.used_runtime.add(entry)
+            self.use_runtime(entry, expr.line)
 
         if name == "uart_init":
             self.require_args(expr, 1)
@@ -1778,7 +2081,7 @@ class Compiler:
 
         if name in ("gpio_set", "gpio_clear", "gpio_toggle", "gpio_test"):
             self.require_args(expr, 1)
-            mask = self._constant_nibble(expr.args[0])
+            mask = self._constant_nibble(expr.args[0], scope)
             if mask is not None:
                 if name == "gpio_test":
                     if mask == 0:
@@ -1938,10 +2241,10 @@ class Compiler:
             self.emit(f"MOV R7, {src.address & 0xF}")
             self.load_temp(NIBBLE, length_addr)
             if dst.type is NIBBLE:
-                self.used_runtime.add("__bc_memcpy_nibbles")
+                self.use_runtime("__bc_memcpy_nibbles", expr.line)
                 self.emit("GOSUB __bc_memcpy_nibbles")
             else:
-                self.used_runtime.add("__bc_memcpy_chars")
+                self.use_runtime("__bc_memcpy_chars", expr.line)
                 self.emit("GOSUB __bc_memcpy_chars")
             self.temp.reset(mark)
             return VOID
@@ -1978,13 +2281,13 @@ class Compiler:
             self.emit(f"MOV R4, {(addr >> 4) & 0xF}")
             self.emit(f"MOV R5, {addr & 0xF}")
             if symbol.type is NIBBLE:
-                self.used_runtime.add("__bc_memset_nibbles")
+                self.use_runtime("__bc_memset_nibbles", expr.line)
                 self.load_temp(NIBBLE, value_addr)
                 self.emit("MOV R3, R1")
                 self.load_temp(NIBBLE, length_addr)
                 self.emit("GOSUB __bc_memset_nibbles")
             else:
-                self.used_runtime.add("__bc_memset_chars")
+                self.use_runtime("__bc_memset_chars", expr.line)
                 self.load_temp(CHAR, value_addr)
                 self.emit("MOV R3, R2")
                 self.emit("MOV R2, R1")
@@ -2248,6 +2551,9 @@ class Compiler:
         )
 
     def load_symbol(self, symbol: VarSymbol, line: int) -> None:
+        if symbol.const_value is not None:
+            self._emit_immediate(symbol.const_value, _REGS[symbol.type.ram_size])
+            return
         if symbol.address is None:
             raise BadgeCompileError(
                 f"{location(self.filename, line)}: {symbol.name!r} has no RAM storage"
@@ -3073,8 +3379,108 @@ class Compiler:
                 "but the badge hardware stack has only five entries"
             )
 
-    def map_data(self) -> dict:
+        # Maximum entry depth for every function reachable from main.  Tail
+        # calls do not add a stack entry, so a tail-call cycle terminates
+        # because the candidate depth stops increasing.
+        self.function_depths = {"main": 0}
+        parents: dict[str, tuple[str, bool, int]] = {}
+        work = ["main"]
+        while work:
+            caller = work.pop()
+            base = self.function_depths[caller]
+            for callee, tail, line in edges.get(caller, []):
+                candidate = base + (0 if tail else 1)
+                if candidate > self.function_depths.get(callee, -1):
+                    self.function_depths[callee] = candidate
+                    parents[callee] = (caller, tail, line)
+                    work.append(callee)
+
+        if self.function_depths:
+            deepest = max(
+                self.function_depths,
+                key=lambda name: (self.function_depths[name], name),
+            )
+            path = [deepest]
+            while path[-1] != "main" and path[-1] in parents:
+                path.append(parents[path[-1]][0])
+            self.deepest_path = list(reversed(path))
+
+        # Runtime helpers cost stack entries too.  Costs are derived from
+        # the runtime assembly, including flash-table ``MOV JSR`` calls.
+        self.runtime_costs = runtime_stack_costs(self.runtime_text)
+        self.stack_call_sites = []
+        self.stack_warnings = []
+        for caller, entry, line in self.runtime_calls:
+            cost = self.runtime_costs.get(entry, 1)
+            user_depth = self.function_depths.get(caller, 0)
+            total = user_depth + cost
+            self.stack_call_sites.append(
+                {
+                    "caller": caller,
+                    "entry": entry,
+                    "line": line,
+                    "user_depth": user_depth,
+                    "cost": cost,
+                    "total": total,
+                }
+            )
+            if total > 5:
+                self.stack_warnings.append(
+                    f"{location(self.filename, line)}: {caller} calls {entry} at user "
+                    f"depth {user_depth}; runtime cost {cost} needs {total} stack "
+                    f"levels (the hardware stack has 5)"
+                )
+
+    def code_sizes(self, total_words: Optional[int] = None) -> dict:
+        """Return per-function, per-runtime, and flash word counts."""
+
+        labels = {fn.label for fn in self.functions.values()}
+        labels.update(self.linked_runtime)
+        labels.add("__bc_flash_data")
+        sizes = word_sizes(self.asm_text, labels, total_words)
+
+        function_words = {
+            name: sizes.get(fn.label, 0) for name, fn in self.functions.items()
+        }
+        runtime_words = {
+            label: sizes.get(label, 0) for label in sorted(self.linked_runtime)
+        }
+        flash_words = sizes.get("__bc_flash_data", 0)
+        total = total_words if total_words is not None else asm_word_count(self.asm_text)
+        startup_words = max(
+            0,
+            total
+            - sum(function_words.values())
+            - sum(runtime_words.values())
+            - flash_words,
+        )
+        return {
+            "functions": function_words,
+            "runtime": runtime_words,
+            "flash": flash_words,
+            "startup": startup_words,
+            "total": total,
+        }
+
+    def stack_data(self) -> dict:
+        """Return the static stack-report data used by ``--stack``."""
+
+        return {
+            "max_call_depth": self.max_call_depth,
+            "deepest_path": list(self.deepest_path),
+            "function_depths": dict(self.function_depths),
+            "runtime_costs": {
+                label: self.runtime_costs.get(label, 1)
+                for label in sorted(self.linked_runtime)
+            },
+            "call_sites": list(self.stack_call_sites),
+            "warnings": list(self.stack_warnings),
+        }
+
+    def map_data(self, total_words: Optional[int] = None) -> dict:
         """Return a JSON-serializable symbol/size map."""
+
+        sizes = self.code_sizes(total_words)
         globals_data = []
         for name, symbol in self.globals.items():
             globals_data.append(
@@ -3084,6 +3490,7 @@ class Compiler:
                     "address": symbol.address,
                     "array_len": symbol.array_len,
                     "const": symbol.is_const,
+                    "value": symbol.const_value,
                     "flash_label": symbol.flash_label,
                 }
             )
@@ -3095,6 +3502,7 @@ class Compiler:
                     "name": name,
                     "label": fn.label,
                     "return_type": str(fn.decl.return_type),
+                    "words": sizes["functions"].get(name, 0),
                     "params": [
                         {
                             "name": param.name,
@@ -3126,6 +3534,12 @@ class Compiler:
                 for caller, callee, tail, line in self.calls
             ],
             "runtime": sorted(self.used_runtime),
+            "runtime_linked": sorted(self.linked_runtime),
+            "runtime_words": sizes["runtime"],
+            "flash_words": sizes["flash"],
+            "startup_words": sizes["startup"],
+            "asm_words": sizes["total"],
+            "stack": self.stack_data(),
             "ram_nibbles_used": self.mem.used(),
             "max_call_depth": self.max_call_depth,
         }

@@ -178,7 +178,11 @@ Runtime stack costs from user code:
 | `uart_puts` | 3 |
 
 These costs are why deep user call chains should use tail calls or
-inlining.
+inlining. The compiler derives them from the runtime assembly itself
+(including `GOSUB` chains and flash-table `MOV JSR` calls). `--stack`
+prints the deepest user path, each function's entry depth, every runtime
+call site, and a warning when a call would exceed the five hardware stack
+entries.
 
 ## Flash data
 

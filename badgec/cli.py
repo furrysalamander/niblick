@@ -27,8 +27,11 @@ def compile_source(
     map_json: str | Path | None = None,
     show_symbols: bool = False,
     show_callgraph: bool = False,
+    show_stack: bool = False,
     trace: bool = False,
+    trace_io: bool = False,
     trace_limit: int = 200,
+    io_trace_limit: int | None = 2000,
     dump_ram: bool = False,
     dump_uart: bool = False,
     dump_sfr: bool = False,
@@ -65,15 +68,20 @@ def compile_source(
         print(f"  data RAM:  {compiler.mem.used()} / 208 nibbles")
         print(f"  max non-tail call depth: {compiler.max_call_depth}")
 
+    for warning in compiler.stack_warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
     if show_map:
         print_map(compiler)
     if show_symbols:
-        print_symbols(compiler)
+        print_symbols(compiler, words)
     if show_callgraph:
         print_callgraph(compiler)
+    if show_stack:
+        print_stack(compiler)
 
     if map_json is not None:
-        data = compiler.map_data()
+        data = compiler.map_data(total_words=words)
         if words is not None:
             data["code_words"] = words
         Path(map_json).write_text(json.dumps(data, indent=2) + "\n")
@@ -84,6 +92,8 @@ def compile_source(
             raise BadgeError("running requires assembly; remove --no-assemble")
         emu = Emulator()
         emu.load_hex(hex_path)
+        if trace_io:
+            emu.trace_io(limit=io_trace_limit)
         if trace:
             steps = run_traced(emu, max_steps=max_steps, limit=trace_limit)
         else:
@@ -96,6 +106,8 @@ def compile_source(
             print_uart(emu)
         if dump_sfr:
             print_sfrs(emu)
+        if trace_io:
+            print_io_trace(emu)
 
     return asm_path, hex_path
 
@@ -107,21 +119,78 @@ def print_map(compiler: Compiler) -> None:
     for name, symbol in compiler.globals.items():
         if symbol.flash_label is not None:
             print(f"    {name}: flash {symbol.flash_label} ({symbol.array_len} elements)")
+        elif symbol.const_value is not None:
+            print(f"    {name}: const 0x{symbol.const_value:X} ({symbol.type})")
         elif symbol.array_len is not None:
             print(f"    {name}: RAM 0x{symbol.address:02X} ({symbol.array_len} elements)")
         else:
             print(f"    {name}: RAM 0x{symbol.address:02X}")
 
 
-def print_symbols(compiler: Compiler) -> None:
+def print_symbols(compiler: Compiler, total_words: int | None = None) -> None:
+    sizes = compiler.code_sizes(total_words)
     print("  functions:")
     for name, fn in compiler.functions.items():
         params = ", ".join(f"{p.name}:{p.type}@0x{p.address:02X}" for p in fn.params)
-        print(f"    {name} -> {fn.decl.return_type} [{fn.label}] {params}")
+        words = sizes["functions"].get(name, 0)
+        print(f"    {name} -> {fn.decl.return_type} [{fn.label}] {words} words {params}")
     if compiler.flash:
         print("  flash data:")
         for item in compiler.flash:
-            print(f"    {item.label}: {item.type}[{len(item.values)}]")
+            words = len(item.values) * max(item.type.flash_size, 1)
+            print(f"    {item.label}: {item.type}[{len(item.values)}] {words} words")
+    print("  runtime:")
+    if not sizes["runtime"]:
+        print("    (none)")
+    for label, words in sorted(sizes["runtime"].items(), key=lambda item: (-item[1], item[0])):
+        print(f"    {label}: {words} words")
+    print(f"  startup/other: {sizes['startup']} words")
+    print(f"  total: {sizes['total']} words")
+
+
+def print_stack(compiler: Compiler) -> None:
+    print("  stack report:")
+    print(f"    user depth: {compiler.max_call_depth} / 4 (hardware has 5 entries)")
+    if compiler.deepest_path:
+        print(f"    deepest path: {' -> '.join(compiler.deepest_path)}")
+    print("    function entry depths:")
+    if not compiler.function_depths:
+        print("      (none)")
+    for name, depth in sorted(
+        compiler.function_depths.items(), key=lambda item: (-item[1], item[0])
+    ):
+        print(f"      {name}: {depth}")
+    print("    runtime calls:")
+    if not compiler.stack_call_sites:
+        print("      (none)")
+    for site in compiler.stack_call_sites:
+        print(
+            f"      {site['caller']}:{site['line']} -> {site['entry']} "
+            f"(cost {site['cost']}) total {site['total']}/5"
+        )
+    print("    linked runtime costs:")
+    if not compiler.linked_runtime:
+        print("      (none)")
+    for label in sorted(compiler.linked_runtime):
+        print(f"      {label}: {compiler.runtime_costs.get(label, 1)}")
+    if compiler.stack_warnings:
+        print("    warnings:")
+        for warning in compiler.stack_warnings:
+            print(f"      {warning}")
+
+
+def print_io_trace(emu: Emulator) -> None:
+    events = emu.io_trace or []
+    suffix = ""
+    if len(events) < emu.io_trace_total:
+        suffix = f" (showing first {len(events)})"
+    print(f"  I/O trace: {emu.io_trace_total} events{suffix}")
+    for event in events:
+        bit = f" bit={event.bit}" if event.bit is not None else ""
+        print(
+            f"    {event.step:06d} pc=0x{event.pc:03X} {event.kind:<5} "
+            f"0x{event.address:02X}{bit} 0x{event.before:X} -> 0x{event.after:X}"
+        )
 
 
 def print_callgraph(compiler: Compiler) -> None:
@@ -208,10 +277,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-steps", type=int, default=100000, help="emulator step limit for --run")
     parser.add_argument("--map", action="store_true", help="print the global memory map")
     parser.add_argument("--map-json", help="write a JSON symbol map")
-    parser.add_argument("--symbols", action="store_true", help="print functions and flash labels")
+    parser.add_argument("--symbols", action="store_true", help="print functions, sizes, and flash labels")
     parser.add_argument("--callgraph", action="store_true", help="print the user call graph")
+    parser.add_argument("--stack", action="store_true", help="print call-depth and runtime stack costs")
     parser.add_argument("--trace", action="store_true", help="trace emulator execution")
     parser.add_argument("--trace-limit", type=int, default=200, help="maximum traced instructions")
+    parser.add_argument("--trace-io", action="store_true", help="trace OUT/OUTB/IN/INB accesses")
+    parser.add_argument(
+        "--io-trace-limit",
+        type=int,
+        default=2000,
+        help="maximum stored I/O trace events (0 = unlimited)",
+    )
     parser.add_argument("--dump-ram", action="store_true", help="dump RAM after running")
     parser.add_argument("--dump-uart", action="store_true", help="dump UART TX/RX after running")
     parser.add_argument("--dump-sfr", action="store_true", help="dump SFRs after running")
@@ -227,7 +304,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    run = args.run or args.trace or args.dump_ram or args.dump_uart or args.dump_sfr
+    run = (
+        args.run
+        or args.trace
+        or args.trace_io
+        or args.dump_ram
+        or args.dump_uart
+        or args.dump_sfr
+    )
 
     try:
         compile_source(
@@ -242,8 +326,11 @@ def main(argv: list[str] | None = None) -> int:
             map_json=args.map_json,
             show_symbols=args.symbols,
             show_callgraph=args.callgraph,
+            show_stack=args.stack,
             trace=args.trace,
+            trace_io=args.trace_io,
             trace_limit=args.trace_limit,
+            io_trace_limit=None if args.io_trace_limit == 0 else args.io_trace_limit,
             dump_ram=args.dump_ram,
             dump_uart=args.dump_uart,
             dump_sfr=args.dump_sfr,

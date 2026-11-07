@@ -113,6 +113,26 @@ dword wide = (dword)word_value;
 
 `const` arrays are read-only and live in flash; RAM arrays are mutable.
 
+Scalar `const` declarations are folded at compile time and occupy no RAM:
+
+```c
+const nibble EPD_SER   = 1;
+const nibble EPD_SRCLK = 2;
+const nibble EPD_CLK   = EPD_SER | EPD_SRCLK;
+
+gpio_set(EPD_CLK);
+```
+
+The initializer may be any integer constant expression built from literals,
+other scalar consts, casts, unary `- ~ !`, arithmetic, shifts, bitwise
+operators, and comparisons. Results follow the same width and widening rules
+as runtime code, so `word * word` still truncates to 16 bits. A scalar const
+whose initializer is dynamic is rejected; use a normal variable instead.
+Taking `&CONST` is also rejected. Local scalar consts work the same way.
+
+Scalar consts still appear in `--map` and `--map-json`, with `address: null`
+and their folded value.
+
 `char` is unsigned 0..255, `word` is unsigned 0..65535, and `dword` is
 unsigned 0..4294967295. String literals and `const char[]` are flash objects
 with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
@@ -132,6 +152,9 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 ## Current optimizations
 
 - Constant folding for integer arithmetic and comparisons.
+- Scalar `const` globals and locals with constant initializers are replaced
+  by immediates, saving both their RAM and their startup stores. Const
+  expression folding is also used for GPIO masks and constant assignments.
 - Direct `peek`/`poke`/`out`/`in` lowering.
 - Whole-program inlining of tiny `return <expr>` functions, with a
   side-effect guard for parameters used more than once. Char arguments are
@@ -189,12 +212,47 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 The Tetris demo is now around **2494 / 4096 words** and **164 / 208 RAM
 nibbles**, down from 4004 words before the condition-lowering and peephole
 work. That leaves roughly 1600 words for new features. A dword-heavy demo
-(`dword_math.badge`) plus the 32-bit multiply/divide runtime is about 2217
+(`dword_math.badge`) plus the 32-bit multiply/divide runtime is about 2216
 words and 105 RAM nibbles.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2600-word
 budget.
+
+## Size and stack reports
+
+`--symbols` now reports per-function word counts, linked runtime routine
+sizes, flash-data size, startup overhead, and the total:
+
+```text
+  functions:
+    epd_spi_byte -> void [fn_epd_spi_byte] 29 words p:char@0x40
+    main -> void [fn_main] 142 words
+  runtime:
+    __bc_uart_puts: 15 words
+  startup/other: 2 words
+  total: 2494 words
+```
+
+`--map-json` carries the same data (`functions[].words`, `runtime_words`,
+`flash_words`, `startup_words`, `asm_words`). The counts are computed from
+the final optimized assembly using the same word-size model as branch
+relaxation; a test checks that the buckets add up to the assembled total.
+
+`--stack` prints the maximum non-tail user depth, the deepest user path,
+each function's entry depth, every runtime call site with its stack cost,
+and the linked runtime routines. Runtime costs are derived from the runtime
+assembly, including internal `GOSUB`s and flash-table `MOV JSR` calls, so
+they stay in sync with `docs/runtime-abi.md`. A call that would need more
+than the five hardware stack entries produces a compile warning:
+
+```text
+warning: driver.badge:42: leaf calls __bc_uart_puts at user depth 4;
+runtime cost 3 needs 7 stack levels (the hardware stack has 5)
+```
+
+The existing hard limit of four non-tail user levels from `main` is
+unchanged.
 
 ## Error handling
 

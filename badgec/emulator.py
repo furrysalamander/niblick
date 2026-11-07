@@ -29,10 +29,24 @@ The implementation follows the revision-4 manuals in
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-__all__ = ["Emulator", "EmulatorError", "EmulatorStackError"]
+__all__ = ["Emulator", "EmulatorError", "EmulatorStackError", "IoTraceEvent"]
+
+
+@dataclass(frozen=True)
+class IoTraceEvent:
+    """One logical I/O-port access recorded by :meth:`Emulator.trace_io`."""
+
+    step: int
+    pc: int
+    kind: str  # "write", "bit", or "read"
+    address: int  # OUT/OUTB/IN/INB data-memory address
+    before: int
+    after: int
+    bit: int | None = None
 
 
 class EmulatorError(RuntimeError):
@@ -119,6 +133,12 @@ class Emulator:
         self.last_key = 0
         self.just_pressed = False
 
+        # I/O tracing.  ``io_trace`` is None until trace_io() is called.
+        self.io_trace: list[IoTraceEvent] | None = None
+        self.io_trace_limit: int | None = None
+        self.io_trace_total = 0
+        self._pc_at_fetch = 0
+
     # ------------------------------------------------------------------
     # Loading and reset
     # ------------------------------------------------------------------
@@ -144,6 +164,69 @@ class Emulator:
         self.alt_down = False
         self.last_key = 0
         self.just_pressed = False
+        if self.io_trace is not None:
+            self.io_trace = []
+            self.io_trace_total = 0
+        self._pc_at_fetch = 0
+
+    # ------------------------------------------------------------------
+    # I/O tracing and input-port helpers
+    # ------------------------------------------------------------------
+    def trace_io(self, limit: int | None = 2000) -> None:
+        """Start recording OUT/OUTB/IN/INB accesses.
+
+        *limit* caps the number of stored events; ``None`` stores everything.
+        ``io_trace_total`` keeps counting past the limit, so a caller can see
+        how many events were dropped.
+        """
+
+        self.io_trace = []
+        self.io_trace_limit = limit
+        self.io_trace_total = 0
+
+    def stop_io_trace(self) -> None:
+        """Disable I/O tracing while keeping any recorded events."""
+
+        self.io_trace_limit = 0
+
+    def _record_io(
+        self,
+        kind: str,
+        address: int,
+        before: int,
+        after: int,
+        bit: int | None = None,
+    ) -> None:
+        if self.io_trace is None:
+            return
+        self.io_trace_total += 1
+        if self.io_trace_limit is not None and len(self.io_trace) >= self.io_trace_limit:
+            return
+        self.io_trace.append(
+            IoTraceEvent(
+                step=self.instruction_count,
+                pc=self._pc_at_fetch,
+                kind=kind,
+                address=address & 0xFF,
+                before=before & 0xF,
+                after=after & 0xF,
+                bit=bit,
+            )
+        )
+
+    def set_input(self, value: int, bank: int | None = None) -> None:
+        """Set the 4-bit input port used by IN/INB tests.
+
+        ``bank=None`` writes both bank 0 (0x0B) and bank 1 (0xFB), which is
+        convenient when the program may change ``WrFlags.IOPos``.  Pass 0 or
+        1 to target the bank selected by ``IOPos=0`` / ``IOPos=1``.
+        """
+
+        value &= 0xF
+        if bank in (None, 0):
+            self.ram[0x0B] = value
+        if bank in (None, 1):
+            self.ram[0xFB] = value
 
     def halt(self) -> None:
         """Request that :meth:`run` stop before its step limit."""
@@ -250,6 +333,7 @@ class Emulator:
             return
 
         word = self.program[self.pc & 0xFFF]
+        self._pc_at_fetch = self.pc
         # The PC points to the next instruction while the current one
         # executes.  This matches JR/SKIP/DSZ, which are documented relative
         # to the already-incremented PC.
@@ -308,10 +392,18 @@ class Emulator:
             self.ram[x] = self.ram[x] ^ self.ram[y]
             self._set_z(self.ram[x])
         elif opcode == 0x8:  # MOV RX,RY
+            before = self.ram[x]
             self.ram[x] = self.ram[y]
+            if x in (0x0A, 0x0B):
+                self._record_io("write", x, before, self.ram[x])
+            if y == 0x0B and x != 0x0B:
+                self._record_io("read", 0x0B, self.ram[y], self.ram[y])
             self._after_register_write(x)
         elif opcode == 0x9:  # MOV RX,N
+            before = self.ram[x]
             self.ram[x] = y
+            if x in (0x0A, 0x0B):
+                self._record_io("write", x, before, self.ram[x])
             self._after_register_write(x)
         elif opcode == 0xA:  # MOV [XY],R0
             address = (self.ram[x] << 4) | self.ram[y]
@@ -389,22 +481,35 @@ class Emulator:
             group = (operand >> 2) & 0x3
             bit = operand & 0x3
             address = self._bit_read_address(group)
+            if group == 3:
+                self._record_io(
+                    "read", address, self.ram[address], self.ram[address], bit
+                )
             self.Z = 0 if (self.ram[address] >> bit) & 1 else 1
         elif opcode == 0xA:  # BSET RG,M
             group = (operand >> 2) & 0x3
             bit = operand & 0x3
             address = self._bit_write_address(group)
+            before = self.ram[address]
             self.ram[address] = (self.ram[address] | (1 << bit)) & 0xF
+            if group == 3:
+                self._record_io("bit", address, before, self.ram[address], bit)
         elif opcode == 0xB:  # BCLR RG,M
             group = (operand >> 2) & 0x3
             bit = operand & 0x3
             address = self._bit_write_address(group)
+            before = self.ram[address]
             self.ram[address] = self.ram[address] & ~(1 << bit) & 0xF
+            if group == 3:
+                self._record_io("bit", address, before, self.ram[address], bit)
         elif opcode == 0xC:  # BTG RG,M
             group = (operand >> 2) & 0x3
             bit = operand & 0x3
             address = self._bit_write_address(group)
+            before = self.ram[address]
             self.ram[address] = (self.ram[address] ^ (1 << bit)) & 0xF
+            if group == 3:
+                self._record_io("bit", address, before, self.ram[address], bit)
         elif opcode == 0xD:  # RRC RY
             value = self.ram[operand]
             old_carry = self.C
@@ -487,7 +592,10 @@ class Emulator:
                 value |= 1
             self.user_sync = False
             return value
-        return self.ram[address]
+        value = self.ram[address]
+        if address in (0x0B, 0xFB):
+            self._record_io("read", address, value, value)
+        return value
 
     def _write_memory(self, address: int, value: int) -> None:
         """Write a nibble, modelling UART, PRNG, and SFR side effects."""
@@ -504,6 +612,11 @@ class Emulator:
         if address == 0xFF:  # seed
             self.random_state = 0xACE1 if value == 15 else value
             self.ram[0xFF] = value
+            return
+        if address in (0x0A, 0xFA):
+            before = self.ram[address]
+            self.ram[address] = value
+            self._record_io("write", address, before, value)
             return
         self.ram[address] = value
 

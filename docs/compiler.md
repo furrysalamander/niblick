@@ -4,9 +4,12 @@
 
 ```text
 .badge source
+  -> badgec/loader.py       resolve imports into one AST
   -> badgec/lexer.py        tokens
   -> badgec/parser.py       AST (badgec/ast_nodes.py)
+  -> badgec/inline.py       inline tiny functions, remove dead declarations
   -> badgec/compiler.py     semantic checks, allocation, code generation
+  -> badgec/asm_opt.py      peepholes, copy propagation, branch relaxation
   -> .asm
   -> vendor assembler       .hex
   -> badgec/emulator.py     headless execution / tests
@@ -118,7 +121,9 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Constant folding for integer arithmetic and comparisons.
 - Direct `peek`/`poke`/`out`/`in` lowering.
 - Whole-program inlining of tiny `return <expr>` functions, with a
-  side-effect guard for parameters used more than once.
+  side-effect guard for parameters used more than once. Char arguments are
+  wrapped in an internal `ToChar` node so substituted literals keep 8-bit
+  semantics.
 - Dead-function elimination based on reachability from `main` and global
   initializers.
 - Runtime stripping: only the `__bc_*` routines reachable from used builtins

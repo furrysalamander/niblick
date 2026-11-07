@@ -24,7 +24,7 @@ def build(tmp_path: Path):
     return compiler, emu, hex_path
 
 
-def decode(emu: Emulator) -> tuple[tuple[int, ...], ...]:
+def decode_screen(emu: Emulator) -> tuple[tuple[int, ...], ...]:
     """Decode the two visible pages into an 8x16 bitmap."""
     left, right = emu.display_pages()
     rows = []
@@ -38,50 +38,83 @@ def decode(emu: Emulator) -> tuple[tuple[int, ...], ...]:
     return tuple(rows)
 
 
-def collect_frames(emu: Emulator, count: int = 24):
+def decode_vfb(emu: Emulator, address: int) -> tuple[tuple[int, ...], ...]:
+    """Decode the 16x16 virtual framebuffer."""
+    rows = []
+    for y in range(16):
+        row = []
+        for group in range(4):
+            value = emu.ram[address + y * 4 + group]
+            for bit in range(4):
+                row.append((value >> (3 - bit)) & 1)
+        rows.append(tuple(row))
+    return tuple(rows)
+
+
+def collect_frames(
+    emu: Emulator, angle_address: int, vfb_address: int, count: int = 18
+):
     frames = []
     marks = []
-    last_page = None
+    last_angle = None
+    changes = 0
     steps = 0
     while steps < 2_000_000 and len(frames) < count:
         emu.step()
         steps += 1
-        page = emu.ram[0xF0]
-        if page in (4, 6) and page != last_page:
-            frames.append((page, decode(emu)))
-            marks.append(emu.instruction_count)
-            last_page = page
+        angle = emu.ram[angle_address] | (emu.ram[angle_address + 1] << 4)
+        if angle != last_angle:
+            last_angle = angle
+            changes += 1
+            # The first two changes are startup and the first rendered frame.
+            if changes > 2:
+                frames.append((decode_screen(emu), decode_vfb(emu, vfb_address)))
+                marks.append(emu.instruction_count)
     return frames, marks
 
 
-def test_cube_buffers_geometry_and_timing(tmp_path: Path) -> None:
+def test_cube_virtual_framebuffer_and_clipping(tmp_path: Path) -> None:
     compiler, emu, hex_path = build(tmp_path)
 
-    # The first global must sit at page 4 so pages 4/5 and 6/7 are usable
-    # as two page-aligned framebuffers.
-    assert compiler.globals["screen"].address == 0x40
+    screen = compiler.globals["screen"]
+    vfb = compiler.globals["vfb"]
+    assert screen.address == 0x40
+    assert screen.array_len == 32
+    assert vfb.address == 0x60
+    assert vfb.array_len == 64
     assert compiler.mem.used() <= 176
     assert code_words(hex_path) <= 2100
 
-    frames, marks = collect_frames(emu)
-    assert len(frames) >= 20
+    angle_address = compiler.globals["angle"].address
+    frames, marks = collect_frames(emu, angle_address, vfb.address)
+    assert len(frames) >= 14
+    assert emu.ram[0xF0] == 4
 
-    nonblank = [(page, bitmap) for page, bitmap in frames if any(any(row) for row in bitmap)]
-    assert len(nonblank) >= 18
-    assert {page for page, _ in nonblank} == {4, 6}
+    screens = [screen for screen, _ in frames]
+    virtual = [vfb for _, vfb in frames]
 
-    bitmaps = {bitmap for _, bitmap in nonblank}
-    assert len(bitmaps) >= 10
+    assert all(any(any(row) for row in bitmap) for bitmap in screens)
+    assert len(set(screens)) >= 10
 
-    for _, bitmap in nonblank:
+    # Every visible pixel must come from virtual columns 4..11.
+    for visible, full in zip(screens, virtual):
+        for y in range(16):
+            assert visible[y] == full[y][4:12]
+
+    # The cube must actually extend into the off-screen margin: those pixels
+    # are drawn in the virtual buffer but never blitted.
+    assert any(
+        full[y][x]
+        for full in virtual
+        for y in range(16)
+        for x in list(range(0, 4)) + list(range(12, 16))
+    )
+
+    for bitmap in screens:
         lit = sum(sum(row) for row in bitmap)
         assert 10 < lit <= 128
-
-    # The cube is scaled to clip at the left and right edges.
-    assert any(bitmap[y][0] for _, bitmap in nonblank for y in range(16))
-    assert any(bitmap[y][7] for _, bitmap in nonblank for y in range(16))
 
     # Guard against a large code-generation or drawing regression.
     diffs = [marks[i] - marks[i - 1] for i in range(1, len(marks))]
     assert diffs
-    assert max(diffs) < 22_000
+    assert max(diffs) < 26_000

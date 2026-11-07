@@ -2,20 +2,23 @@
 //
 // The matrix is 16 rows x 8 columns.  It shows two 16x4 pages side by side:
 // page+1 is the left half (columns 0..3) and page is the right half
-// (columns 4..7).  Pages 4/5 and 6/7 are two 32-nibble framebuffers; the
-// cube is drawn into the hidden one and then the Page register is flipped.
+// (columns 4..7).
+//
+// The projection can put vertices a column or two outside the visible area.
+// Instead of clamping them to the border, the cube is drawn into a 16x16
+// off-screen framebuffer that is four columns wider on each side.  Only the
+// middle eight columns are copied to the matrix, so clipped edges disappear
+// correctly instead of being pinned to the outermost columns.
 //
 // A cube repeats every 90 degrees, so the sine table only covers one quadrant.
 // The projection uses a fixed 30-degree camera pitch and is deliberately a
-// little wider than the display, so the cube reaches and clips at the left and
-// right edges instead of shrinking to fit.
+// little wider than the display, so it clips at the left and right edges
+// instead of shrinking to fit.
 
-nibble screen[64];
-nibble lfb[16];
-nibble rfb[16];
+nibble screen[32];
+nibble vfb[64];
 nibble bitmask[4];
 
-char draw_base;
 char angle;
 word cb;
 word sb;
@@ -43,8 +46,23 @@ const nibble cube_edges[] = {
     6, 7
 };
 
-// Integer Bresenham with no signed arithmetic.  Vertices are clamped to the
-// screen before they get here, so the plot loop needs no bounds checks.
+// The virtual framebuffer is 16 columns x 16 rows, four nibbles per row.
+// Visible column 0 is virtual column 4, and visible column 7 is virtual 11.
+fn void put_pixel(nibble x, nibble y) {
+    nibble group;
+    nibble mask;
+    char idx;
+
+    group = x >> 2;
+    mask = bitmask[x & 3];
+    idx = y;
+    idx = idx << 2;
+    idx = idx + group;
+    vfb[idx] = vfb[idx] | mask;
+}
+
+// Integer Bresenham with no signed arithmetic.  All coordinates are in the
+// 16x16 virtual framebuffer, so this needs no clipping checks.
 fn void line(nibble x0, nibble y0, nibble x1, nibble y1) {
     nibble dx;
     nibble dy;
@@ -75,11 +93,7 @@ fn void line(nibble x0, nibble y0, nibble x1, nibble y1) {
     if (dx >= dy) {
         err = 0;
         while (1) {
-            if (x < 4) {
-                lfb[y] = lfb[y] | bitmask[x];
-            } else {
-                rfb[y] = rfb[y] | bitmask[x - 4];
-            }
+            put_pixel(x, y);
             if (x == x1) {
                 break;
             }
@@ -101,11 +115,7 @@ fn void line(nibble x0, nibble y0, nibble x1, nibble y1) {
     } else {
         err = 0;
         while (1) {
-            if (x < 4) {
-                lfb[y] = lfb[y] | bitmask[x];
-            } else {
-                rfb[y] = rfb[y] | bitmask[x - 4];
-            }
+            put_pixel(x, y);
             if (y == y1) {
                 break;
             }
@@ -150,14 +160,9 @@ fn void build_vertices() {
         } else {
             bx = bx + sb;
         }
+        // tx is 2..11, so virtual x is 3..12.  The visible columns are 4..11.
         tx = (nibble)(((bx << 2) + (bx << 1) + bx) >> 9);
-        if (tx < 3) {
-            vx[i] = 0;
-        } else if (tx > 10) {
-            vx[i] = 7;
-        } else {
-            vx[i] = tx - 3;
-        }
+        vx[i] = tx + 1;
 
         // sy = y*cos(30) + (x*sb - z*cb)/2.  Bias by 478.
         by = 478;
@@ -183,22 +188,21 @@ fn void build_vertices() {
 }
 
 fn void clear_fb() {
-    char y;
-    y = 0;
-    while (y < 16) {
-        lfb[y] = 0;
-        rfb[y] = 0;
-        y = y + 1;
+    char i;
+    i = 0;
+    while (i < 64) {
+        vfb[i] = 0;
+        i = i + 1;
     }
 }
 
-// Copy the logical 8x16 framebuffer into one of the two hardware buffers.
-fn void blit(char base) {
+// Copy the visible middle eight columns into pages 4/5.
+fn void blit() {
     char y;
     y = 0;
     while (y < 16) {
-        screen[base + 16 + y] = lfb[y];
-        screen[base + y] = rfb[y];
+        screen[16 + y] = vfb[(y << 2) + 1];
+        screen[y] = vfb[(y << 2) + 2];
         y = y + 1;
     }
 }
@@ -227,7 +231,6 @@ fn main() {
     bitmask[2] = 2;
     bitmask[3] = 1;
 
-    draw_base = 32;
     angle = 1;
     display_page(4);
 
@@ -238,14 +241,7 @@ fn main() {
         clear_fb();
         build_vertices();
         draw_edges();
-        blit(draw_base);
-
-        if (draw_base == 0) {
-            display_page(4);
-        } else {
-            display_page(6);
-        }
-        draw_base = 32 - draw_base;
+        blit();
 
         // 16 steps over a 90-degree quadrant.  Start on an odd table entry
         // so the cube never sits exactly face-on.  A cube is symmetric every

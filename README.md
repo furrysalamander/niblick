@@ -207,12 +207,13 @@ The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
 
 `examples/cube.badge` draws a rotating 3D wireframe cube on the 8×16 matrix.
 It uses a fixed-point yaw sweep, a fixed 30° camera pitch, and Bresenham line
-drawing. The cube is scaled to reach the left and right edges, so it is
-clipped there as it turns.
+drawing. The projection spans 16 virtual columns, four columns wider on each
+side than the visible matrix. Drawing into that off-screen buffer and copying
+only the middle eight columns gives true clipping: off-screen vertical edges
+disappear instead of being pinned to the outermost columns.
 
-Two hidden page buffers are alternated (`Page` 4/6) so the cube is never
-drawn into the visible half. The demo is about 1862 words and 159 RAM
-nibbles; it needs no UART or input and starts spinning as soon as it runs.
+The demo is about 1783 words and 161 RAM nibbles; it needs no UART or input
+and starts spinning as soon as it runs.
 
 ## Library modules
 

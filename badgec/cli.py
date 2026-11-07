@@ -12,7 +12,7 @@ from .compiler import Compiler
 from .disasm import decode
 from .emulator import Emulator
 from .errors import BadgeError
-from .parser import parse
+from .loader import load_program
 
 
 def compile_source(
@@ -34,8 +34,7 @@ def compile_source(
     dump_sfr: bool = False,
 ) -> tuple[Path, Path | None]:
     source_path = Path(source_path)
-    source = source_path.read_text()
-    program = parse(source, str(source_path))
+    program = load_program(source_path)
     compiler = Compiler(
         program,
         str(source_path),

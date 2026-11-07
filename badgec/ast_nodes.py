@@ -173,6 +173,13 @@ class FunctionDecl:
 
 
 @dataclass
+class ImportDecl:
+    path: str
+    line: int = 0
+
+
+@dataclass
 class Program:
     globals: list[GlobalDecl] = field(default_factory=list)
     functions: list[FunctionDecl] = field(default_factory=list)
+    imports: list[ImportDecl] = field(default_factory=list)

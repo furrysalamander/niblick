@@ -243,6 +243,11 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def compile(self) -> str:
+        if self.program.imports:
+            raise BadgeCompileError(
+                f"{self.filename}: imports must be resolved first; "
+                "load the program with badgec.loader.load_program()"
+            )
         optimize_program(self.program)
         self.prepare_globals()
         self.prepare_functions()

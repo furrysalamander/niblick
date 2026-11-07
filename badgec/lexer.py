@@ -23,6 +23,7 @@ KEYWORDS = {
     "continue",
     "true",
     "false",
+    "import",
 }
 
 # Longest operators first.

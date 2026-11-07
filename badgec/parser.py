@@ -106,7 +106,16 @@ class Parser:
     def parse_program(self) -> ast.Program:
         program = ast.Program()
         while not self.at_end():
-            if self.check("fn", "keyword"):
+            if self.check("import", "keyword"):
+                line = self.current().line
+                self.advance()
+                path = self.current()
+                if path.kind != "string":
+                    raise self.error(f"expected a quoted import path, got {path.value!r}")
+                self.advance()
+                self.expect(";")
+                program.imports.append(ast.ImportDecl(str(path.value), line=line))
+            elif self.check("fn", "keyword"):
                 program.functions.append(self.parse_function())
             elif self.check("const", "keyword"):
                 program.globals.append(self.parse_const_global())

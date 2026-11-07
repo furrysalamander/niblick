@@ -154,6 +154,15 @@ Caveats:
   `stty -F /dev/ttyUSB0 raw 9600`.
 * macOS `cat` has been reported not to work reliably for this; use a terminal
   program such as CoolTerm.
+* A Tigard has two UART channels and therefore two `/dev/ttyUSB*` devices.
+  Only one channel is connected to the badge. Use that channel consistently;
+  do not send the same program to both, and do not assume `ttyUSB1` is spare.
+* Program load waits for a valid header, so sender/LOAD timing matters. A
+  one-shot send that finishes before LOAD is pressed does nothing; retrying the
+  file is the simplest robust fix. Appending about 1 KiB of NUL bytes helps
+  flush adapters that buffer the tail.
+* After a successful LOAD the badge remains in DIR mode and the matrix stays
+  blank. Switch to RUN and press RUN to execute the program.
 * The badge cannot tell whether the host is ready. SAVE starts transmitting
   immediately; start the capture first, then press SAVE.
 * The Nov. 2022 tutorial reports a firmware bug in the application UART on the

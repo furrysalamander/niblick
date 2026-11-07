@@ -232,6 +232,54 @@ Windows helpers are in `software/Windows Tools/`:
 
 Both require `pip install pyserial`.
 
+### Flashing checklist (especially for agents)
+
+These are the details that most often waste a flashing attempt:
+
+1. **Use exactly one serial port.** A Tigard exposes two interfaces
+   (`/dev/ttyUSB0` and `/dev/ttyUSB1`); only one is wired to the badge. Identify
+   the correct channel with `udevadm info -q property -n /dev/ttyUSBn` or the
+   adapter labels, then use that port consistently. Do **not** broadcast the
+   same `.hex` to both channels. The second channel may be wired to another
+   target or inject noise into the badge's UART.
+2. **Use plain LOAD, not ALT+LOAD.** ALT+LOAD enters the firmware bootloader,
+   whose LOAD LED blinks slowly and which expects a raw firmware image, not a
+   program `.hex`. A slow blink means stop and exit/reset the bootloader.
+3. **Timing matters.** The loader ignores bytes until it sees a valid header.
+   Start the sender and press LOAD close together; if the sender finishes before
+   LOAD, nothing is loaded. A sender that retries the whole file is more robust
+   than a single one-shot write.
+4. **The badge stays in DIR mode after loading.** The matrix is blank in DIR
+   mode. Select **RUN** and press **RUN** to execute the new program.
+5. **Pad the transfer.** Some FTDI/Tigard adapters buffer the tail. Appending
+   about 1 KiB of NUL bytes after the `.hex` is harmless and helps flush the
+   final bytes. The badge ignores the padding.
+6. **Validate the container first.** The file starts with
+   `00 FF 00 FF A5 C3`, followed by a 16-bit word count, the words, and a
+   16-bit checksum. `examples/*.hex` from the BadgeC toolchain already satisfy
+   this.
+7. **Wiring:** 3.3 V logic, common ground, adapter TX to badge RX and adapter RX
+   to badge TX. Use the main I/O connector (pins 2/3), not the SAO header. Do
+   not parallel adapter VCC with the badge batteries.
+
+A retrying sender that targets one channel is enough:
+
+```python
+import time
+from pathlib import Path
+import serial
+
+port_name = "/dev/ttyUSB0"          # the one wired to the badge
+data = Path("examples/wave.hex").read_bytes() + b"\0" * 1024
+for _ in range(3):
+    with serial.Serial(port_name, 9600, bytesize=8, parity="N", stopbits=1) as port:
+        time.sleep(0.3)
+        port.write(data)
+        port.flush()
+        time.sleep(len(data) / (9600 / 10.0))
+    time.sleep(2)
+```
+
 ### Firmware bootloader
 
 This is separate from program LOAD and takes a raw firmware image, not a program

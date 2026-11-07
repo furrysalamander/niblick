@@ -75,14 +75,15 @@ calls or a user loop can handle larger buffers.
 
 ## Numbers, casts, and operators
 
-Integer types are `nibble` (4-bit), `char` (8-bit), and `word` (16-bit), all
-unsigned. Widening is implicit; narrowing needs a cast:
+Integer types are `nibble` (4-bit), `char` (8-bit), `word` (16-bit), and
+`dword` (32-bit), all unsigned. Widening is implicit; narrowing needs a cast:
 
 ```c
-word w = 1000;
-char low = (char)w;      // low byte
-nibble n = (nibble)w;    // low nibble
-word again = (word)low;  // zero-extended
+dword wide = 100000;
+char low = (char)wide;       // low byte
+nibble n = (nibble)wide;     // low nibble
+word mid = (word)wide;       // low word
+dword again = (dword)mid;    // zero-extended
 ```
 
 | Call | Returns | Notes |
@@ -94,11 +95,16 @@ word again = (word)low;  // zero-extended
 |---|---|
 | `+ - & \| ^` | Common width, wrapping |
 | `<< >>` | Constant count, unrolled; full-width or more gives zero |
-| `*` | Widens one step: `nibble*nibble -> char`, `char*char -> word`, `word*word -> word` (low 16 bits) |
+| `*` | Widens one step: `nibble*nibble -> char`, `char*char -> word`; `word*word -> word`, `dword*dword -> dword` (low bits) |
 | `/ %` | Common width, unsigned; division by zero gives zero |
 
-`<<`/`>>` use a constant count; variable counts are rejected for now. The
-`lib/math.badge` helpers remain as thin wrappers for older code.
+`<<`/`>>` accept both constant counts (unrolled) and variable counts (a
+small loop). All widths are supported. The `lib/math.badge` helpers remain
+as thin wrappers for older code.
+
+32-bit `*`, `/`, and `%` reserve a 24-nibble scratch block in user RAM, but
+only when those operators are used. This keeps dword-free programs at the
+full 176-nibble budget.
 
 ## GPIO
 
@@ -163,6 +169,8 @@ globals are removed, so importing a module is free unless you call it.
 | `uart_print_dec8(c)` | Decimal, no leading zeros (`0..255`) |
 | `uart_print_hex16(w)` | Four hex digits |
 | `uart_print_dec16(w)` | Decimal `0..65535`, no leading zeros |
+| `uart_print_hex32(d)` | Eight hex digits |
+| `uart_print_dec32(d)` | Decimal `0..4294967295`, no leading zeros |
 | `uart_print_str(addr)` | RAM byte string, `0xFF` terminated |
 | `uart_print_hexdump(addr, len)` | `len` bytes as hex plus a newline |
 | `uart_read_nibble()` | Read one hex digit |
@@ -261,8 +269,7 @@ buffer, which is useful when the allocator chooses the address.
 - A `printf`-style formatter (the language has no varargs)
 - General pointer arithmetic and `char *` parameters
 - Byte-oriented `mem*` helpers (current ones are nibble-oriented)
-- `*`, `/`, and `%` operators (library helpers exist)
-- Variable shift counts
+- 64-bit integers
 - `malloc` / free
 - Interrupt-driven UART
 - A calibrated millisecond delay

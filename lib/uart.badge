@@ -94,6 +94,29 @@ fn void uart_print_dec16(word v) {
     uart_putc('0' + (nibble)v);
 }
 
+fn void uart_print_hex32(dword v) {
+    uart_print_hex16((word)(v >> 16));
+    uart_print_hex16((word)v);
+}
+
+fn void uart_print_dec32(dword v) {
+    dword divisor;
+    nibble digit;
+    nibble started;
+
+    divisor = 1000000000;
+    started = 0;
+    while (divisor != 0) {
+        digit = (nibble)(v / divisor);
+        v = v % divisor;
+        if (started != 0 || digit != 0 || divisor == 1) {
+            uart_putc('0' + digit);
+            started = 1;
+        }
+        divisor = divisor / 10;
+    }
+}
+
 fn void uart_print_str(char addr) {
     char c;
     c = peek8(addr);

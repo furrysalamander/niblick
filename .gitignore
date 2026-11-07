@@ -10,6 +10,7 @@ __pycache__/
 # Generated at runtime / by the demo
 captures/
 badge-backup/
+photobooth.toml
 epaper_badge/data/app_list
 epaper_badge/data/user_apps.py
 epaper_badge/data/graphics/supercon_photo*.png

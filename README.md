@@ -14,11 +14,13 @@ it is a normal 8-bit machine.
 
 Working today:
 
-- `nibble` (u4), `char` (u8, two nibbles), and `flashptr` (12-bit code address)
+- `nibble` (u4), `char` (u8), `word` (u16), `dword` (u32), and `flashptr` (12-bit code address)
 - Globals, locals, fixed-size RAM arrays, and `const` flash arrays
 - Functions, parameters, returns, and tail-call optimization
 - `if`/`else`, `while`, `for`, `break`, `continue`
-- Arithmetic, bitwise operators, comparisons, `&&`, `||`, `!`
+- Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
+- Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
+- `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
 - Flash strings and `RET`-table iteration
 - UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
 - RAM helpers: `peek`, `poke`, `memset`, `uart_write`, `delay`
@@ -31,11 +33,16 @@ Working today:
 Not implemented yet:
 
 - General (non-tail) recursion
-- Multiplication, division, shifts
+- 64-bit integers and floating point
 - General pointers and pointer arithmetic
-- Structs, floats, varargs, dynamic allocation
+- Structs, varargs, dynamic allocation
 - Register allocation, local overlay, and a broader peephole/optimization pipeline
 - UART interrupt-driven or buffered I/O beyond the hardware FIFO
+
+32-bit `*`, `/`, and `%` are implemented but deliberately size-conscious:
+they use a 24-nibble scratch block allocated only when the program uses
+them, and a 32-bit divide takes milliseconds at 250 kHz. See
+`docs/compiler.md` and `docs/stdlib.md`.
 
 ## Quick start
 

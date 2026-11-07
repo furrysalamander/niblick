@@ -12,6 +12,7 @@ KEYWORDS = {
     "nibble",
     "char",
     "word",
+    "dword",
     "flashptr",
     "void",
     "const",

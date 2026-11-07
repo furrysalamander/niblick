@@ -13,6 +13,8 @@
 | `tetris.badge` | LED-matrix Tetris; OPCODE 8/1/4/2 = left/right/rotate/soft drop |
 | `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, bits, keys, clock, and display |
 | `word_math.badge` | 16-bit words, casts, and `* / %` |
+| `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |
+| `math32_test.badge` | 32-bit arithmetic self-test; send `0x01` over UART |
 
 Compile one with:
 

@@ -10,7 +10,7 @@ from .lexer import Token, tokenize
 from .types import Type, type_from_name
 
 
-TYPE_NAMES = {"nibble", "char", "word", "flashptr", "void"}
+TYPE_NAMES = {"nibble", "char", "word", "dword", "flashptr", "void"}
 
 # Binding powers.  Assignment is handled at statement level, not here.
 BINARY_PRECEDENCE = {

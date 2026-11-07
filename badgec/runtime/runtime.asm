@@ -725,6 +725,684 @@ __bc_flash_read_word:
     RET R0, 0
 
 ; ---------------------------------------------------------------------------
+; 32-bit multiply / divide
+;
+; Scratch layout (24 nibbles, allocated on demand):
+;   00..07  A (multiply) / dividend and quotient (divide)
+;   08..15  B (multiply) / divisor and remainder (divide)
+;   16..23  result (multiply) / working remainder (divide)
+; ---------------------------------------------------------------------------
+
+; word pointers: R4:R5 = A, R6:R7 = B.  Result in R1..R8.
+__bc_mul32:
+    MOV R0, [R4:R5]
+    MOV [__D32_00], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_01], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_02], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_03], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_04], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_05], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_06], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_07], R0
+    MOV R0, [R6:R7]
+    MOV [__D32_08], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_09], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_10], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_11], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_12], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_13], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_14], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_15], R0
+    MOV R0, 0
+    MOV [__D32_16], R0
+    MOV R0, 0
+    MOV [__D32_17], R0
+    MOV R0, 0
+    MOV [__D32_18], R0
+    MOV R0, 0
+    MOV [__D32_19], R0
+    MOV R0, 0
+    MOV [__D32_20], R0
+    MOV R0, 0
+    MOV [__D32_21], R0
+    MOV R0, 0
+    MOV [__D32_22], R0
+    MOV R0, 0
+    MOV [__D32_23], R0
+    MOV R9, 0
+    MOV R3, 2
+__bc_mul32_loop:
+    MOV R0, [__D32_08]
+    AND R0, 1
+    CP R0, 0
+    SKIP NZ, 2
+    GOTO __bc_mul32_noadd
+    MOV R0, [__D32_00]
+    MOV R8, R0
+    MOV R0, [__D32_16]
+    ADD R0, R8
+    MOV [__D32_16], R0
+    MOV R0, [__D32_01]
+    MOV R8, R0
+    MOV R0, [__D32_17]
+    ADC R0, R8
+    MOV [__D32_17], R0
+    MOV R0, [__D32_02]
+    MOV R8, R0
+    MOV R0, [__D32_18]
+    ADC R0, R8
+    MOV [__D32_18], R0
+    MOV R0, [__D32_03]
+    MOV R8, R0
+    MOV R0, [__D32_19]
+    ADC R0, R8
+    MOV [__D32_19], R0
+    MOV R0, [__D32_04]
+    MOV R8, R0
+    MOV R0, [__D32_20]
+    ADC R0, R8
+    MOV [__D32_20], R0
+    MOV R0, [__D32_05]
+    MOV R8, R0
+    MOV R0, [__D32_21]
+    ADC R0, R8
+    MOV [__D32_21], R0
+    MOV R0, [__D32_06]
+    MOV R8, R0
+    MOV R0, [__D32_22]
+    ADC R0, R8
+    MOV [__D32_22], R0
+    MOV R0, [__D32_07]
+    MOV R8, R0
+    MOV R0, [__D32_23]
+    ADC R0, R8
+    MOV [__D32_23], R0
+__bc_mul32_noadd:
+    ADD R0, 0
+    MOV R0, [__D32_00]
+    ADC R0, R0
+    MOV [__D32_00], R0
+    MOV R0, [__D32_01]
+    ADC R0, R0
+    MOV [__D32_01], R0
+    MOV R0, [__D32_02]
+    ADC R0, R0
+    MOV [__D32_02], R0
+    MOV R0, [__D32_03]
+    ADC R0, R0
+    MOV [__D32_03], R0
+    MOV R0, [__D32_04]
+    ADC R0, R0
+    MOV [__D32_04], R0
+    MOV R0, [__D32_05]
+    ADC R0, R0
+    MOV [__D32_05], R0
+    MOV R0, [__D32_06]
+    ADC R0, R0
+    MOV [__D32_06], R0
+    MOV R0, [__D32_07]
+    ADC R0, R0
+    MOV [__D32_07], R0
+    ADD R0, 0
+    MOV R0, [__D32_15]
+    RRC R0
+    MOV [__D32_15], R0
+    MOV R0, [__D32_14]
+    RRC R0
+    MOV [__D32_14], R0
+    MOV R0, [__D32_13]
+    RRC R0
+    MOV [__D32_13], R0
+    MOV R0, [__D32_12]
+    RRC R0
+    MOV [__D32_12], R0
+    MOV R0, [__D32_11]
+    RRC R0
+    MOV [__D32_11], R0
+    MOV R0, [__D32_10]
+    RRC R0
+    MOV [__D32_10], R0
+    MOV R0, [__D32_09]
+    RRC R0
+    MOV [__D32_09], R0
+    MOV R0, [__D32_08]
+    RRC R0
+    MOV [__D32_08], R0
+    DSZ R9
+    JR __bc_mul32_continue
+    DSZ R3
+    JR __bc_mul32_continue
+    GOTO __bc_mul32_done
+__bc_mul32_continue:
+    GOTO __bc_mul32_loop
+__bc_mul32_done:
+    MOV R0, [__D32_16]
+    MOV R1, R0
+    MOV R0, [__D32_17]
+    MOV R2, R0
+    MOV R0, [__D32_18]
+    MOV R3, R0
+    MOV R0, [__D32_19]
+    MOV R4, R0
+    MOV R0, [__D32_20]
+    MOV R5, R0
+    MOV R0, [__D32_21]
+    MOV R6, R0
+    MOV R0, [__D32_22]
+    MOV R7, R0
+    MOV R0, [__D32_23]
+    MOV R8, R0
+    RET R0, 0
+
+; D pointer R4:R5 becomes quotient; V pointer R6:R7 becomes remainder.
+__bc_divmod32:
+    MOV R1, R4
+    MOV R2, R5
+    MOV R3, R6
+    MOV R8, R7
+    MOV R0, [R4:R5]
+    MOV [__D32_00], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_01], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_02], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_03], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_04], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_05], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_06], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [R4:R5]
+    MOV [__D32_07], R0
+    MOV R0, [R6:R7]
+    MOV [__D32_08], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_09], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_10], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_11], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_12], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_13], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_14], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [R6:R7]
+    MOV [__D32_15], R0
+    MOV R4, R1
+    MOV R5, R2
+    MOV R6, R3
+    MOV R7, R8
+    MOV R0, 0
+    MOV [__D32_16], R0
+    MOV R0, 0
+    MOV [__D32_17], R0
+    MOV R0, 0
+    MOV [__D32_18], R0
+    MOV R0, 0
+    MOV [__D32_19], R0
+    MOV R0, 0
+    MOV [__D32_20], R0
+    MOV R0, 0
+    MOV [__D32_21], R0
+    MOV R0, 0
+    MOV [__D32_22], R0
+    MOV R0, 0
+    MOV [__D32_23], R0
+    MOV R0, [__D32_08]
+    MOV R8, R0
+    MOV R0, [__D32_09]
+    OR R8, R0
+    MOV R0, [__D32_10]
+    OR R8, R0
+    MOV R0, [__D32_11]
+    OR R8, R0
+    MOV R0, [__D32_12]
+    OR R8, R0
+    MOV R0, [__D32_13]
+    OR R8, R0
+    MOV R0, [__D32_14]
+    OR R8, R0
+    MOV R0, [__D32_15]
+    OR R8, R0
+    MOV R0, R8
+    CP R0, 0
+    SKIP NZ, 2
+    GOTO __bc_divmod32_zero
+    MOV R9, 0
+    MOV R3, 2
+__bc_divmod32_loop:
+    ADD R0, 0
+    MOV R0, [__D32_00]
+    ADC R0, R0
+    MOV [__D32_00], R0
+    MOV R0, [__D32_01]
+    ADC R0, R0
+    MOV [__D32_01], R0
+    MOV R0, [__D32_02]
+    ADC R0, R0
+    MOV [__D32_02], R0
+    MOV R0, [__D32_03]
+    ADC R0, R0
+    MOV [__D32_03], R0
+    MOV R0, [__D32_04]
+    ADC R0, R0
+    MOV [__D32_04], R0
+    MOV R0, [__D32_05]
+    ADC R0, R0
+    MOV [__D32_05], R0
+    MOV R0, [__D32_06]
+    ADC R0, R0
+    MOV [__D32_06], R0
+    MOV R0, [__D32_07]
+    ADC R0, R0
+    MOV [__D32_07], R0
+    MOV R0, [__D32_16]
+    ADC R0, R0
+    MOV [__D32_16], R0
+    MOV R0, [__D32_17]
+    ADC R0, R0
+    MOV [__D32_17], R0
+    MOV R0, [__D32_18]
+    ADC R0, R0
+    MOV [__D32_18], R0
+    MOV R0, [__D32_19]
+    ADC R0, R0
+    MOV [__D32_19], R0
+    MOV R0, [__D32_20]
+    ADC R0, R0
+    MOV [__D32_20], R0
+    MOV R0, [__D32_21]
+    ADC R0, R0
+    MOV [__D32_21], R0
+    MOV R0, [__D32_22]
+    ADC R0, R0
+    MOV [__D32_22], R0
+    MOV R0, [__D32_23]
+    ADC R0, R0
+    MOV [__D32_23], R0
+    MOV R0, [__D32_08]
+    MOV R8, R0
+    MOV R0, [__D32_16]
+    SUB R0, R8
+    MOV [__D32_16], R0
+    MOV R0, [__D32_09]
+    MOV R8, R0
+    MOV R0, [__D32_17]
+    SBB R0, R8
+    MOV [__D32_17], R0
+    MOV R0, [__D32_10]
+    MOV R8, R0
+    MOV R0, [__D32_18]
+    SBB R0, R8
+    MOV [__D32_18], R0
+    MOV R0, [__D32_11]
+    MOV R8, R0
+    MOV R0, [__D32_19]
+    SBB R0, R8
+    MOV [__D32_19], R0
+    MOV R0, [__D32_12]
+    MOV R8, R0
+    MOV R0, [__D32_20]
+    SBB R0, R8
+    MOV [__D32_20], R0
+    MOV R0, [__D32_13]
+    MOV R8, R0
+    MOV R0, [__D32_21]
+    SBB R0, R8
+    MOV [__D32_21], R0
+    MOV R0, [__D32_14]
+    MOV R8, R0
+    MOV R0, [__D32_22]
+    SBB R0, R8
+    MOV [__D32_22], R0
+    MOV R0, [__D32_15]
+    MOV R8, R0
+    MOV R0, [__D32_23]
+    SBB R0, R8
+    MOV [__D32_23], R0
+    SKIP C, 2
+    GOTO __bc_divmod32_restore
+    MOV R0, [__D32_00]
+    OR R0, 1
+    MOV [__D32_00], R0
+    GOTO __bc_divmod32_next
+__bc_divmod32_restore:
+    MOV R0, [__D32_08]
+    MOV R8, R0
+    MOV R0, [__D32_16]
+    ADD R0, R8
+    MOV [__D32_16], R0
+    MOV R0, [__D32_09]
+    MOV R8, R0
+    MOV R0, [__D32_17]
+    ADC R0, R8
+    MOV [__D32_17], R0
+    MOV R0, [__D32_10]
+    MOV R8, R0
+    MOV R0, [__D32_18]
+    ADC R0, R8
+    MOV [__D32_18], R0
+    MOV R0, [__D32_11]
+    MOV R8, R0
+    MOV R0, [__D32_19]
+    ADC R0, R8
+    MOV [__D32_19], R0
+    MOV R0, [__D32_12]
+    MOV R8, R0
+    MOV R0, [__D32_20]
+    ADC R0, R8
+    MOV [__D32_20], R0
+    MOV R0, [__D32_13]
+    MOV R8, R0
+    MOV R0, [__D32_21]
+    ADC R0, R8
+    MOV [__D32_21], R0
+    MOV R0, [__D32_14]
+    MOV R8, R0
+    MOV R0, [__D32_22]
+    ADC R0, R8
+    MOV [__D32_22], R0
+    MOV R0, [__D32_15]
+    MOV R8, R0
+    MOV R0, [__D32_23]
+    ADC R0, R8
+    MOV [__D32_23], R0
+__bc_divmod32_next:
+    DSZ R9
+    JR __bc_divmod32_continue
+    DSZ R3
+    JR __bc_divmod32_continue
+    GOTO __bc_divmod32_output
+__bc_divmod32_continue:
+    GOTO __bc_divmod32_loop
+__bc_divmod32_zero:
+    MOV R0, 0
+    MOV [__D32_00], R0
+    MOV [__D32_01], R0
+    MOV [__D32_02], R0
+    MOV [__D32_03], R0
+    MOV [__D32_04], R0
+    MOV [__D32_05], R0
+    MOV [__D32_06], R0
+    MOV [__D32_07], R0
+    MOV [__D32_08], R0
+    MOV [__D32_09], R0
+    MOV [__D32_10], R0
+    MOV [__D32_11], R0
+    MOV [__D32_12], R0
+    MOV [__D32_13], R0
+    MOV [__D32_14], R0
+    MOV [__D32_15], R0
+__bc_divmod32_output:
+    MOV R0, [__D32_00]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_01]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_02]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_03]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_04]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_05]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_06]
+    MOV [R4:R5], R0
+    INC R5
+    SKIP NC, 1
+    INC R4
+    MOV R0, [__D32_07]
+    MOV [R4:R5], R0
+    MOV R0, [__D32_16]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_17]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_18]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_19]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_20]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_21]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_22]
+    MOV [R6:R7], R0
+    INC R7
+    SKIP NC, 1
+    INC R6
+    MOV R0, [__D32_23]
+    MOV [R6:R7], R0
+    RET R0, 0
+
+; Flash dword read.  in: R1/R2/R3 = pointer.  out: R1..R8.
+__bc_flash_read_dword:
+    MOV R6, R1
+    MOV R7, R2
+    MOV R8, R3
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_00], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_01], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_02], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_03], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_04], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_05], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_06], R0
+    INC R6
+    SKIP NC, 3
+    INC R7
+    SKIP NC, 1
+    INC R8
+    MOV PCH, R8
+    MOV PCM, R7
+    MOV JSR, R6
+    MOV [__D32_07], R0
+    MOV R0, [__D32_00]
+    MOV R1, R0
+    MOV R0, [__D32_01]
+    MOV R2, R0
+    MOV R0, [__D32_02]
+    MOV R3, R0
+    MOV R0, [__D32_03]
+    MOV R4, R0
+    MOV R0, [__D32_04]
+    MOV R5, R0
+    MOV R0, [__D32_05]
+    MOV R6, R0
+    MOV R0, [__D32_06]
+    MOV R7, R0
+    MOV R0, [__D32_07]
+    MOV R8, R0
+    RET R0, 0
+
+; ---------------------------------------------------------------------------
 ; WrFlags helper bits
 ; ---------------------------------------------------------------------------
 

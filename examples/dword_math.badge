@@ -1,0 +1,45 @@
+// 32-bit words, casts, and the full operator set.
+
+import "lib/uart.badge";
+
+dword a;
+dword b;
+dword product;
+dword quotient;
+dword remainder;
+word high;
+word low;
+
+fn main() {
+    uart_route(1);
+    uart_init(3);
+
+    a = 100000;
+    b = 37;
+
+    product = a * b;
+    quotient = a / b;
+    remainder = a % b;
+
+    uart_puts("100000 * 37 = ");
+    uart_print_dec32(product);
+    uart_nl();
+
+    uart_puts("100000 / 37 = ");
+    uart_print_dec32(quotient);
+    uart_puts(" remainder ");
+    uart_print_dec32(remainder);
+    uart_nl();
+
+    uart_puts("hex ");
+    uart_print_hex32(product);
+    uart_nl();
+
+    high = (word)(product >> 16);
+    low = (word)product;
+    uart_puts("high ");
+    uart_print_hex16(high);
+    uart_puts(" low ");
+    uart_print_hex16(low);
+    uart_nl();
+}

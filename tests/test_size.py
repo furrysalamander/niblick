@@ -17,6 +17,8 @@ BUDGETS = {
     "tetris.badge": 2600,
     "stdlib_demo.badge": 1900,
     "word_math.badge": 1300,
+    "dword_math.badge": 2300,
+    "math32_test.badge": 2800,
 }
 
 

@@ -38,6 +38,7 @@ class Type:
 NIBBLE = Type("nibble", ram_size=1, flash_size=1)
 CHAR = Type("char", ram_size=2, flash_size=2)
 WORD = Type("word", ram_size=4, flash_size=4)
+DWORD = Type("dword", ram_size=8, flash_size=8)
 FLASHPTR = Type("flashptr", ram_size=3, flash_size=0)
 VOID = Type("void", ram_size=0, flash_size=0, is_scalar=False)
 
@@ -45,13 +46,14 @@ SCALAR_TYPES = {
     "nibble": NIBBLE,
     "char": CHAR,
     "word": WORD,
+    "dword": DWORD,
     "flashptr": FLASHPTR,
     "void": VOID,
 }
 
 # Widening order for integer types.  ram_size is also the register width in
 # nibbles, so the index is a convenient width code.
-INTEGER_TYPES = (NIBBLE, CHAR, WORD)
+INTEGER_TYPES = (NIBBLE, CHAR, WORD, DWORD)
 
 
 def type_from_name(name: str) -> Type:
@@ -84,4 +86,6 @@ def promoted_mul_type(t: Type) -> Type:
 
     if t is NIBBLE:
         return CHAR
-    return WORD
+    if t is CHAR:
+        return WORD
+    return t

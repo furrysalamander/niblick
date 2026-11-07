@@ -30,6 +30,7 @@ Every expression leaves its result in fixed registers:
 | `nibble` | `R1` |
 | `char` | `R1` = low, `R2` = high |
 | `word` | `R1` = low, `R2`, `R3`, `R4` = high |
+| `dword` | `R1` = low through `R8` = high |
 | `flashptr` | `R1` = low, `R2` = middle, `R3` = high |
 
 `R0` is reserved for the instructions that can only access memory through
@@ -47,7 +48,8 @@ addresses are known at compile time.
 | `0x00..0x0F` | registers and SFRs |
 | `0x10..0x1F` | hardware subroutine stack |
 | `0x20..0x37` | compile-time expression temporaries (24 nibbles) |
-| `0x38..0x3F` | multiply/divide runtime scratch (8 nibbles) |
+| `0x38..0x3F` | word multiply/divide runtime scratch (8 nibbles) |
+| user RAM | optional 24-nibble dword mul/div scratch, allocated on demand |
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays (176 nibbles) |
 | `0xF0..0xFF` | SFR page |
 
@@ -98,20 +100,22 @@ cover it.
 
 ## Types and coercions
 
-Integer widths are `nibble` (4), `char` (8), and `word` (16). Widening is
-implicit and zero-extends into the higher result registers. Narrowing is
-rejected unless an explicit cast is used:
+Integer widths are `nibble` (4), `char` (8), `word` (16), and `dword` (32).
+Widening is implicit and zero-extends into the higher result registers.
+Narrowing is rejected unless an explicit cast is used:
 
 ```c
 char low = (char)wide;
 nibble nib = (nibble)wide;
 word back = (word)byte;
+dword wide = (dword)word_value;
 ```
 
 `const` arrays are read-only and live in flash; RAM arrays are mutable.
 
-`char` is unsigned 0..255 and `word` is unsigned 0..65535. String literals
-and `const char[]` are flash objects with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
+`char` is unsigned 0..255, `word` is unsigned 0..65535, and `dword` is
+unsigned 0..4294967295. String literals and `const char[]` are flash objects
+with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
 it loads the 3-nibble cursor, calls the RET-table reader, and writes the
 advanced cursor back without using a RAM buffer.
 
@@ -151,12 +155,16 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   clobber them, replacing RAM spill traffic.
 - Address arithmetic uses operand registers directly and drops carry
   correction for page-aligned arrays.
-- Constant-count `<<`/`>>` are unrolled for nibble, char, and word values.
+- Constant-count `<<`/`>>` are unrolled; variable counts use a small loop.
+  All integer widths are supported.
 - `*` widens one step (`nibble*nibble -> char`, `char*char -> word`) and
-  strength-reduces constants (`*2`, `*4`, ...).
+  keeps `word*word -> word`, `dword*dword -> dword` (low 32 bits). Constant
+  powers of two become shifts.
 - `/` and `%` use unsigned binary long division; constant powers of two
   become shifts and masks. Division by zero returns zero.
-- Explicit `(nibble)`, `(char)`, and `(word)` casts.
+- Explicit `(nibble)`, `(char)`, `(word)`, and `(dword)` casts.
+- 32-bit multiply/divide use a 24-nibble scratch block allocated only when
+  the program actually uses those operators.
 - `import` with cycle detection and dead-declaration elimination.
 - Branch relaxation from two-word `GOTO` to one-word `JR` when in range,
   including adjustment of a preceding `SKIP` count.
@@ -169,15 +177,16 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 1. Size-aware inlining for small functions with no static locals.
 2. Call-graph local overlay to reduce RAM.
 3. Short-`if` skip fusion for bodies of four words or fewer.
-4. Strength reduction for multiply/divide and shifts once those operators
-   are implemented.
-5. Loop rotation to remove the unconditional back-edge.
+4. Loop rotation to remove the unconditional back-edge.
+5. Faster 32-bit multiply/divide (the current routines are size-conscious).
 
 ## Current code-size pressure
 
 The Tetris demo is now around **2494 / 4096 words** and **164 / 208 RAM
 nibbles**, down from 4004 words before the condition-lowering and peephole
-work. That leaves roughly 1600 words for new features.
+work. That leaves roughly 1600 words for new features. A dword-heavy demo
+(`dword_math.badge`) plus the 32-bit multiply/divide runtime is about 2217
+words and 105 RAM nibbles.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2600-word

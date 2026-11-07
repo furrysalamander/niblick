@@ -104,6 +104,18 @@ python3 scripts/monitor.py /dev/ttyUSB0
 The confirmed mapping is in [keys.md](keys.md). Update it when new buttons
 are measured.
 
+## 32-bit math test
+
+`examples/math32_test.badge` exercises dword storage, shifts, casts,
+multiply, divide, and modulo. It uses the same `0x01` start byte as the main
+self-test:
+
+```bash
+python3 -m badgec examples/math32_test.badge
+# load examples/math32_test.hex, press RUN, then:
+python3 scripts/hw_test.py /dev/ttyUSB0
+```
+
 ## Tetris smoke test
 
 `examples/tetris.badge` exercises the display, keys, random pieces, PWM

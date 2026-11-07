@@ -73,17 +73,32 @@ Strings use `0xFF` as their terminator.
 general pointer. `len` is a nibble, so up to 15 elements per call. Repeated
 calls or a user loop can handle larger buffers.
 
-## Nibbles, bytes, and shifts
+## Numbers, casts, and operators
+
+Integer types are `nibble` (4-bit), `char` (8-bit), and `word` (16-bit), all
+unsigned. Widening is implicit; narrowing needs a cast:
+
+```c
+word w = 1000;
+char low = (char)w;      // low byte
+nibble n = (nibble)w;    // low nibble
+word again = (word)low;  // zero-extended
+```
 
 | Call | Returns | Notes |
 |---|---|---|
 | `high_nibble(c)` | `nibble` | High nibble of a char |
 | `low_nibble(c)` | `nibble` | Low nibble of a char |
 
-`<<` and `>>` accept a **constant** shift count and are unrolled at compile
-time. Both nibble and char values are supported; a shift of the full width or
-more produces zero. Variable shift counts are rejected for now. `*`, `/`, and
-`%` are still not implemented as operators; use the `lib/math.badge` helpers.
+| Operator | Behavior |
+|---|---|
+| `+ - & \| ^` | Common width, wrapping |
+| `<< >>` | Constant count, unrolled; full-width or more gives zero |
+| `*` | Widens one step: `nibble*nibble -> char`, `char*char -> word`, `word*word -> word` (low 16 bits) |
+| `/ %` | Common width, unsigned; division by zero gives zero |
+
+`<<`/`>>` use a constant count; variable counts are rejected for now. The
+`lib/math.badge` helpers remain as thin wrappers for older code.
 
 ## GPIO
 
@@ -146,6 +161,8 @@ globals are removed, so importing a module is free unless you call it.
 | `uart_print_hex8(c)` | Two hex digits |
 | `uart_print_bin8(c)` | Eight binary digits |
 | `uart_print_dec8(c)` | Decimal, no leading zeros (`0..255`) |
+| `uart_print_hex16(w)` | Four hex digits |
+| `uart_print_dec16(w)` | Decimal `0..65535`, no leading zeros |
 | `uart_print_str(addr)` | RAM byte string, `0xFF` terminated |
 | `uart_print_hexdump(addr, len)` | `len` bytes as hex plus a newline |
 | `uart_read_nibble()` | Read one hex digit |

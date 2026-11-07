@@ -189,7 +189,7 @@ It starts at the slowest fall setting and speeds up every **8 cleared
 lines**. The badge's global `Dimmer` PWM is used for line-clear flashes and
 the game-over fade.
 
-The image uses about 2475 of 4096 words and 164 of 208 RAM nibbles. The
+The image uses about 2494 of 4096 words and 164 of 208 RAM nibbles. The
 compiler's condition lowering, copy propagation, and spill elimination left
 roughly 1600 words of headroom for new features.
 

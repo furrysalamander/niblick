@@ -76,7 +76,7 @@ and cycle counts and an estimated elapsed time at the current `Clock` setting.
 
 ## Hardware self-test
 
-`examples/hw_test.badge` is a 54-check self-test that waits for a single
+`examples/hw_test.badge` is a 67-check self-test that waits for a single
 `0x01` UART byte. It exercises arithmetic, loops, tail recursion, RAM
 arrays, memset/memcpy, peek/poke, flash tables, flash iteration, UART TX/RX,
 GPIO, display paging, dimmer, random, WrFlags, key reads, and delay.

@@ -13,6 +13,7 @@ hardware return stack has only five entries.
 |---|---|
 | `nibble` | One register or one RAM nibble; `0..15` |
 | `char` | Two nibbles, low first then high; `0..255` |
+| `word` | Four nibbles, low first; `0..65535` |
 | `flashptr` | Three nibbles: low, middle, high (12-bit code address) |
 | `void` | No value |
 
@@ -22,6 +23,7 @@ An expression result is left in fixed registers:
 |---|---|
 | `nibble` | `R1` |
 | `char` | `R1` = low, `R2` = high |
+| `word` | `R1` = low, `R2`, `R3`, `R4` = high |
 | `flashptr` | `R1` = low, `R2` = middle, `R3` = high |
 
 `R0` is reserved for instructions that only work through it:
@@ -81,6 +83,12 @@ the same expression-result registers:
 | `__bc_uart_puts` | `R1/R2/R3` = flash pointer | none; stops at `0xFF` |
 | `__bc_flash_read_char` | `R1/R2/R3` = flash pointer | `R1/R2` = char |
 | `__bc_flash_read_nibble` | `R1/R2/R3` = flash pointer | `R1` = nibble |
+| `__bc_flash_read_word` | `R1/R2/R3` = flash pointer | `R1..R4` = word |
+| `__bc_mul4` | `R1` = a, `R2` = b | `R1:R2` = product |
+| `__bc_mul8` | `R1:R2`, `R3:R4` | `R1..R4` = 16-bit product |
+| `__bc_mul16` | `R1..R4`, `R5..R8` | `R1..R4` = low word |
+| `__bc_divmod8` | `R1:R2`, `R3:R4` | quotient `R1:R2`, remainder `R3:R4` |
+| `__bc_divmod16` | `R1..R4`, `R5..R8` | quotient `R1..R4`, remainder `R5..R8` |
 
 All runtime routines may clobber `R0`–`R9`. They do not preserve flags.
 Internally, the flash reader uses `R6/R7/R8` as the 12-bit pointer and
@@ -135,7 +143,8 @@ the other `WrFlags` bits.
 |---|---|
 | `0x00..0x0F` | registers and SFRs |
 | `0x10..0x1F` | hardware subroutine stack (5 × 3 nibbles) |
-| `0x20..0x3F` | compile-time expression temporaries |
+| `0x20..0x37` | compile-time expression temporaries |
+| `0x38..0x3F` | multiply/divide runtime scratch |
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays |
 | `0xF0..0xFF` | SFR page |
 

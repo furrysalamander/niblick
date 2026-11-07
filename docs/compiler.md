@@ -29,13 +29,14 @@ Every expression leaves its result in fixed registers:
 |---|---|
 | `nibble` | `R1` |
 | `char` | `R1` = low, `R2` = high |
+| `word` | `R1` = low, `R2`, `R3`, `R4` = high |
 | `flashptr` | `R1` = low, `R2` = middle, `R3` = high |
 
 `R0` is reserved for the instructions that can only access memory through
 it (`MOV [NN],R0`, `MOV R0,[NN]`, `CP R0,N`, `ADD R0,N`).
 
 Nested binary expressions park the left operand in a static temporary slot
-in `0x20..0x3F`, evaluate the right operand, then reload and combine. No
+in `0x20..0x37`, evaluate the right operand, then reload and combine. No
 runtime stack pointer is needed for expression temporaries; the slot
 addresses are known at compile time.
 
@@ -45,7 +46,8 @@ addresses are known at compile time.
 |---|---|
 | `0x00..0x0F` | registers and SFRs |
 | `0x10..0x1F` | hardware subroutine stack |
-| `0x20..0x3F` | compile-time expression temporaries (32 nibbles) |
+| `0x20..0x37` | compile-time expression temporaries (24 nibbles) |
+| `0x38..0x3F` | multiply/divide runtime scratch (8 nibbles) |
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays (176 nibbles) |
 | `0xF0..0xFF` | SFR page |
 
@@ -96,13 +98,20 @@ cover it.
 
 ## Types and coercions
 
-Only widening from `nibble` to `char` is implicit. Narrowing is rejected
-because silently discarding the high nibble is a common source of bugs on a
-4-bit machine. `const` arrays are read-only and live in flash; RAM arrays
-are mutable.
+Integer widths are `nibble` (4), `char` (8), and `word` (16). Widening is
+implicit and zero-extends into the higher result registers. Narrowing is
+rejected unless an explicit cast is used:
 
-`char` is unsigned 0..255. String literals and `const char[]` are flash
-objects with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
+```c
+char low = (char)wide;
+nibble nib = (nibble)wide;
+word back = (word)byte;
+```
+
+`const` arrays are read-only and live in flash; RAM arrays are mutable.
+
+`char` is unsigned 0..255 and `word` is unsigned 0..65535. String literals
+and `const char[]` are flash objects with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
 it loads the 3-nibble cursor, calls the RET-table reader, and writes the
 advanced cursor back without using a RAM buffer.
 
@@ -142,7 +151,12 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   clobber them, replacing RAM spill traffic.
 - Address arithmetic uses operand registers directly and drops carry
   correction for page-aligned arrays.
-- Constant-count `<<`/`>>` are unrolled for nibble and char values.
+- Constant-count `<<`/`>>` are unrolled for nibble, char, and word values.
+- `*` widens one step (`nibble*nibble -> char`, `char*char -> word`) and
+  strength-reduces constants (`*2`, `*4`, ...).
+- `/` and `%` use unsigned binary long division; constant powers of two
+  become shifts and masks. Division by zero returns zero.
+- Explicit `(nibble)`, `(char)`, and `(word)` casts.
 - `import` with cycle detection and dead-declaration elimination.
 - Branch relaxation from two-word `GOTO` to one-word `JR` when in range,
   including adjustment of a preceding `SKIP` count.
@@ -161,7 +175,7 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 
 ## Current code-size pressure
 
-The Tetris demo is now around **2475 / 4096 words** and **164 / 208 RAM
+The Tetris demo is now around **2494 / 4096 words** and **164 / 208 RAM
 nibbles**, down from 4004 words before the condition-lowering and peephole
 work. That leaves roughly 1600 words for new features.
 

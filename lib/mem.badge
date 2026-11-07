@@ -1,0 +1,72 @@
+// Nibble-addressed memory helpers.  Addresses are 8-bit data addresses and
+// lengths are chars, so these work past the nibble-sized mem* builtins.
+
+fn void mem_fill(char addr, nibble value, char len) {
+    while (len != 0) {
+        poke(addr, value);
+        addr = addr + 1;
+        len = len - 1;
+    }
+}
+
+fn void mem_zero(char addr, char len) {
+    mem_fill(addr, 0, len);
+}
+
+fn void mem_copy(char dst, char src, char len) {
+    while (len != 0) {
+        poke(dst, peek(src));
+        dst = dst + 1;
+        src = src + 1;
+        len = len - 1;
+    }
+}
+
+// 0 when the ranges match, 1 when they differ.
+fn nibble mem_cmp(char a, char b, char len) {
+    while (len != 0) {
+        if (peek(a) != peek(b)) {
+            return 1;
+        }
+        a = a + 1;
+        b = b + 1;
+        len = len - 1;
+    }
+    return 0;
+}
+
+fn void mem_swap(char a, char b) {
+    nibble tmp;
+    tmp = peek(a);
+    poke(a, peek(b));
+    poke(b, tmp);
+}
+
+// Bit helpers for nibble arrays.  The mask table lives in flash.
+const nibble mem_bit_masks[] = { 1, 2, 4, 8 };
+
+fn nibble mem_bit_test(char addr, nibble bit) {
+    return (peek(addr) & mem_bit_masks[bit]) != 0;
+}
+
+fn void mem_bit_set(char addr, nibble bit) {
+    poke(addr, peek(addr) | mem_bit_masks[bit]);
+}
+
+fn void mem_bit_clear(char addr, nibble bit) {
+    poke(addr, peek(addr) & (mem_bit_masks[bit] ^ 15));
+}
+
+fn void mem_bit_toggle(char addr, nibble bit) {
+    poke(addr, peek(addr) ^ mem_bit_masks[bit]);
+}
+
+fn nibble mem_popcount(nibble v) {
+    nibble count;
+    count = 0;
+    while (v != 0) {
+        count = count + (v & 1);
+        v = v >> 1;
+    }
+    return count;
+}

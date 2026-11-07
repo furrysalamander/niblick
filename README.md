@@ -189,12 +189,37 @@ It starts at the slowest fall setting and speeds up every **8 cleared
 lines**. The badge's global `Dimmer` PWM is used for line-clear flashes and
 the game-over fade.
 
-The image uses about 2517 of 4096 words and 164 of 208 RAM nibbles. The
+The image uses about 2475 of 4096 words and 164 of 208 RAM nibbles. The
 compiler's condition lowering, copy propagation, and spill elimination left
-roughly 1500 words of headroom for new features.
+roughly 1600 words of headroom for new features.
 
 The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
 `docs/keys.md`.
+
+## Library modules
+
+`lib/` contains opt-in BadgeC modules for UART formatting, strings, math,
+nibble memory and bit operations, key helpers, and clock/sync helpers:
+
+```c
+import "lib/uart.badge";
+import "lib/string.badge";
+
+char buf[16];
+
+fn main() {
+    uart_route(1);
+    uart_init(3);
+    str_copy_flash(&buf, "hi");
+    uart_print_str(&buf);
+    uart_nl();
+}
+```
+
+Imports resolve relative to the importing file and then the repository root.
+Unused module functions and pure globals are removed, so an import costs
+nothing until you use it. See `docs/stdlib.md` and
+`examples/stdlib_demo.badge`.
 
 ## Documentation
 

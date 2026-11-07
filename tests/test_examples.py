@@ -8,15 +8,14 @@ import pytest
 
 from badgec.assembler import assemble_file, code_words
 from badgec.compiler import Compiler
-from badgec.parser import parse
+from badgec.loader import load_program
 
 EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "examples").glob("*.badge"))
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.name)
 def test_example_compiles(tmp_path: Path, example: Path) -> None:
-    source = example.read_text()
-    program = parse(source, str(example))
+    program = load_program(example)
     compiler = Compiler(program, str(example))
     asm = compiler.compile()
     asm_path = tmp_path / (example.stem + ".asm")

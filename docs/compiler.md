@@ -53,6 +53,25 @@ trade-off is that two functions that are never active at the same time
 still get separate storage. A call-graph overlay or inliner is a future
 optimization.
 
+## Imports
+
+`import "lib/uart.badge";` is resolved by `badgec/loader.py` before semantic
+analysis. Imports are looked up relative to the importing file, then relative
+to the repository root and any `BADGEC_PATH` entries. Each file is parsed
+once, cycles are rejected, and the declarations are merged into a single
+`ast.Program`.
+
+Dead-declaration elimination runs after inlining:
+
+- functions unreachable from `main` (or a kept global initializer) are
+  removed;
+- globals that are not referenced by reachable code and whose initializer has
+  no calls are removed, including unreferenced const flash tables.
+
+This is what makes importing a module free when only part of it is used.
+Error locations inside imported files currently report the entry file's
+name, because AST nodes carry a line but not a filename.
+
 ## Calls, tail calls, and recursion
 
 Non-tail calls use `GOSUB`/`RET` and consume one of the five hardware stack
@@ -118,6 +137,8 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   clobber them, replacing RAM spill traffic.
 - Address arithmetic uses operand registers directly and drops carry
   correction for page-aligned arrays.
+- Constant-count `<<`/`>>` are unrolled for nibble and char values.
+- `import` with cycle detection and dead-declaration elimination.
 - Branch relaxation from two-word `GOTO` to one-word `JR` when in range,
   including adjustment of a preceding `SKIP` count.
 - Tail-call elimination.
@@ -135,9 +156,9 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 
 ## Current code-size pressure
 
-The Tetris demo is now around **2517 / 4096 words** and **164 / 208 RAM
+The Tetris demo is now around **2475 / 4096 words** and **164 / 208 RAM
 nibbles**, down from 4004 words before the condition-lowering and peephole
-work. That leaves roughly 1500 words for new features.
+work. That leaves roughly 1600 words for new features.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2600-word

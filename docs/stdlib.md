@@ -1,8 +1,37 @@
 # BadgeC standard library
 
-BadgeC has no libc. The builtins below are recognized by the compiler and
-lowered to inline code or calls into `badgec/runtime/runtime.asm`. They are
-the supported “standard library” for now.
+BadgeC has two library layers:
+
+- **Builtins** are recognized by the compiler and lowered to inline code or
+  calls into `badgec/runtime/runtime.asm`.
+- **Modules** are ordinary BadgeC files under `lib/`, pulled in with
+  `import`.
+
+```c
+import "lib/uart.badge";
+import "lib/string.badge";
+
+char buf[16];
+
+fn main() {
+    uart_route(1);
+    uart_init(3);
+    str_copy_flash(&buf, "hi");
+    uart_print_str(&buf);
+    uart_nl();
+}
+```
+
+Imports resolve relative to the importing file first, then the repository
+root; `BADGEC_PATH` can add more search roots. Each file is loaded once and
+import cycles are reported. Imported declarations are compiled together with
+the main program, and the compiler removes any function or pure global that
+is still unreachable, so an unused module costs neither code nor RAM.
+
+`&array` yields the base **nibble address** of a RAM array. A `char` occupies
+two consecutive nibbles, so byte strings advance by 2 per character. String
+modules use `0xFF` as the terminator, matching flash strings and
+`uart_puts`.
 
 ## UART
 
@@ -35,12 +64,26 @@ Strings use `0xFF` as their terminator.
 |---|---|---|
 | `peek(addr)` | `nibble` | Read a nibble at an 8-bit data address |
 | `poke(addr, value)` | `void` | Write a nibble at an 8-bit data address |
+| `peek8(addr)` | `char` | Read a full byte (`addr` and `addr + 1`) |
+| `poke8(addr, value)` | `void` | Write a full byte across two nibbles |
 | `memset(buf, value, len)` | `void` | Fill `len` elements (`1..15`) of a RAM array |
 | `memcpy(dst, src, len)` | `void` | Copy `len` elements (`1..15`) between same-type RAM arrays |
 
 `memset`/`memcpy` accept a named RAM array as the buffer argument, not a
 general pointer. `len` is a nibble, so up to 15 elements per call. Repeated
 calls or a user loop can handle larger buffers.
+
+## Nibbles, bytes, and shifts
+
+| Call | Returns | Notes |
+|---|---|---|
+| `high_nibble(c)` | `nibble` | High nibble of a char |
+| `low_nibble(c)` | `nibble` | Low nibble of a char |
+
+`<<` and `>>` accept a **constant** shift count and are unrolled at compile
+time. Both nibble and char values are supported; a shift of the full width or
+more produces zero. Variable shift counts are rejected for now. `*`, `/`, and
+`%` are still not implemented as operators; use the `lib/math.badge` helpers.
 
 ## GPIO
 
@@ -89,14 +132,101 @@ The `WrFlags` routing helpers take a boolean (nonzero = enable):
 `Clock` SFR and the current CPU speed. Use `Sync`/`RdFlags` for
 timing-critical work.
 
+## Library modules
+
+These live in `lib/` and are opt-in via `import`. Unused functions and pure
+globals are removed, so importing a module is free unless you call it.
+
+### `lib/uart.badge`
+
+| Call | Notes |
+|---|---|
+| `uart_nl()` | Send LF |
+| `uart_print_nibble(v)` | One hex digit, `0..F` |
+| `uart_print_hex8(c)` | Two hex digits |
+| `uart_print_bin8(c)` | Eight binary digits |
+| `uart_print_dec8(c)` | Decimal, no leading zeros (`0..255`) |
+| `uart_print_str(addr)` | RAM byte string, `0xFF` terminated |
+| `uart_print_hexdump(addr, len)` | `len` bytes as hex plus a newline |
+| `uart_read_nibble()` | Read one hex digit |
+| `uart_read_hex8()` | Read two hex digits into a char |
+| `uart_read_line(addr, max)` | Read until CR/LF; returns byte count |
+
+### `lib/string.badge`
+
+Byte strings in RAM at a nibble address; terminator `0xFF`.
+
+| Call | Notes |
+|---|---|
+| `str_len(addr)` | Length in bytes |
+| `str_eq(a, b)` | `1` when identical |
+| `str_copy(dst, src)` | Copy including terminator |
+| `str_cat(dst, src)` | Append `src` at the end of `dst` |
+| `str_chr(addr, ch)` | Address of the first match, or `0` |
+| `str_len_flash(p)` | Length of a flash string |
+| `str_copy_flash(dst, p)` | Copy a flash string into RAM |
+
+### `lib/math.badge`
+
+All values unsigned. Callers must not pass a zero divisor.
+
+| Call | Returns |
+|---|---|
+| `math_min(a, b)`, `math_max(a, b)` | `nibble` |
+| `math_clamp(v, low, high)` | `nibble` |
+| `math_abs_diff(a, b)` | `nibble` |
+| `math_mul(a, b)` | `char` (`a,b` are nibbles) |
+| `math_div(a, b)`, `math_mod(a, b)` | nibble / nibble |
+| `math_div8(c, b)` | `char` / nibble |
+| `math_mod8(c, b)` | remainder as a nibble |
+| `math_isqrt(c)` | nibble |
+| `math_pow2(n)` | `char`; zero when `n >= 8` |
+
+### `lib/mem.badge`
+
+These operate on **nibbles**, one address step per element.
+
+| Call | Notes |
+|---|---|
+| `mem_fill(addr, value, len)` | Fill `len` nibbles |
+| `mem_zero(addr, len)` | Fill with zero |
+| `mem_copy(dst, src, len)` | Copy `len` nibbles |
+| `mem_cmp(a, b, len)` | `0` equal, `1` different |
+| `mem_swap(a, b)` | Swap two nibbles |
+| `mem_bit_test(addr, bit)` | `1` when set |
+| `mem_bit_set/clear/toggle(addr, bit)` | Bit operations |
+| `mem_popcount(v)` | Number of set bits in a nibble |
+
+### `lib/key.badge`
+
+| Call | Notes |
+|---|---|
+| `key_op8()` / `key_op4()` / `key_op2()` / `key_op1()` | Measured `KeyReg` codes |
+| `key_dep()` | DEP+ / CLOCK / STEP code (`0`) |
+| `key_wait()` | Block for a new press, return its code |
+| `key_wait_release()` | Wait for press and release |
+| `key_wait_any()` | Wait for any non-ALT key |
+| `key_name(code)` | Flash string name |
+
+### `lib/time.badge`
+
+| Call | Notes |
+|---|---|
+| `time_clock_set(divider)` / `time_clock_get()` | `Clock` SFR |
+| `time_sync_set(divider)` | `Sync` SFR |
+| `time_sync_seen()` | Read and clear `UserSync` |
+| `time_sync_wait()` | Block until the next `UserSync` |
+| `time_delay_frames(n)` | Wait for `n` sync frames |
+
 ## Missing / planned
 
-- `printf`-style formatted output
-- `strlen`, `strcmp`, `strcpy` for RAM arrays
+- A `printf`-style formatter (the language has no varargs)
 - General pointer arithmetic and `char *` parameters
-- `memcpy`/`memset` lengths above 15
-- Multiply/divide/shift operators
+- Byte-oriented `mem*` helpers (current ones are nibble-oriented)
+- `*`, `/`, and `%` operators (library helpers exist)
+- Variable shift counts
 - `malloc` / free
 - Interrupt-driven UART
 - A calibrated millisecond delay
 - A higher-level display/font library
+- Bit-banged I2C/SPI helpers

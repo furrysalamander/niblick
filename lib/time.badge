@@ -1,0 +1,32 @@
+// Clock and user-sync helpers.  The badge has no wall-clock counter; `Sync`
+// sets the UserSync flag rate and `RdFlags` reports it.  Reading RdFlags
+// clears UserSync.
+
+fn void time_clock_set(nibble divider) {
+    poke(0xF1, divider);
+}
+
+fn nibble time_clock_get() {
+    return peek(0xF1);
+}
+
+fn void time_sync_set(nibble divider) {
+    poke(0xF2, divider);
+}
+
+// Reading this clears the current UserSync flag.
+fn nibble time_sync_seen() {
+    return peek(0xF4) & 1;
+}
+
+fn void time_sync_wait() {
+    while ((peek(0xF4) & 1) == 0) {
+    }
+}
+
+fn void time_delay_frames(nibble count) {
+    while (count != 0) {
+        time_sync_wait();
+        count = count - 1;
+    }
+}

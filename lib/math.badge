@@ -1,0 +1,101 @@
+// Small integer helpers.  Everything is unsigned: nibble is 0..15 and char
+// is 0..255.  Multiplication above 255 is not representable.
+
+fn nibble math_min(nibble a, nibble b) {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
+
+fn nibble math_max(nibble a, nibble b) {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+fn nibble math_clamp(nibble v, nibble low, nibble high) {
+    if (v < low) {
+        return low;
+    }
+    if (v > high) {
+        return high;
+    }
+    return v;
+}
+
+fn nibble math_abs_diff(nibble a, nibble b) {
+    if (a > b) {
+        return a - b;
+    }
+    return b - a;
+}
+
+// a * b, with a and b in 0..15.  The result fits in a char.
+fn char math_mul(nibble a, nibble b) {
+    char result;
+    result = 0;
+    while (b != 0) {
+        result = result + a;
+        b = b - 1;
+    }
+    return result;
+}
+
+// Quotient and remainder for nibble / nibble.
+fn nibble math_div(nibble a, nibble b) {
+    nibble q;
+    q = 0;
+    while (a >= b) {
+        a = a - b;
+        q = q + 1;
+    }
+    return q;
+}
+
+fn nibble math_mod(nibble a, nibble b) {
+    while (a >= b) {
+        a = a - b;
+    }
+    return a;
+}
+
+// char / nibble.  The quotient can be up to 255.
+fn char math_div8(char a, nibble b) {
+    char q;
+    q = 0;
+    while (a >= b) {
+        a = a - b;
+        q = q + 1;
+    }
+    return q;
+}
+
+fn nibble math_mod8(char a, nibble b) {
+    while (a >= b) {
+        a = a - b;
+    }
+    return low_nibble(a);
+}
+
+// Largest r with r*r <= n.
+fn nibble math_isqrt(char n) {
+    nibble r;
+    r = 0;
+    // r stays a nibble; r+1 would wrap to 0 once r reaches 15.
+    while (r < 15 && math_mul(r + 1, r + 1) <= n) {
+        r = r + 1;
+    }
+    return r;
+}
+
+fn char math_pow2(nibble n) {
+    char v;
+    v = 1;
+    while (n != 0) {
+        v = v << 1;
+        n = n - 1;
+    }
+    return v;
+}

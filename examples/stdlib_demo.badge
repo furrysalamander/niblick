@@ -1,0 +1,57 @@
+// Demonstrates the optional library modules in lib/.
+// Compile with: python3 -m badgec examples/stdlib_demo.badge
+
+import "lib/uart.badge";
+import "lib/math.badge";
+import "lib/mem.badge";
+import "lib/string.badge";
+import "lib/key.badge";
+import "lib/time.badge";
+
+char buf[24];
+char product;
+
+fn main() {
+    uart_route(1);
+    uart_init(3);
+
+    uart_puts("BadgeC stdlib demo\n");
+
+    uart_puts("hex=");
+    uart_print_hex8(171);
+    uart_puts(" dec=");
+    uart_print_dec8(234);
+    uart_puts(" bin=");
+    uart_print_bin8(165);
+    uart_nl();
+
+    str_copy_flash(&buf, "hello");
+    uart_puts("str=");
+    uart_print_str(&buf);
+    uart_puts(" len=");
+    uart_print_dec8(str_len(&buf));
+    uart_nl();
+
+    product = math_mul(7, 9);
+    uart_puts("mul=");
+    uart_print_dec8(product);
+    uart_puts(" sqrt(49)=");
+    uart_print_dec8(math_isqrt(49));
+    uart_nl();
+
+    mem_bit_set(&buf, 2);
+    uart_puts("bit2=");
+    uart_print_dec8(mem_bit_test(&buf, 2));
+    uart_puts(" popcount(15)=");
+    uart_print_dec8(mem_popcount(15));
+    uart_nl();
+
+    uart_puts("key=");
+    uart_puts(key_name(key_op8()));
+    uart_nl();
+
+    time_clock_set(5);
+    uart_puts("clock=");
+    uart_print_dec8(time_clock_get());
+    uart_nl();
+}

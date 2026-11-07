@@ -2055,6 +2055,18 @@ class Compiler:
             self.emit("OR R1, R2")
             return "Z" if op in ("==", "<=") else "NZ"
 
+        if constant == 255 and op in ("==", "!="):
+            typ = self.compile_expr(left, scope)
+            self.coerce(typ, CHAR, line)
+            # R0 = (high ^ 15) | (low ^ 15): zero only for 0xFF.
+            self.emit("MOV R0, R2")
+            self.emit("XOR R0, 15")
+            self.emit("MOV R3, R0")
+            self.emit("MOV R0, R1")
+            self.emit("XOR R0, 15")
+            self.emit("OR R0, R3")
+            return "Z" if op == "==" else "NZ"
+
         if constant == 16 and op in ("<", ">="):
             typ = self.compile_expr(left, scope)
             self.coerce(typ, CHAR, line)

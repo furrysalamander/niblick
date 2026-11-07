@@ -6,7 +6,7 @@ from pathlib import Path
 
 from badgec.assembler import assemble_file, code_words
 from badgec.compiler import Compiler
-from badgec.parser import parse
+from badgec.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
 BUDGETS = {
@@ -19,8 +19,9 @@ BUDGETS = {
 
 
 def compile_example(example: Path, tmp_path: Path, strip_runtime: bool = True):
-    source = example.read_text()
-    compiler = Compiler(parse(source, str(example)), str(example), strip_runtime=strip_runtime)
+    compiler = Compiler(
+        load_program(example), str(example), strip_runtime=strip_runtime
+    )
     asm = compiler.compile()
     asm_path = tmp_path / (example.stem + ".asm")
     asm_path.write_text(asm)

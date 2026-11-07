@@ -1,0 +1,78 @@
+// Byte strings in RAM addressed by an 8-bit char address.
+// The terminator is 0xFF, matching flash strings and uart_puts.
+
+fn char str_len(char addr) {
+    char count;
+    count = 0;
+    while (peek8(addr) != 255) {
+        addr = addr + 2;
+        count = count + 1;
+    }
+    return count;
+}
+
+// 1 when the strings are identical, including the terminator.
+fn nibble str_eq(char a, char b) {
+    while (peek8(a) == peek8(b)) {
+        if (peek8(a) == 255) {
+            return 1;
+        }
+        a = a + 2;
+        b = b + 2;
+    }
+    return 0;
+}
+
+fn void str_copy(char dst, char src) {
+    char c;
+    c = peek8(src);
+    while (c != 255) {
+        poke8(dst, c);
+        dst = dst + 2;
+        src = src + 2;
+        c = peek8(src);
+    }
+    poke8(dst, 255);
+}
+
+fn void str_cat(char dst, char src) {
+    while (peek8(dst) != 255) {
+        dst = dst + 2;
+    }
+    str_copy(dst, src);
+}
+
+// Address of the first match, or 0 when absent.  RAM variables start at
+// 0x40, so 0 is safe as "not found".
+fn char str_chr(char addr, char ch) {
+    char c;
+    c = peek8(addr);
+    while (c != 255) {
+        if (c == ch) {
+            return addr;
+        }
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+    return 0;
+}
+
+fn char str_len_flash(flashptr p) {
+    char count;
+    count = 0;
+    while (flash_next(&p) != 255) {
+        count = count + 1;
+    }
+    return count;
+}
+
+fn void str_copy_flash(char dst, flashptr src) {
+    char c;
+    c = flash_next(&src);
+    while (c != 255) {
+        poke8(dst, c);
+        dst = dst + 2;
+        c = flash_next(&src);
+    }
+    poke8(dst, 255);
+}

@@ -1,0 +1,367 @@
+// Signed integer helpers for the existing unsigned storage types.
+//
+// BadgeC has no native signed types yet.  These helpers interpret the raw
+// bits of the normal types as two's complement:
+//
+//     nibble   4-bit signed   -8..7
+//     char     8-bit signed   -128..127
+//     word     16-bit signed  -32768..32767
+//
+// Negative values are passed and returned as their raw unsigned bit
+// patterns, e.g. -1 is 15, 255, or 0xFFFF depending on width.  Unused
+// functions are removed by the compiler's dead-declaration pass.
+
+// ---------------------------------------------------------------------------
+// Negation, absolute value, and sign tests
+// ---------------------------------------------------------------------------
+
+fn nibble s_neg4(nibble v) {
+    return 0 - v;
+}
+
+fn char s_neg8(char v) {
+    return 0 - v;
+}
+
+fn word s_neg16(word v) {
+    return 0 - v;
+}
+
+fn nibble s_abs4(nibble v) {
+    if ((v & 8) != 0) {
+        return 0 - v;
+    }
+    return v;
+}
+
+fn char s_abs8(char v) {
+    if ((v & 128) != 0) {
+        return 0 - v;
+    }
+    return v;
+}
+
+fn word s_abs16(word v) {
+    if ((v & 0x8000) != 0) {
+        return 0 - v;
+    }
+    return v;
+}
+
+fn nibble s_is_neg4(nibble v) {
+    return (v & 8) != 0;
+}
+
+fn nibble s_is_neg8(char v) {
+    return (v & 128) != 0;
+}
+
+fn nibble s_is_neg16(word v) {
+    return (v & 0x8000) != 0;
+}
+
+// ---------------------------------------------------------------------------
+// Comparisons
+//
+// Flipping the sign bit maps two's-complement order onto unsigned order.
+// ---------------------------------------------------------------------------
+
+fn nibble s_lt4(nibble a, nibble b) {
+    return (a ^ 8) < (b ^ 8);
+}
+
+fn nibble s_le4(nibble a, nibble b) {
+    return (a ^ 8) <= (b ^ 8);
+}
+
+fn nibble s_gt4(nibble a, nibble b) {
+    return (a ^ 8) > (b ^ 8);
+}
+
+fn nibble s_ge4(nibble a, nibble b) {
+    return (a ^ 8) >= (b ^ 8);
+}
+
+fn nibble s_lt8(char a, char b) {
+    return (a ^ 128) < (b ^ 128);
+}
+
+fn nibble s_le8(char a, char b) {
+    return (a ^ 128) <= (b ^ 128);
+}
+
+fn nibble s_gt8(char a, char b) {
+    return (a ^ 128) > (b ^ 128);
+}
+
+fn nibble s_ge8(char a, char b) {
+    return (a ^ 128) >= (b ^ 128);
+}
+
+fn nibble s_lt16(word a, word b) {
+    return (a ^ 0x8000) < (b ^ 0x8000);
+}
+
+fn nibble s_le16(word a, word b) {
+    return (a ^ 0x8000) <= (b ^ 0x8000);
+}
+
+fn nibble s_gt16(word a, word b) {
+    return (a ^ 0x8000) > (b ^ 0x8000);
+}
+
+fn nibble s_ge16(word a, word b) {
+    return (a ^ 0x8000) >= (b ^ 0x8000);
+}
+
+fn nibble s_min4(nibble a, nibble b) {
+    if (s_lt4(a, b) != 0) {
+        return a;
+    }
+    return b;
+}
+
+fn nibble s_max4(nibble a, nibble b) {
+    if (s_gt4(a, b) != 0) {
+        return a;
+    }
+    return b;
+}
+
+fn char s_min8(char a, char b) {
+    if (s_lt8(a, b) != 0) {
+        return a;
+    }
+    return b;
+}
+
+fn char s_max8(char a, char b) {
+    if (s_gt8(a, b) != 0) {
+        return a;
+    }
+    return b;
+}
+
+fn word s_min16(word a, word b) {
+    if (s_lt16(a, b) != 0) {
+        return a;
+    }
+    return b;
+}
+
+fn word s_max16(word a, word b) {
+    if (s_gt16(a, b) != 0) {
+        return a;
+    }
+    return b;
+}
+
+fn nibble s_clamp4(nibble v, nibble low, nibble high) {
+    if (s_lt4(v, low) != 0) {
+        return low;
+    }
+    if (s_gt4(v, high) != 0) {
+        return high;
+    }
+    return v;
+}
+
+fn char s_clamp8(char v, char low, char high) {
+    if (s_lt8(v, low) != 0) {
+        return low;
+    }
+    if (s_gt8(v, high) != 0) {
+        return high;
+    }
+    return v;
+}
+
+fn word s_clamp16(word v, word low, word high) {
+    if (s_lt16(v, low) != 0) {
+        return low;
+    }
+    if (s_gt16(v, high) != 0) {
+        return high;
+    }
+    return v;
+}
+
+// ---------------------------------------------------------------------------
+// Sign extension
+// ---------------------------------------------------------------------------
+
+fn char s_ext4(nibble v) {
+    if ((v & 8) != 0) {
+        return (char)(v | 0xF0);
+    }
+    return (char)v;
+}
+
+fn word s_ext8(char v) {
+    if ((v & 128) != 0) {
+        return (word)(v | 0xFF00);
+    }
+    return (word)v;
+}
+
+fn dword s_ext16(word v) {
+    if ((v & 0x8000) != 0) {
+        return (dword)(v | 0xFFFF0000);
+    }
+    return (dword)v;
+}
+
+// ---------------------------------------------------------------------------
+// Arithmetic right shift
+// ---------------------------------------------------------------------------
+
+fn nibble s_sar4(nibble v, nibble n) {
+    while (n != 0) {
+        if ((v & 8) != 0) {
+            v = (v >> 1) | 8;
+        } else {
+            v = v >> 1;
+        }
+        n = n - 1;
+    }
+    return v;
+}
+
+fn char s_sar8(char v, nibble n) {
+    while (n != 0) {
+        if ((v & 128) != 0) {
+            v = (v >> 1) | 128;
+        } else {
+            v = v >> 1;
+        }
+        n = n - 1;
+    }
+    return v;
+}
+
+fn word s_sar16(word v, nibble n) {
+    while (n != 0) {
+        if ((v & 0x8000) != 0) {
+            v = (v >> 1) | 0x8000;
+        } else {
+            v = v >> 1;
+        }
+        n = n - 1;
+    }
+    return v;
+}
+
+// ---------------------------------------------------------------------------
+// Multiply and divide
+//
+// Multiplication of same-width signed values has the same low bits as
+// unsigned multiplication.  Narrower inputs must be sign-extended to the
+// result width first, which is what s_mul4 and s_mul8 do.
+// ---------------------------------------------------------------------------
+
+fn char s_mul4(nibble a, nibble b) {
+    return (char)(s_ext4(a) * s_ext4(b));
+}
+
+// Compact variant for 4-bit fields: keep the low nibble of the product.
+fn nibble s_mul4_nib(nibble a, nibble b) {
+    return (nibble)s_mul4(a, b);
+}
+
+fn char s_mul8(char a, char b) {
+    return (char)(s_ext8(a) * s_ext8(b));
+}
+
+fn word s_mul16(word a, word b) {
+    return a * b;
+}
+
+// Division truncates toward zero, matching C.  Division by zero returns 0.
+// The most-negative value divided by -1 wraps to itself.
+fn char s_div8(char a, char b) {
+    nibble neg;
+    neg = 0;
+    if (s_is_neg8(a) != 0) {
+        a = s_neg8(a);
+        neg = neg ^ 1;
+    }
+    if (s_is_neg8(b) != 0) {
+        b = s_neg8(b);
+        neg = neg ^ 1;
+    }
+    if (b == 0) {
+        return 0;
+    }
+    a = a / b;
+    if (neg != 0) {
+        a = s_neg8(a);
+    }
+    return a;
+}
+
+fn char s_mod8(char a, char b) {
+    nibble neg;
+    neg = s_is_neg8(a);
+    if (neg != 0) {
+        a = s_neg8(a);
+    }
+    if (s_is_neg8(b) != 0) {
+        b = s_neg8(b);
+    }
+    if (b == 0) {
+        return 0;
+    }
+    a = a % b;
+    if (neg != 0) {
+        a = s_neg8(a);
+    }
+    return a;
+}
+
+fn word s_div16(word a, word b) {
+    nibble neg;
+    neg = 0;
+    if (s_is_neg16(a) != 0) {
+        a = s_neg16(a);
+        neg = neg ^ 1;
+    }
+    if (s_is_neg16(b) != 0) {
+        b = s_neg16(b);
+        neg = neg ^ 1;
+    }
+    if (b == 0) {
+        return 0;
+    }
+    a = a / b;
+    if (neg != 0) {
+        a = s_neg16(a);
+    }
+    return a;
+}
+
+fn word s_mod16(word a, word b) {
+    nibble neg;
+    neg = s_is_neg16(a);
+    if (neg != 0) {
+        a = s_neg16(a);
+    }
+    if (s_is_neg16(b) != 0) {
+        b = s_neg16(b);
+    }
+    if (b == 0) {
+        return 0;
+    }
+    a = a % b;
+    if (neg != 0) {
+        a = s_neg16(a);
+    }
+    return a;
+}
+
+fn nibble s_div4(nibble a, nibble b) {
+    return (nibble)s_div8(s_ext4(a), s_ext4(b));
+}
+
+fn nibble s_mod4(nibble a, nibble b) {
+    return (nibble)s_mod8(s_ext4(a), s_ext4(b));
+}

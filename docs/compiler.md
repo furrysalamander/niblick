@@ -133,6 +133,15 @@ Taking `&CONST` is also rejected. Local scalar consts work the same way.
 Scalar consts still appear in `--map` and `--map-json`, with `address: null`
 and their folded value.
 
+Native signed types are not implemented. Signed arithmetic is available as
+raw-bit helpers in `lib/signed.badge` (`nibble` = 4-bit signed, `char` =
+8-bit signed, `word` = 16-bit signed) and Q4.4 fixed point in
+`lib/fixed.badge`. This keeps the type system and code generator small while
+a signed-heavy application is evaluated. A native signed type would affect
+coercion, comparison, arithmetic shift, division, literal typing, and
+address/print handling; the helper library is the current prototype for
+deciding whether that cost is justified.
+
 `char` is unsigned 0..255, `word` is unsigned 0..65535, and `dword` is
 unsigned 0..4294967295. String literals and `const char[]` are flash objects
 with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:

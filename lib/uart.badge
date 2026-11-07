@@ -94,6 +94,23 @@ fn void uart_print_dec16(word v) {
     uart_putc('0' + (nibble)v);
 }
 
+// Signed decimal formatting for raw two's-complement values.
+fn void uart_print_dec8_signed(char v) {
+    if ((v & 128) != 0) {
+        uart_putc('-');
+        v = 0 - v;
+    }
+    uart_print_dec8(v);
+}
+
+fn void uart_print_dec16_signed(word v) {
+    if ((v & 0x8000) != 0) {
+        uart_putc('-');
+        v = 0 - v;
+    }
+    uart_print_dec16(v);
+}
+
 fn void uart_print_hex32(dword v) {
     uart_print_hex16((word)(v >> 16));
     uart_print_hex16((word)v);

@@ -34,6 +34,7 @@ Not implemented yet:
 
 - General (non-tail) recursion
 - 64-bit integers and floating point
+- Native signed types (raw-bit signed helpers live in `lib/signed.badge`)
 - General pointers and pointer arithmetic
 - Structs, varargs, dynamic allocation
 - Register allocation, local overlay, and a broader peephole/optimization pipeline
@@ -222,7 +223,8 @@ and starts spinning as soon as it runs.
 ## Library modules
 
 `lib/` contains opt-in BadgeC modules for UART formatting, strings, math,
-nibble memory and bit operations, key helpers, and clock/sync helpers:
+two's-complement signed helpers and Q4.4 fixed point, nibble memory and bit
+operations, key helpers, and clock/sync helpers:
 
 ```c
 import "lib/uart.badge";

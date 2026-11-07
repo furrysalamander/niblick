@@ -194,6 +194,8 @@ globals are removed, so importing a module is free unless you call it.
 | `uart_print_dec16(w)` | Decimal `0..65535`, no leading zeros |
 | `uart_print_hex32(d)` | Eight hex digits |
 | `uart_print_dec32(d)` | Decimal `0..4294967295`, no leading zeros |
+| `uart_print_dec8_signed(c)` | Signed decimal for a raw two's-complement char |
+| `uart_print_dec16_signed(w)` | Signed decimal for a raw two's-complement word |
 | `uart_print_str(addr)` | RAM byte string, `0xFF` terminated |
 | `uart_print_hexdump(addr, len)` | `len` bytes as hex plus a newline |
 | `uart_read_nibble()` | Read one hex digit |
@@ -229,6 +231,62 @@ All values unsigned. Callers must not pass a zero divisor.
 | `math_mod8(c, b)` | remainder as a nibble |
 | `math_isqrt(c)` | nibble |
 | `math_pow2(n)` | `char`; zero when `n >= 8` |
+
+### `lib/signed.badge`
+
+BadgeC's types are unsigned, so these helpers interpret the raw bits of
+`nibble`, `char`, and `word` as two's complement:
+
+| Raw type | Signed range |
+|---|---|
+| `nibble` | -8 .. 7 |
+| `char` | -128 .. 127 |
+| `word` | -32768 .. 32767 |
+
+Negative values are passed and returned as raw bit patterns (`15`, `255`,
+`0xFFFF`). Unused helpers are removed by the compiler.
+
+| Call | Notes |
+|---|---|
+| `s_neg4/8/16(v)` | Two's-complement negate |
+| `s_abs4/8/16(v)` | Magnitude as raw bits |
+| `s_is_neg4/8/16(v)` | `1` when negative |
+| `s_lt4/8/16(a,b)`, `s_le...`, `s_gt...`, `s_ge...` | Signed comparisons |
+| `s_min4/8/16`, `s_max4/8/16` | Signed min/max |
+| `s_clamp4/8/16(v, low, high)` | Signed clamp |
+| `s_ext4(v)` | Sign-extend nibble to char |
+| `s_ext8(v)` | Sign-extend char to word |
+| `s_ext16(v)` | Sign-extend word to dword |
+| `s_sar4/8/16(v, n)` | Arithmetic right shift |
+| `s_mul4(a,b)` | 8-bit signed product of two nibbles |
+| `s_mul4_nib(a,b)` | Low nibble of `s_mul4` |
+| `s_mul8(a,b)` | Low 8 bits of the signed product |
+| `s_mul16(a,b)` | Low 16 bits of the signed product |
+| `s_div4/8/16`, `s_mod4/8/16` | Signed division / remainder |
+
+Signed division truncates toward zero, division by zero returns `0`, and the
+most-negative value divided by `-1` wraps to itself. The result of `s_mul8`
+and `s_mul16` is the low half of the exact signed product.
+
+### `lib/fixed.badge`
+
+Q4.4 signed fixed point in a `char`: raw value divided by 16, range
+-8.0 .. +7.9375, resolution 1/16.
+
+| Call | Notes |
+|---|---|
+| `q4_4_add/sub(a,b)` | Wrapping add/subtract |
+| `q4_4_neg(v)` | Negate |
+| `q4_4_mul(a,b)` | Q4.4 multiply, wrapping |
+| `q4_4_div(a,b)` | Q4.4 divide, wrapping; zero divisor gives 0 |
+| `q4_4_from_int(v)` | Signed nibble to Q4.4 |
+| `q4_4_to_int(v)` | Q4.4 to signed nibble, truncating toward zero |
+| `q4_4_min/max(a,b)` | Signed min/max |
+| `q4_4_clamp(v, low, high)` | Signed clamp |
+
+Q4.4 is a pragmatic format for 8-bit signed quantities on this CPU. A
+16-bit Q8.8 module would need signed 32-bit products and arithmetic shifts,
+which are deliberately not part of this prototype.
 
 ### `lib/mem.badge`
 
@@ -293,6 +351,8 @@ buffer, which is useful when the allocator chooses the address.
 - General pointer arithmetic and `char *` parameters
 - Byte-oriented `mem*` helpers (current ones are nibble-oriented)
 - 64-bit integers
+- Native signed types; `lib/signed.badge` currently provides raw-bit helpers
+- Signed 32-bit arithmetic and Q8.8 fixed point
 - `malloc` / free
 - Interrupt-driven UART
 - A calibrated millisecond delay

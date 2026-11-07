@@ -1,0 +1,61 @@
+// Q4.4 signed fixed-point helpers.
+//
+// A Q4.4 value is stored in a char as a raw two's-complement value divided
+// by 16.  The range is -8.0 .. +7.9375 with a resolution of 1/16.
+//
+//     raw 0x10 =  1.0
+//     raw 0x08 =  0.5
+//     raw 0xF8 = -0.5
+//     raw 0xC0 = -4.0
+//
+// Addition and subtraction wrap on overflow.  Multiplication and division
+// wrap too; clamp explicitly when the application needs saturation.  These
+// helpers build on the raw-bit signed routines in signed.badge.
+
+import "signed.badge";
+
+fn char q4_4_add(char a, char b) {
+    return a + b;
+}
+
+fn char q4_4_sub(char a, char b) {
+    return a - b;
+}
+
+fn char q4_4_neg(char v) {
+    return s_neg8(v);
+}
+
+fn char q4_4_mul(char a, char b) {
+    return (char)s_sar16(s_ext8(a) * s_ext8(b), 4);
+}
+
+fn char q4_4_div(char a, char b) {
+    return (char)s_div16((word)s_ext8(a) << 4, s_ext8(b));
+}
+
+// Convert a signed integer nibble (-8..7) to Q4.4.
+fn char q4_4_from_int(nibble v) {
+    return (char)(s_ext4(v) << 4);
+}
+
+// Convert Q4.4 to a signed integer nibble, truncating toward zero.
+fn nibble q4_4_to_int(char v) {
+    if (s_is_neg8(v) != 0) {
+        // Arithmetic shift floors; add 15 first to truncate toward zero.
+        return (nibble)s_sar8(v + 15, 4);
+    }
+    return (nibble)s_sar8(v, 4);
+}
+
+fn char q4_4_min(char a, char b) {
+    return s_min8(a, b);
+}
+
+fn char q4_4_max(char a, char b) {
+    return s_max8(a, b);
+}
+
+fn char q4_4_clamp(char v, char low, char high) {
+    return s_clamp8(v, low, high);
+}

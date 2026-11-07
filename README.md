@@ -244,12 +244,14 @@ full 8×16 matrix. Each cell is empty or water, water falls in the current
 gravity direction, slides diagonally when blocked, and spreads sideways when
 it piles up. Water is just a lit LED; the display edges are the only walls.
 
-The amount of water is fixed at startup (the bottom five rows), and gravity
-cycles through down, left, up, and right every 32 simulation frames. The water
-therefore sloshes around the box instead of settling permanently.
+The amount of water is fixed at startup (a centred five-row band), and
+gravity cycles through down, left, up, and right every 16 simulation frames.
+The water therefore sloshes around the box instead of settling permanently.
 
-The 8×16 grid is packed one bit per cell into 32 nibbles. The demo is about
-1731 words and 108 RAM nibbles.
+The 8×16 grid uses two bits per cell (water and a "moved this frame" bit) in
+64 nibbles. Two 32-nibble screen buffers are alternated so the visible page is
+never cleared and redrawn in place. The demo is about 1931 words and 170 RAM
+nibbles.
 
 ## Library modules
 

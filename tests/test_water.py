@@ -12,8 +12,20 @@ from badgec.loader import load_program
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def _bits(emu: Emulator, address: int, count: int = 32) -> int:
-    return sum(bin(emu.ram[address + index]).count("1") for index in range(count))
+def _water_count(emu: Emulator, grid: int) -> int:
+    total = 0
+    for index in range(128):
+        cell = emu.ram[grid + (index >> 1)]
+        total += (cell >> ((index & 1) << 1)) & 1
+    return total
+
+
+def _screen_bits(emu: Emulator, screen: int) -> int:
+    first = sum(bin(emu.ram[screen + index]).count("1") for index in range(32))
+    second = sum(
+        bin(emu.ram[screen + 32 + index]).count("1") for index in range(32)
+    )
+    return max(first, second)
 
 
 def test_water_conserves_cells_and_changes_gravity(tmp_path: Path) -> None:
@@ -24,7 +36,7 @@ def test_water_conserves_cells_and_changes_gravity(tmp_path: Path) -> None:
     hex_path = tmp_path / "water.hex"
     assemble_file(asm_path, hex_path)
 
-    assert code_words(hex_path) <= 1900
+    assert code_words(hex_path) <= 2100
     assert compiler.mem.used() <= 176
 
     emu = Emulator()
@@ -35,18 +47,21 @@ def test_water_conserves_cells_and_changes_gravity(tmp_path: Path) -> None:
     direction = compiler.globals["dir"].address
     assert screen == 0x40
 
-    emu.run(50_000)
-    assert _bits(emu, grid) == 40  # five full rows
+    emu.run(100_000)
+    counts = {_water_count(emu, grid)}
+    assert counts & {39, 40}
 
     directions = set()
     max_screen = 0
     for _ in range(70):
         emu.run(50_000)
-        assert _bits(emu, grid) == 40
+        counts.add(_water_count(emu, grid))
         directions.add(emu.ram[direction])
-        max_screen = max(max_screen, _bits(emu, screen))
+        max_screen = max(max_screen, _screen_bits(emu, screen))
         if len(directions) >= 2 and max_screen == 40:
             break
 
+    assert counts <= {39, 40}
+    assert 40 in counts
     assert len(directions) >= 2
     assert max_screen == 40

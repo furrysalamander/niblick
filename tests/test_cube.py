@@ -39,9 +39,9 @@ def decode_screen(emu: Emulator) -> tuple[tuple[int, ...], ...]:
 
 
 def decode_vfb(emu: Emulator, address: int) -> tuple[tuple[int, ...], ...]:
-    """Decode the 16x18 virtual framebuffer."""
+    """Decode the 16x16 virtual framebuffer."""
     rows = []
-    for y in range(18):
+    for y in range(16):
         row = []
         for group in range(4):
             value = emu.ram[address + y * 4 + group]
@@ -81,7 +81,7 @@ def test_cube_virtual_framebuffer_and_clipping(tmp_path: Path) -> None:
     assert screen.address == 0x40
     assert screen.array_len == 32
     assert vfb.address == 0x60
-    assert vfb.array_len == 72
+    assert vfb.array_len == 64
     assert compiler.mem.used() <= 176
     assert code_words(hex_path) <= 2100
 
@@ -96,17 +96,17 @@ def test_cube_virtual_framebuffer_and_clipping(tmp_path: Path) -> None:
     assert all(any(any(row) for row in bitmap) for bitmap in screens)
     assert len(set(screens)) >= 10
 
-    # Every visible pixel must come from virtual columns 4..11 and rows 1..16.
+    # Every visible pixel must come from virtual columns 4..11.
     for visible, full in zip(screens, virtual):
         for y in range(16):
-            assert visible[y] == full[y + 1][4:12]
+            assert visible[y] == full[y][4:12]
 
     # The cube must actually extend into the off-screen margin: those pixels
     # are drawn in the virtual buffer but never blitted.
     assert any(
         full[y][x]
         for full in virtual
-        for y in range(18)
+        for y in range(16)
         for x in list(range(0, 4)) + list(range(12, 16))
     )
 

@@ -5,18 +5,17 @@
 // (columns 4..7).
 //
 // The projection can put vertices a few columns outside the visible area.
-// Instead of clamping them to the border, the cube is drawn into a 16x18
-// off-screen framebuffer with four columns of margin on each side and one
-// row of margin above and below.  Only the middle eight columns and rows 1..16
-// are copied to the matrix, so clipped edges disappear correctly instead of
-// being pinned to the outermost columns.
+// Instead of clamping them to the border, the cube is drawn into a 16x16
+// off-screen framebuffer with four columns of margin on each side.  Only the
+// middle eight columns are copied to the matrix, so clipped edges disappear
+// correctly instead of being pinned to the outermost columns.
 //
 // A cube repeats every 90 degrees, so the sine table only covers one quadrant.
 // The projection uses a fixed 30-degree camera pitch, a slightly wider
 // horizontal scale, and a small fixed roll so the cube sits a little off-axis.
 
 nibble screen[32];
-nibble vfb[72];
+nibble vfb[64];
 nibble bitmask[4];
 
 char angle;
@@ -46,9 +45,8 @@ const nibble cube_edges[] = {
     6, 7
 };
 
-// The virtual framebuffer is 16 columns x 18 rows, four nibbles per row.
+// The virtual framebuffer is 16 columns x 16 rows, four nibbles per row.
 // Visible column 0 is virtual column 4, and visible column 7 is virtual 11.
-// Visible row 0 is virtual row 1, and visible row 15 is virtual row 16.
 fn void put_pixel(nibble x, nibble y) {
     nibble group;
     nibble mask;
@@ -183,11 +181,11 @@ fn void build_vertices() {
         } else {
             by = by - (cb >> 1);
         }
-        // Small clockwise roll around virtual (8, 9), approximated with
+        // Small clockwise roll around virtual (8, 8), approximated with
         // eighth-pixel shifts so it costs only adds and shifts.
         //   x' = x + 2 - (y + 7)/8
         //   y' = y - 2 + (x + 8)/8
-        dyb = (char)(24 - (((by << 3) + by) >> 9));
+        dyb = (char)(23 - (((by << 3) + by) >> 9));
         dxb = (char)tx;
         dxb = dxb + 8;
         vx[i] = (nibble)(dxb - (dyb >> 3) - 6);
@@ -200,7 +198,7 @@ fn void build_vertices() {
 fn void clear_fb() {
     char i;
     i = 0;
-    while (i < 72) {
+    while (i < 64) {
         vfb[i] = 0;
         i = i + 1;
     }
@@ -211,8 +209,8 @@ fn void blit() {
     char y;
     y = 0;
     while (y < 16) {
-        screen[16 + y] = vfb[((y + 1) << 2) + 1];
-        screen[y] = vfb[((y + 1) << 2) + 2];
+        screen[16 + y] = vfb[(y << 2) + 1];
+        screen[y] = vfb[(y << 2) + 2];
         y = y + 1;
     }
 }

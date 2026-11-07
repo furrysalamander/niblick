@@ -207,13 +207,12 @@ The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
 
 `examples/cube.badge` draws a rotating 3D wireframe cube on the 8×16 matrix.
 It uses a fixed-point yaw sweep, a fixed 30° camera pitch, a slightly wider
-horizontal scale, and a small fixed roll. Bresenham line drawing fills a 16×18
-off-screen framebuffer with four columns of margin on each side and one row
-above and below. Copying only the middle eight columns and rows 1..16 gives
-true clipping: off-screen edges disappear instead of being pinned to the
-outermost columns.
+horizontal scale, and a small fixed roll. Bresenham line drawing fills a 16×16
+off-screen framebuffer with four columns of margin on each side. Copying only
+the middle eight columns gives true clipping: off-screen edges disappear
+instead of being pinned to the outermost columns.
 
-The demo is about 1806 words and 173 RAM nibbles; it needs no UART or input
+The demo is about 1792 words and 165 RAM nibbles; it needs no UART or input
 and starts spinning as soon as it runs.
 
 ## Library modules

@@ -1,0 +1,259 @@
+// Spinning wireframe cube for the Supercon.6 LED matrix.
+//
+// The matrix is 16 rows x 8 columns.  It shows two 16x4 pages side by side:
+// page+1 is the left half (columns 0..3) and page is the right half
+// (columns 4..7).  Pages 4/5 and 6/7 are two 32-nibble framebuffers; the
+// cube is drawn into the hidden one and then the Page register is flipped.
+//
+// A cube repeats every 90 degrees, so the sine table only covers one quadrant.
+// The projection uses a fixed 30-degree camera pitch and is deliberately a
+// little wider than the display, so the cube reaches and clips at the left and
+// right edges instead of shrinking to fit.
+
+nibble screen[64];
+nibble lfb[16];
+nibble rfb[16];
+nibble bitmask[4];
+
+char draw_base;
+char angle;
+word cb;
+word sb;
+nibble vx[8];
+nibble vy[8];
+
+// sin(k * 90 / 32), Q8.8 (256 = 1.0)
+const word sin_q8[] = {
+      0,  13,  25,  38,  50,  62,  74,  86,
+     98, 109, 121, 132, 142, 152, 162, 172,
+    181, 190, 198, 206, 213, 220, 226, 231,
+    237, 241, 245, 248, 251, 253, 255, 256,
+    256
+};
+
+// Vertex i uses bits 0/1/2 as the signs of x/y/z (1 = negative).
+// These are the twelve edges of the cube: every pair differing in one bit.
+const nibble cube_edges[] = {
+    0, 1,  0, 2,  0, 4,
+    1, 3,  1, 5,
+    2, 3,  2, 6,
+    3, 7,
+    4, 5,  4, 6,
+    5, 7,
+    6, 7
+};
+
+// Integer Bresenham with no signed arithmetic.  Vertices are clamped to the
+// screen before they get here, so the plot loop needs no bounds checks.
+fn void line(nibble x0, nibble y0, nibble x1, nibble y1) {
+    nibble dx;
+    nibble dy;
+    char err;
+    nibble x;
+    nibble y;
+    nibble stepx;
+    nibble stepy;
+
+    x = x0;
+    y = y0;
+
+    if (x1 >= x0) {
+        dx = x1 - x0;
+        stepx = 1;
+    } else {
+        dx = x0 - x1;
+        stepx = 15;
+    }
+    if (y1 >= y0) {
+        dy = y1 - y0;
+        stepy = 1;
+    } else {
+        dy = y0 - y1;
+        stepy = 15;
+    }
+
+    if (dx >= dy) {
+        err = 0;
+        while (1) {
+            if (x < 4) {
+                lfb[y] = lfb[y] | bitmask[x];
+            } else {
+                rfb[y] = rfb[y] | bitmask[x - 4];
+            }
+            if (x == x1) {
+                break;
+            }
+            err = err + dy;
+            if (err >= dx) {
+                err = err - dx;
+                if (stepy == 1) {
+                    y = y + 1;
+                } else {
+                    y = y - 1;
+                }
+            }
+            if (stepx == 1) {
+                x = x + 1;
+            } else {
+                x = x - 1;
+            }
+        }
+    } else {
+        err = 0;
+        while (1) {
+            if (x < 4) {
+                lfb[y] = lfb[y] | bitmask[x];
+            } else {
+                rfb[y] = rfb[y] | bitmask[x - 4];
+            }
+            if (y == y1) {
+                break;
+            }
+            err = err + dx;
+            if (err >= dy) {
+                err = err - dy;
+                if (stepx == 1) {
+                    x = x + 1;
+                } else {
+                    x = x - 1;
+                }
+            }
+            if (stepy == 1) {
+                y = y + 1;
+            } else {
+                y = y - 1;
+            }
+        }
+    }
+}
+
+fn void build_vertices() {
+    nibble i;
+    nibble flags;
+    nibble tx;
+    word bx;
+    word by;
+
+    i = 0;
+    while (i < 8) {
+        flags = i;
+
+        // sx = x*cb + z*sb.  Bias by 512 to keep it unsigned.
+        bx = 512;
+        if (flags & 1) {
+            bx = bx - cb;
+        } else {
+            bx = bx + cb;
+        }
+        if (flags & 4) {
+            bx = bx - sb;
+        } else {
+            bx = bx + sb;
+        }
+        tx = (nibble)(((bx << 2) + (bx << 1) + bx) >> 9);
+        if (tx < 3) {
+            vx[i] = 0;
+        } else if (tx > 10) {
+            vx[i] = 7;
+        } else {
+            vx[i] = tx - 3;
+        }
+
+        // sy = y*cos(30) + (x*sb - z*cb)/2.  Bias by 478.
+        by = 478;
+        if (flags & 2) {
+            by = by - 222;
+        } else {
+            by = by + 222;
+        }
+        if (flags & 1) {
+            by = by - (sb >> 1);
+        } else {
+            by = by + (sb >> 1);
+        }
+        if (flags & 4) {
+            by = by + (cb >> 1);
+        } else {
+            by = by - (cb >> 1);
+        }
+        vy[i] = (nibble)(16 - (((by << 3) + by) >> 9));
+
+        i = i + 1;
+    }
+}
+
+fn void clear_fb() {
+    char y;
+    y = 0;
+    while (y < 16) {
+        lfb[y] = 0;
+        rfb[y] = 0;
+        y = y + 1;
+    }
+}
+
+// Copy the logical 8x16 framebuffer into one of the two hardware buffers.
+fn void blit(char base) {
+    char y;
+    y = 0;
+    while (y < 16) {
+        screen[base + 16 + y] = lfb[y];
+        screen[base + y] = rfb[y];
+        y = y + 1;
+    }
+}
+
+fn void draw_edges() {
+    char i;
+    i = 0;
+    while (i < 24) {
+        line(
+            vx[cube_edges[i]],
+            vy[cube_edges[i]],
+            vx[cube_edges[i + 1]],
+            vy[cube_edges[i + 1]]
+        );
+        i = i + 2;
+    }
+}
+
+fn main() {
+    matrix_enable(1);
+    dimmer(15);
+    leds_enable(1);
+
+    bitmask[0] = 8;
+    bitmask[1] = 4;
+    bitmask[2] = 2;
+    bitmask[3] = 1;
+
+    draw_base = 32;
+    angle = 1;
+    display_page(4);
+
+    while (1) {
+        cb = sin_q8[32 - angle];
+        sb = sin_q8[angle];
+
+        clear_fb();
+        build_vertices();
+        draw_edges();
+        blit(draw_base);
+
+        if (draw_base == 0) {
+            display_page(4);
+        } else {
+            display_page(6);
+        }
+        draw_base = 32 - draw_base;
+
+        // 16 steps over a 90-degree quadrant.  Start on an odd table entry
+        // so the cube never sits exactly face-on.  A cube is symmetric every
+        // 90 degrees, so this loops without a visible jump.
+        angle = angle + 2;
+        if (angle > 31) {
+            angle = 1;
+        }
+        delay(1);
+    }
+}

@@ -203,6 +203,17 @@ roughly 1600 words of headroom for new features.
 The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
 `docs/keys.md`.
 
+## LED-matrix demo: spinning cube
+
+`examples/cube.badge` draws a rotating 3D wireframe cube on the 8×16 matrix.
+It uses a fixed-point yaw sweep, a fixed 30° camera pitch, and Bresenham line
+drawing. The cube is scaled to reach the left and right edges, so it is
+clipped there as it turns.
+
+Two hidden page buffers are alternated (`Page` 4/6) so the cube is never
+drawn into the visible half. The demo is about 1862 words and 159 RAM
+nibbles; it needs no UART or input and starts spinning as soon as it runs.
+
 ## Library modules
 
 `lib/` contains opt-in BadgeC modules for UART formatting, strings, math,

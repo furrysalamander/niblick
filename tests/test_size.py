@@ -19,6 +19,7 @@ BUDGETS = {
     "word_math.badge": 1300,
     "dword_math.badge": 2300,
     "math32_test.badge": 2800,
+    "cube.badge": 2100,
 }
 
 

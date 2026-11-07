@@ -11,6 +11,7 @@
 | `hello_loop.badge` | Repeating UART hello, useful for link checks |
 | `sao_hello.badge` | UART hello routed to the SAO header |
 | `tetris.badge` | LED-matrix Tetris; OPCODE 8/1/4/2 = left/right/rotate/soft drop |
+| `cube.badge` | Spinning 3D wireframe cube on the LED matrix |
 | `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, bits, keys, clock, and display |
 | `word_math.badge` | 16-bit words, casts, and `* / %` |
 | `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |

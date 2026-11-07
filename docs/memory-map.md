@@ -124,7 +124,7 @@ firmware bootloader ignore `RxTxPos` and always use the main I/O connector.
 | 1 | `LastPress` | The key named in `KeyReg` is currently pressed |
 | 0 | `JustPress` | A key was pressed since the last read; read clears it |
 
-The matrix is 16 columns x 8 rows, so two pages (32 nibbles) are visible at once:
+The matrix is 16 rows x 8 columns, arranged as two 16x4 pages side by side, so two pages (32 nibbles) are visible at once:
 
 ```
              Page+1 (left half)              Page (right half)

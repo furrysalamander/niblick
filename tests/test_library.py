@@ -158,6 +158,44 @@ def test_mem_module(tmp_path: Path) -> None:
     assert emu.ram[b_base] == 6
 
 
+def test_display_module(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/display.badge";
+        nibble screen[32];
+        nibble corner;
+        nibble empty;
+        nibble bottom;
+        nibble page_value;
+        fn main() {
+            clear_screen(&screen);
+            pixel_set(&screen, 0, 0, 1);
+            pixel_set(&screen, 7, 15, 1);
+            corner = pixel_get(&screen, 0, 0);
+            empty = pixel_get(&screen, 1, 0);
+            bottom = pixel_get(&screen, 7, 15);
+            hline(&screen, 0, 7, 5, 1);
+            display_fill(8, 5);
+            page_value = display_peek(8, 3);
+            display_clear(8);
+        }
+        """,
+    )
+    assert value(compiler, emu, "corner") == 1
+    assert value(compiler, emu, "empty") == 0
+    assert value(compiler, emu, "bottom") == 1
+    assert value(compiler, emu, "page_value") == 5
+
+    base = compiler.globals["screen"].address
+    assert base is not None
+    # Row 5 occupies nibbles 10 and 11; hline set all eight pixels.
+    assert emu.ram[base + 10] == 15
+    assert emu.ram[base + 11] == 15
+    # display_clear cleared page 8.
+    assert emu.ram[0x80] == 0
+
+
 def test_key_names_and_clock(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,

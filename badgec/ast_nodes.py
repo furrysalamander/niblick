@@ -68,6 +68,18 @@ class AddressOf(Expr):
     operand: Expr = field(default_factory=Expr)
 
 
+@dataclass
+class ToChar(Expr):
+    """Widen a value to char without changing its value.
+
+    The inliner inserts this around arguments passed to char parameters so a
+    substituted literal keeps char-width semantics (for example ``15 << 1``
+    must be 30, not a wrapped nibble).
+    """
+
+    operand: Expr = field(default_factory=Expr)
+
+
 # ---------------------------------------------------------------------------
 # Statements
 # ---------------------------------------------------------------------------

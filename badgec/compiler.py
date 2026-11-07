@@ -645,6 +645,11 @@ class Compiler:
         if isinstance(expr, ast.AddressOf):
             return self.compile_address_of(expr, scope)
 
+        if isinstance(expr, ast.ToChar):
+            typ = self.compile_expr(expr.operand, scope)
+            self.coerce(typ, CHAR, expr.line)
+            return CHAR
+
         raise BadgeCompileError(
             f"{location(self.filename, getattr(expr, 'line', 0))}: unsupported expression {type(expr).__name__}"
         )
@@ -2238,6 +2243,8 @@ class Compiler:
                 )
             return fn.decl.return_type
         if isinstance(expr, ast.AddressOf):
+            return CHAR
+        if isinstance(expr, ast.ToChar):
             return CHAR
         raise BadgeCompileError(
             f"{location(self.filename, expr.line)}: cannot infer type of {type(expr).__name__}"

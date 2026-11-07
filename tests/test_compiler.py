@@ -143,6 +143,34 @@ def test_nibble_and_byte_helpers(tmp_path: Path) -> None:
     assert (emu.ram[base] | (emu.ram[base + 1] << 4)) == 0xA5
 
 
+def test_inlined_char_arguments_keep_char_width(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        char a;
+        char b;
+        char c;
+        fn char inc(char n) { return n + 1; }
+        fn char shl(char n) { return n << 1; }
+        fn char add_shifted(char base, char n) { return base + (n << 1); }
+        fn main() {
+            a = inc(15);
+            b = shl(15);
+            c = add_shifted(64, 15);
+        }
+        """,
+    )
+    emu = run(hex_path)
+
+    def value(name: str) -> int:
+        base = ram_nibble(compiler, name)
+        return emu.ram[base] | (emu.ram[base + 1] << 4)
+
+    assert value("a") == 16
+    assert value("b") == 30
+    assert value("c") == 94
+
+
 def test_constant_shifts(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,

@@ -1,0 +1,80 @@
+// Minimal W5500 register access over SPI.
+//
+// W5500 wiring assumed:
+//   OUT0 = RST
+//   SPI module pins: OUT2=SCLK, OUT3=MOSI, OUT1=CS, IN0=MISO
+//
+// This module only implements reset and register read/write.  Socket setup
+// and UDP/TCP helpers can be layered on top.
+
+import "spi.badge";
+
+const nibble W5500_RST = 1;
+
+// Release the W5500 from reset.  Do not pulse RST low here: when the pin is
+// shared with the badge's OUT0, driving it low also drops the Ethernet link.
+fn void w5500_reset() {
+    gpio_set(W5500_RST);
+    delay(15);
+    delay(15);
+}
+
+// bsb: 0 = common registers, 1..8 = socket register blocks,
+//      9..16 = socket TX buffers, 17..24 = socket RX buffers.
+fn char w5500_read(nibble bsb, char addr_hi, char addr_lo) {
+    char value;
+
+    spi_begin();
+    spi_xfer(addr_hi);
+    spi_xfer(addr_lo);
+    spi_xfer((char)bsb << 3);       // read; OM = 00
+    value = spi_xfer(0);
+    spi_end();
+    return value;
+}
+
+fn void w5500_write(nibble bsb, char addr_hi, char addr_lo, char value) {
+    spi_begin();
+    spi_xfer(addr_hi);
+    spi_xfer(addr_lo);
+    spi_xfer(((char)bsb << 3) | 4);   // write; OM = 00
+    spi_xfer(value);
+    spi_end();
+}
+
+fn char w5500_version() {
+    return w5500_read(0, 0x00, 0x39);
+}
+
+fn char w5500_phy() {
+    return w5500_read(0, 0x00, 0x2E);
+}
+
+fn word w5500_read16(nibble bsb, char addr_hi, char addr_lo) {
+    char hi;
+    char lo;
+    hi = w5500_read(bsb, addr_hi, addr_lo);
+    lo = w5500_read(bsb, addr_hi, addr_lo + 1);
+    return ((word)hi << 8) | lo;
+}
+
+fn void w5500_write16(nibble bsb, char addr_hi, char addr_lo, word value) {
+    w5500_write(bsb, addr_hi, addr_lo, (char)(value >> 8));
+    w5500_write(bsb, addr_hi, addr_lo + 1, (char)value);
+}
+
+// Open socket 0 as UDP with the given local port.
+fn void w5500_open_udp(char port_hi, char port_lo) {
+    // The W5500 may have stayed powered across a badge reset, so close any
+    // socket left open by a previous run before opening it again.
+    w5500_write(1, 0x00, 0x01, 0x10);   // CLOSE
+    delay(5);
+
+    w5500_write(1, 0x00, 0x00, 0x02);   // Sn_MR = UDP
+    w5500_write(1, 0x00, 0x04, port_hi);
+    w5500_write(1, 0x00, 0x05, port_lo);
+    w5500_write(1, 0x00, 0x01, 0x01);   // OPEN
+    while (w5500_read(1, 0x00, 0x03) != 0x22) {
+        delay(1);
+    }
+}

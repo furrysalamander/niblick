@@ -1,0 +1,56 @@
+// Bit-banged SPI mode 0 on the badge's main I/O connector.
+//
+// Default wiring (all outputs are on the 4-bit OUT latch, MISO is IN0):
+//
+//   OUT2 = SCLK
+//   OUT3 = MOSI
+//   OUT1 = CS
+//   IN0  = MISO
+//
+// The module uses GPIO bank 0 (WrFlags.IOPos = 0).  Unused functions are
+// removed by the compiler's dead-declaration pass.
+
+const nibble SPI_SCLK = 4;
+const nibble SPI_MOSI = 8;
+const nibble SPI_CS = 2;
+const nibble SPI_MISO = 1;
+
+fn void spi_init() {
+    gpio_alt(0);
+    gpio_set(SPI_CS);          // CS idle high
+    gpio_clear(SPI_SCLK | SPI_MOSI);
+}
+
+fn void spi_begin() {
+    gpio_clear(SPI_CS);
+}
+
+fn void spi_end() {
+    gpio_set(SPI_CS);
+}
+
+// Exchange one byte, MSB first, mode 0 (sample MISO on the rising edge).
+fn char spi_xfer(char out) {
+    char in;
+    nibble bit;
+
+    in = 0;
+    bit = 0;
+    while (bit != 8) {
+        if ((out & 128) != 0) {
+            gpio_set(SPI_MOSI);
+        } else {
+            gpio_clear(SPI_MOSI);
+        }
+        out = out << 1;
+
+        gpio_set(SPI_SCLK);
+        in = in << 1;
+        if ((in() & SPI_MISO) != 0) {
+            in = in | 1;
+        }
+        gpio_clear(SPI_SCLK);
+        bit = bit + 1;
+    }
+    return in;
+}

@@ -202,6 +202,46 @@ globals are removed, so importing a module is free unless you call it.
 | `uart_read_hex8()` | Read two hex digits into a char |
 | `uart_read_line(addr, max)` | Read until CR/LF; returns byte count |
 
+### `lib/spi.badge`
+
+Bit-banged SPI mode 0 on the main I/O connector. Default pins:
+
+| Signal | Badge pin |
+|---|---|
+| `SCLK` | OUT2 |
+| `MOSI` | OUT3 |
+| `CS` | OUT1 |
+| `MISO` | IN0 |
+
+| Call | Notes |
+|---|---|
+| `spi_init()` | Select GPIO bank 0, CS high, clock/data low |
+| `spi_begin()` / `spi_end()` | Assert / release CS |
+| `spi_xfer(byte)` | Exchange one byte, MSB first |
+
+### `lib/w5500.badge`
+
+Minimal W5500 register/socket access over `lib/spi.badge`. Assumes W5500
+`RST` is on OUT0.
+
+| Call | Notes |
+|---|---|
+| `w5500_reset()` | Release RST high; does not pulse it low |
+| `w5500_read(bsb, addr_hi, addr_lo)` | Read one register byte |
+| `w5500_write(bsb, addr_hi, addr_lo, value)` | Write one register byte |
+| `w5500_read16` / `w5500_write16` | 16-bit big-endian registers |
+| `w5500_version()` | `VERSIONR`, should return `0x04` |
+| `w5500_phy()` | `PHYCFGR`; bit 0 is link status |
+| `w5500_open_udp(port_hi, port_lo)` | Open socket 0 as UDP |
+
+`examples/w5500_udp.badge` configures badge `192.168.1.50`, sends
+`hello from badge\n` to `192.168.1.10:5001` from source port `5000`, and
+prints status on the main UART.
+
+The W5500 needs a clean 3.3 V supply and about 130 mA. Do not assume the
+badge's battery `+3V` rail is suitable; use a separate 3.3 V supply with a
+common ground for bring-up.
+
 ### `lib/string.badge`
 
 Byte strings in RAM at a nibble address; terminator `0xFF`.

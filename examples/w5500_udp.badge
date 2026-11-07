@@ -1,0 +1,118 @@
+// Send a UDP datagram from the badge to the host every second.
+//
+// Badge: 192.168.1.50
+// Host:  192.168.1.10, UDP port 5001
+// Badge source port: 5000
+//
+// Wiring:
+//   OUT0=RST, OUT1=CS, OUT2=SCLK, OUT3=MOSI, IN0=MISO
+
+import "lib/spi.badge";
+import "lib/w5500.badge";
+import "lib/uart.badge";
+
+const char message[] = "hello from badge\n";
+
+flashptr p;
+char version;
+char phy;
+char len;
+char c;
+char ahi;
+char alo;
+word fsr;
+word wr;
+
+fn main() {
+    spi_init();
+    w5500_reset();
+
+    uart_route(1);
+    uart_init(3);
+
+    version = w5500_version();
+    uart_puts("W5500 ver=");
+    uart_print_hex8(version);
+    uart_nl();
+
+    // Wait for the PHY to link before configuring the socket.
+    while ((w5500_phy() & 1) == 0) {
+        uart_puts("wait link\n");
+        delay(15);
+        delay(15);
+    }
+    uart_puts("link up\n");
+
+    // Static network configuration.
+    w5500_write(0, 0x00, 0x01, 192);   // GAR
+    w5500_write(0, 0x00, 0x02, 168);
+    w5500_write(0, 0x00, 0x03, 1);
+    w5500_write(0, 0x00, 0x04, 10);
+
+    w5500_write(0, 0x00, 0x05, 255);   // SUBR
+    w5500_write(0, 0x00, 0x06, 255);
+    w5500_write(0, 0x00, 0x07, 255);
+    w5500_write(0, 0x00, 0x08, 0);
+
+    w5500_write(0, 0x00, 0x09, 0x02);  // SHAR
+    w5500_write(0, 0x00, 0x0A, 0x08);
+    w5500_write(0, 0x00, 0x0B, 0xDC);
+    w5500_write(0, 0x00, 0x0C, 0x50);
+    w5500_write(0, 0x00, 0x0D, 0x00);
+    w5500_write(0, 0x00, 0x0E, 0x01);
+
+    w5500_write(0, 0x00, 0x0F, 192);   // SIPR
+    w5500_write(0, 0x00, 0x10, 168);
+    w5500_write(0, 0x00, 0x11, 1);
+    w5500_write(0, 0x00, 0x12, 50);
+
+    w5500_open_udp(0x13, 0x88);        // source port 5000
+
+    // Destination: 192.168.1.10:5001.
+    w5500_write(1, 0x00, 0x0C, 192);
+    w5500_write(1, 0x00, 0x0D, 168);
+    w5500_write(1, 0x00, 0x0E, 1);
+    w5500_write(1, 0x00, 0x0F, 10);
+    w5500_write(1, 0x00, 0x10, 0x13);
+    w5500_write(1, 0x00, 0x11, 0x89);
+
+    while (1) {
+        phy = w5500_phy();
+        if ((phy & 1) == 0) {
+            uart_puts("link down\n");
+            delay(15);
+            continue;
+        }
+
+        p = message;
+        len = 0;
+        while (flash_next(&p) != 255) {
+            len = len + 1;
+        }
+
+        fsr = w5500_read16(1, 0x00, 0x20);
+        if (fsr >= (word)len) {
+            wr = w5500_read16(1, 0x00, 0x24);
+            ahi = (char)(wr >> 8);
+            alo = (char)wr;
+
+            p = message;
+            c = flash_next(&p);
+            while (c != 255) {
+                w5500_write(2, ahi, alo, c);
+                alo = alo + 1;
+                if (alo == 0) {
+                    ahi = ahi + 1;
+                }
+                c = flash_next(&p);
+            }
+
+            w5500_write16(1, 0x00, 0x24, wr + (word)len);
+            w5500_write(1, 0x00, 0x01, 0x20);   // SEND
+            uart_puts("sent\n");
+        }
+
+        delay(15);
+        delay(15);
+    }
+}

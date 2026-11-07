@@ -253,11 +253,31 @@ The 8×16 grid uses two bits per cell (water and a "moved this frame" bit) in
 the whole screen, so there is no full-frame blank. The demo is about 1910
 words and 139 RAM nibbles.
 
+## Ethernet demo: W5500 UDP
+
+`examples/w5500_udp.badge` bit-bangs SPI to a Wiznet W5500 and sends UDP
+datagrams to a host.
+
+- Badge: `192.168.1.50`
+- Host: `192.168.1.10`
+- Badge source port: `5000`
+- Host destination port: `5001`
+- Payload: `hello from badge\n`
+
+Default SPI wiring: `OUT2=SCLK`, `OUT3=MOSI`, `OUT1=CS`, `IN0=MISO`, and
+`OUT0=W5500 RST` if reset is controlled by the badge. The W5500 needs a clean
+3.3 V supply and roughly 130 mA; a separate 3.3 V supply with common ground is
+recommended.
+
+Use `examples/w5500_probe.badge` first to confirm `VERSIONR == 0x04` and check
+the PHY link before running the UDP demo.
+
 ## Library modules
 
 `lib/` contains opt-in BadgeC modules for UART formatting, strings, math,
 two's-complement signed helpers and Q4.4 fixed point, nibble memory and bit
-operations, key helpers, and clock/sync helpers:
+operations, key helpers, clock/sync helpers, bit-banged SPI, and a minimal
+W5500 Ethernet driver:
 
 ```c
 import "lib/uart.badge";

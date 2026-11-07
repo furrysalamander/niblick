@@ -24,6 +24,7 @@ ROUTINE_LABELS = {
     "__bc_flash_read_char_ptr",
     "__bc_flash_read_char",
     "__bc_flash_read_nibble",
+    "__bc_flash_read_word",
     "__bc_uart_puts",
     "__bc_gpio_read",
     "__bc_gpio_read_out",
@@ -51,6 +52,11 @@ ROUTINE_LABELS = {
     "__bc_uart_route",
     "__bc_leds_enable",
     "__bc_matrix_enable",
+    "__bc_mul4",
+    "__bc_mul8",
+    "__bc_mul16",
+    "__bc_divmod8",
+    "__bc_divmod16",
 }
 
 

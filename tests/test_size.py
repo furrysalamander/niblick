@@ -16,6 +16,7 @@ BUDGETS = {
     "gpio_blink.badge": 70,
     "tetris.badge": 2600,
     "stdlib_demo.badge": 1900,
+    "word_math.badge": 1300,
 }
 
 

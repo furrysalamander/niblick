@@ -58,6 +58,42 @@ fn void uart_print_dec8(char v) {
     uart_putc('0' + ones);
 }
 
+fn void uart_print_hex16(word v) {
+    uart_print_hex8((char)(v >> 8));
+    uart_print_hex8((char)v);
+}
+
+fn void uart_print_dec16(word v) {
+    nibble digit;
+    nibble started;
+    started = 0;
+
+    digit = (nibble)(v / 10000);
+    v = v % 10000;
+    if (digit != 0) {
+        uart_putc('0' + digit);
+        started = 1;
+    }
+    digit = (nibble)(v / 1000);
+    v = v % 1000;
+    if (started != 0 || digit != 0) {
+        uart_putc('0' + digit);
+        started = 1;
+    }
+    digit = (nibble)(v / 100);
+    v = v % 100;
+    if (started != 0 || digit != 0) {
+        uart_putc('0' + digit);
+        started = 1;
+    }
+    digit = (nibble)(v / 10);
+    v = v % 10;
+    if (started != 0 || digit != 0) {
+        uart_putc('0' + digit);
+    }
+    uart_putc('0' + (nibble)v);
+}
+
 fn void uart_print_str(char addr) {
     char c;
     c = peek8(addr);

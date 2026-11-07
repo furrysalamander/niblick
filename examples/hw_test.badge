@@ -53,6 +53,7 @@ fn char add_char(char a, char b) {
     return a + b;
 }
 
+
 fn run_tests() {
     nibble n;
     nibble i;
@@ -61,6 +62,8 @@ fn run_tests() {
     nibble r2;
     nibble r3;
     char cc;
+    word wa;
+    word we;
 
     pass_count = 0;
     fail_count = 0;
@@ -85,6 +88,30 @@ fn run_tests() {
     check(cc, 66);
     check(0x12 & 0x0F, 0x02);
     check(add_char(10, 20), 30);
+
+    // --- widening multiply, divide, modulo, and casts ---
+    check(7 * 9, 63);
+    wa = 200 * 7;
+    we = 1400;
+    check((char)wa, (char)we);
+    check((char)(wa >> 8), (char)(we >> 8));
+    wa = 1000 * 37;
+    we = 37000;
+    check((char)wa, (char)we);
+    check((char)(wa >> 8), (char)(we >> 8));
+    check(200 / 7, 28);
+    check(200 % 7, 4);
+    wa = 1000 / 37;
+    we = 27;
+    check((char)wa, (char)we);
+    check((char)(wa >> 8), (char)(we >> 8));
+    wa = 1000 % 37;
+    we = 1;
+    check((char)wa, (char)we);
+    check((char)(wa >> 8), (char)(we >> 8));
+    check(15 / 0, 0);
+    cc = (char)0x1234;
+    check(cc, 0x34);
 
     // --- comparisons and logical ops ---
     check(3 < 5, 1);

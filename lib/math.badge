@@ -34,49 +34,25 @@ fn nibble math_abs_diff(nibble a, nibble b) {
 
 // a * b, with a and b in 0..15.  The result fits in a char.
 fn char math_mul(nibble a, nibble b) {
-    char result;
-    result = 0;
-    while (b != 0) {
-        result = result + a;
-        b = b - 1;
-    }
-    return result;
+    return a * b;
 }
 
 // Quotient and remainder for nibble / nibble.
 fn nibble math_div(nibble a, nibble b) {
-    nibble q;
-    q = 0;
-    while (a >= b) {
-        a = a - b;
-        q = q + 1;
-    }
-    return q;
+    return a / b;
 }
 
 fn nibble math_mod(nibble a, nibble b) {
-    while (a >= b) {
-        a = a - b;
-    }
-    return a;
+    return a % b;
 }
 
 // char / nibble.  The quotient can be up to 255.
 fn char math_div8(char a, nibble b) {
-    char q;
-    q = 0;
-    while (a >= b) {
-        a = a - b;
-        q = q + 1;
-    }
-    return q;
+    return a / b;
 }
 
 fn nibble math_mod8(char a, nibble b) {
-    while (a >= b) {
-        a = a - b;
-    }
-    return low_nibble(a);
+    return (nibble)(a % b);
 }
 
 // Largest r with r*r <= n.

@@ -220,6 +220,23 @@ instead of being pinned to the outermost columns.
 The demo is about 1792 words and 165 RAM nibbles; it needs no UART or input
 and starts spinning as soon as it runs.
 
+## LED-matrix demo: signed wave field
+
+`examples/wave.badge` runs a 4×8 height-field wave on the 8×16 matrix. Heights
+are signed nibbles stored as raw two's complement, and the display draws each
+cell as a 2×2 block. A centre impulse is injected every 48 frames.
+
+The update uses `lib/signed.badge` for sign extension, arithmetic shifts, and
+clamping:
+
+```c
+next_height = sum(neighbours) / 2 - previous_height
+```
+
+It is about 1027 words and 164 RAM nibbles. This is the small-scale prototype
+for deciding whether native signed types are worth adding; the helpers are
+currently sufficient.
+
 ## Library modules
 
 `lib/` contains opt-in BadgeC modules for UART formatting, strings, math,

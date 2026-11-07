@@ -32,7 +32,7 @@ def test_water_conserves_cells_and_changes_gravity(tmp_path: Path) -> None:
     hex_path = tmp_path / "water.hex"
     assemble_file(asm_path, hex_path)
 
-    assert code_words(hex_path) <= 2800
+    assert code_words(hex_path) <= 2100
     assert compiler.mem.used() <= 176
 
     emu = Emulator()

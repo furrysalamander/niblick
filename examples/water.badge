@@ -18,21 +18,12 @@
 // by a later scan step, which previously produced a stable staircase under
 // upward gravity.  The visible page is updated one pixel at a time, without
 // clearing the whole screen, so there is no full-frame blank.
-//
-// A small spring-damper "tilt" state carries horizontal momentum between
-// gravity changes.  It biases sideways water movement while gravity is
-// vertical, which produces a visible slosh instead of an instant settle.
-
-import "lib/signed.badge";
 
 nibble screen[32];
 nibble grid[64];
 nibble pixel_masks[4];
 char frame;
 nibble dir;
-char tilt;
-char tilt_vel;
-nibble prev_dir;
 
 fn nibble cell_get(char i) {
     nibble v;
@@ -84,10 +75,6 @@ fn void update_cell(char i, nibble x, nibble y, nibble dir) {
                 target = i + 7;
             } else if (x < 7 && (cell_get(i + 9) & 1) == 0) {
                 target = i + 9;
-            } else if (s_gt8(tilt, 1) != 0 && x < 7 && (cell_get(i + 1) & 1) == 0) {
-                target = i + 1;
-            } else if (s_lt8(tilt, 0xFF) != 0 && x > 0 && (cell_get(i - 1) & 1) == 0) {
-                target = i - 1;
             } else if (x > 0 && (cell_get(i - 1) & 1) == 0) {
                 target = i - 1;
             } else if (x < 7 && (cell_get(i + 1) & 1) == 0) {
@@ -116,10 +103,6 @@ fn void update_cell(char i, nibble x, nibble y, nibble dir) {
                 target = i - 9;
             } else if (x < 7 && (cell_get(i - 7) & 1) == 0) {
                 target = i - 7;
-            } else if (s_gt8(tilt, 1) != 0 && x < 7 && (cell_get(i + 1) & 1) == 0) {
-                target = i + 1;
-            } else if (s_lt8(tilt, 0xFF) != 0 && x > 0 && (cell_get(i - 1) & 1) == 0) {
-                target = i - 1;
             } else if (x > 0 && (cell_get(i - 1) & 1) == 0) {
                 target = i - 1;
             } else if (x < 7 && (cell_get(i + 1) & 1) == 0) {
@@ -225,18 +208,9 @@ fn main() {
 
     dir = 0;
     frame = 0;
-    tilt = 0;
-    tilt_vel = 0;
-    prev_dir = 0;
     display_page(4);
 
     while (1) {
-        // Spring-damper slosh: a horizontal impulse decays into a rocking
-        // motion.  Keep it bounded so 8-bit arithmetic cannot wrap wildly.
-        tilt_vel = s_clamp8(tilt_vel - s_sar8(tilt, 1), 0xF0, 15);
-        tilt_vel = s_clamp8(tilt_vel - s_sar8(tilt_vel, 2), 0xF0, 15);
-        tilt = s_clamp8(tilt + tilt_vel, 0xE0, 31);
-
         // Sideways settling needs more time than the 8-column width suggests
         // because the water has to build up a vertical wall in the 16-row box.
         if (dir == 1 || dir == 3) {
@@ -298,16 +272,9 @@ fn main() {
         frame = frame + 1;
         if (frame == phase_limit) {
             frame = 0;
-            prev_dir = dir;
             dir = dir + 1;
             if (dir == 4) {
                 dir = 0;
-            }
-            // Carry horizontal momentum out of a sideways phase.
-            if (prev_dir == 1) {
-                tilt_vel = s_clamp8(tilt_vel - 6, 0xF0, 15);
-            } else if (prev_dir == 3) {
-                tilt_vel = s_clamp8(tilt_vel + 6, 0xF0, 15);
             }
         }
         delay(1);

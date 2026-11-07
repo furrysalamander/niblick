@@ -233,10 +233,20 @@ Minimal W5500 register/socket access over `lib/spi.badge`. Assumes W5500
 | `w5500_version()` | `VERSIONR`, should return `0x04` |
 | `w5500_phy()` | `PHYCFGR`; bit 0 is link status |
 | `w5500_open_udp(port_hi, port_lo)` | Open socket 0 as UDP |
+| `w5500_open_tcp(port_hi, port_lo)` | Open socket 0 as a TCP listener |
+| `w5500_send_flash(msg)` | Send a flash string through socket 0 |
+| `w5500_discard_rx()` | Read and discard up to 200 received bytes |
 
 `examples/w5500_udp.badge` configures badge `192.168.1.50`, sends
 `hello from badge\n` to `192.168.1.10:5001` from source port `5000`, and
 prints status on the main UART.
+
+`examples/w5500_http.badge` runs a minimal TCP listener on port 80 and returns
+a short `200 OK` response. With the host at `192.168.1.10`:
+
+```bash
+curl http://192.168.1.50/
+```
 
 The W5500 needs a clean 3.3 V supply and about 130 mA. Do not assume the
 badge's battery `+3V` rail is suitable; use a separate 3.3 V supply with a

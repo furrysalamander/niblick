@@ -22,6 +22,9 @@ BUDGETS = {
     "cube.badge": 2100,
     "wave.badge": 1200,
     "water.badge": 2100,
+    "w5500_probe.badge": 600,
+    "w5500_udp.badge": 2200,
+    "w5500_http.badge": 2700,
 }
 
 

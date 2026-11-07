@@ -270,7 +270,12 @@ Default SPI wiring: `OUT2=SCLK`, `OUT3=MOSI`, `OUT1=CS`, `IN0=MISO`, and
 recommended.
 
 Use `examples/w5500_probe.badge` first to confirm `VERSIONR == 0x04` and check
-the PHY link before running the UDP demo.
+the PHY link before running the UDP demo. `examples/w5500_http.badge` adds a
+minimal TCP listener on port 80:
+
+```bash
+curl http://192.168.1.50/
+```
 
 ## Library modules
 

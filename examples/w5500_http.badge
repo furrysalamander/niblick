@@ -1,0 +1,83 @@
+// Minimal HTTP server on a W5500.
+//
+// Badge: 192.168.1.50:80
+// Host:  192.168.1.10
+//
+// Try: curl http://192.168.1.50/
+
+import "lib/spi.badge";
+import "lib/w5500.badge";
+import "lib/uart.badge";
+
+const char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 17\r\nConnection: close\r\n\r\nhello from badge\n";
+
+char version;
+char status;
+
+fn main() {
+    spi_init();
+    w5500_reset();
+
+    uart_route(1);
+    uart_init(3);
+
+    version = w5500_version();
+    uart_puts("W5500 ver=");
+    uart_print_hex8(version);
+    uart_nl();
+
+    while ((w5500_phy() & 1) == 0) {
+        uart_puts("wait link phy=");
+        uart_print_hex8(w5500_phy());
+        uart_nl();
+        delay(15);
+        delay(15);
+    }
+    uart_puts("link up\n");
+
+    // Static network configuration: badge 192.168.1.50, host 192.168.1.10.
+    w5500_write(0, 0x00, 0x01, 192);
+    w5500_write(0, 0x00, 0x02, 168);
+    w5500_write(0, 0x00, 0x03, 1);
+    w5500_write(0, 0x00, 0x04, 10);
+
+    w5500_write(0, 0x00, 0x05, 255);
+    w5500_write(0, 0x00, 0x06, 255);
+    w5500_write(0, 0x00, 0x07, 255);
+    w5500_write(0, 0x00, 0x08, 0);
+
+    w5500_write(0, 0x00, 0x09, 0x02);
+    w5500_write(0, 0x00, 0x0A, 0x08);
+    w5500_write(0, 0x00, 0x0B, 0xDC);
+    w5500_write(0, 0x00, 0x0C, 0x50);
+    w5500_write(0, 0x00, 0x0D, 0x00);
+    w5500_write(0, 0x00, 0x0E, 0x01);
+
+    w5500_write(0, 0x00, 0x0F, 192);
+    w5500_write(0, 0x00, 0x10, 168);
+    w5500_write(0, 0x00, 0x11, 1);
+    w5500_write(0, 0x00, 0x12, 50);
+
+    uart_puts("opening tcp\n");
+    w5500_open_tcp(0x00, 0x50);         // port 80
+    uart_puts("listening\n");
+
+    while (1) {
+        status = w5500_read(1, 0x00, 0x03);
+        if (status == 0x17) {           // ESTABLISHED
+            if (w5500_read16(1, 0x00, 0x26) > 0) {
+                w5500_discard_rx();
+                if (w5500_send_flash(response) != 0) {
+                    delay(15);
+                    delay(15);
+                }
+                w5500_write(1, 0x00, 0x01, 0x08);   // DISCONNECT
+                delay(15);
+                w5500_open_tcp(0x00, 0x50);
+            }
+        } else if (status == 0x1C || status == 0x00) {
+            w5500_open_tcp(0x00, 0x50);
+        }
+        delay(1);
+    }
+}

@@ -11,10 +11,12 @@ import "spi.badge";
 
 const nibble W5500_RST = 1;
 
-// Release the W5500 from reset.  Do not pulse RST low here: when the pin is
-// shared with the badge's OUT0, driving it low also drops the Ethernet link.
 fn void w5500_reset() {
+    gpio_clear(W5500_RST);
+    delay(15);
+    delay(15);
     gpio_set(W5500_RST);
+    delay(15);
     delay(15);
     delay(15);
 }
@@ -77,4 +79,106 @@ fn void w5500_open_udp(char port_hi, char port_lo) {
     while (w5500_read(1, 0x00, 0x03) != 0x22) {
         delay(1);
     }
+}
+
+fn void w5500_open_tcp(char port_hi, char port_lo) {
+    w5500_write(1, 0x00, 0x01, 0x10);   // CLOSE
+    while (w5500_read(1, 0x00, 0x03) != 0x00) {
+        delay(1);
+    }
+
+    w5500_write(1, 0x00, 0x00, 0x01);   // Sn_MR = TCP
+    w5500_write(1, 0x00, 0x04, port_hi);
+    w5500_write(1, 0x00, 0x05, port_lo);
+    w5500_write(1, 0x00, 0x01, 0x01);   // OPEN
+    while (w5500_read(1, 0x00, 0x03) != 0x13) {
+        delay(1);
+    }
+    w5500_write(1, 0x00, 0x01, 0x02);   // LISTEN
+    while (w5500_read(1, 0x00, 0x03) != 0x14) {
+        delay(1);
+    }
+}
+
+// Send a flash string through the socket 0 TX buffer.  Returns 1 if the
+// SEND command was issued, 0 if the TX buffer did not have room.
+fn nibble w5500_send_flash(flashptr msg) {
+    flashptr p;
+    char len;
+    char c;
+    char ahi;
+    char alo;
+    word fsr;
+    word wr;
+
+    len = 0;
+    p = msg;
+    while (flash_next(&p) != 255) {
+        len = len + 1;
+    }
+    if (len == 0) {
+        return 0;
+    }
+
+    fsr = w5500_read16(1, 0x00, 0x20);
+    if (fsr < (word)len) {
+        return 0;
+    }
+
+    wr = w5500_read16(1, 0x00, 0x24);
+    ahi = (char)(wr >> 8);
+    alo = (char)wr;
+
+    p = msg;
+    c = flash_next(&p);
+    while (c != 255) {
+        w5500_write(2, ahi, alo, c);
+        alo = alo + 1;
+        if (alo == 0) {
+            ahi = ahi + 1;
+        }
+        c = flash_next(&p);
+    }
+
+    w5500_write16(1, 0x00, 0x24, wr + (word)len);
+    w5500_write(1, 0x00, 0x01, 0x20);   // SEND
+    return 1;
+}
+
+// Discard up to 200 bytes of received request data.
+fn void w5500_discard_rx() {
+    word rsr;
+    word rd;
+    char len;
+    char ahi;
+    char alo;
+    char i;
+
+    rsr = w5500_read16(1, 0x00, 0x26);
+    if (rsr == 0) {
+        return;
+    }
+    if (rsr > 200) {
+        len = 200;
+    } else {
+        len = (char)rsr;
+    }
+    if (len == 0) {
+        return;
+    }
+
+    rd = w5500_read16(1, 0x00, 0x28);
+    ahi = (char)(rd >> 8);
+    alo = (char)rd;
+    i = 0;
+    while (i < len) {
+        w5500_read(3, ahi, alo);
+        alo = alo + 1;
+        if (alo == 0) {
+            ahi = ahi + 1;
+        }
+        i = i + 1;
+    }
+    w5500_write16(1, 0x00, 0x28, rd + (word)len);
+    w5500_write(1, 0x00, 0x01, 0x40);   // RECV
 }

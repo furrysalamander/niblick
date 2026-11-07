@@ -206,13 +206,14 @@ The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
 ## LED-matrix demo: spinning cube
 
 `examples/cube.badge` draws a rotating 3D wireframe cube on the 8×16 matrix.
-It uses a fixed-point yaw sweep, a fixed 30° camera pitch, and Bresenham line
-drawing. The projection spans 16 virtual columns, four columns wider on each
-side than the visible matrix. Drawing into that off-screen buffer and copying
-only the middle eight columns gives true clipping: off-screen vertical edges
-disappear instead of being pinned to the outermost columns.
+It uses a fixed-point yaw sweep, a fixed 30° camera pitch, a slightly wider
+horizontal scale, and a small fixed roll. Bresenham line drawing fills a 16×18
+off-screen framebuffer with four columns of margin on each side and one row
+above and below. Copying only the middle eight columns and rows 1..16 gives
+true clipping: off-screen edges disappear instead of being pinned to the
+outermost columns.
 
-The demo is about 1783 words and 161 RAM nibbles; it needs no UART or input
+The demo is about 1806 words and 173 RAM nibbles; it needs no UART or input
 and starts spinning as soon as it runs.
 
 ## Library modules

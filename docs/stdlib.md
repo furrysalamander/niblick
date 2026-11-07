@@ -120,6 +120,13 @@ The helpers honor `WrFlags.IOPos`; when `IOPos=0` they use `OUT`/`IN` at
 | `gpio_toggle(mask)` | `void` | Read the output latch, XOR `mask`, write back |
 | `gpio_test(mask)` | `nibble` | `1` if any masked input bit is set, else `0` |
 
+When `mask` is a compile-time constant (`0..15`), `gpio_set`, `gpio_clear`,
+and `gpio_toggle` lower directly to `BSET`/`BCLR`/`BTG R3,n` with no runtime
+call. A single-bit `gpio_test` lowers to `BIT R3,n` and a four-word 0/1
+materialization. Multi-bit `gpio_test` and non-constant masks keep the
+runtime path. This also removes the GPIO helpers' stack cost from hot
+bit-bang loops.
+
 The `WrFlags` routing helpers take a boolean (nonzero = enable):
 
 | Call | Effect |

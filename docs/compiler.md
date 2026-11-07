@@ -165,6 +165,10 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Explicit `(nibble)`, `(char)`, `(word)`, and `(dword)` casts.
 - 32-bit multiply/divide use a 24-nibble scratch block allocated only when
   the program actually uses those operators.
+- Constant-mask `gpio_set`/`gpio_clear`/`gpio_toggle` lower to
+  `BSET`/`BCLR`/`BTG R3,n`; single-bit `gpio_test` lowers to `BIT R3,n`.
+  Multi-bit tests and variable masks still call the runtime, and the GPIO
+  runtime is stripped when every use takes the fast path.
 - `import` with cycle detection and dead-declaration elimination.
 - Branch relaxation from two-word `GOTO` to one-word `JR` when in range,
   including adjustment of a preceding `SKIP` count.

@@ -1633,10 +1633,24 @@ class Compiler:
         self.temp.reset(mark)
         return fn.decl.return_type
 
+    def _constant_nibble(self, expr: ast.Expr) -> Optional[int]:
+        while isinstance(expr, (ast.ToType, ast.Cast)):
+            expr = expr.operand
+        if isinstance(expr, ast.Number) and 0 <= int(expr.value) <= 15:
+            return int(expr.value)
+        return None
+
     def compile_builtin(self, expr: ast.Call, scope: Scope) -> Type:
         name = expr.name
         entry = RUNTIME_ENTRY.get(name)
-        if entry is not None:
+
+        constant_mask = None
+        if name in ("gpio_set", "gpio_clear", "gpio_toggle", "gpio_test") and len(expr.args) == 1:
+            constant_mask = self._constant_nibble(expr.args[0])
+        fast_gpio = constant_mask is not None and (
+            name != "gpio_test" or constant_mask.bit_count() <= 1
+        )
+        if entry is not None and not fast_gpio:
             self.used_runtime.add(entry)
 
         if name == "uart_init":
@@ -1764,6 +1778,30 @@ class Compiler:
 
         if name in ("gpio_set", "gpio_clear", "gpio_toggle", "gpio_test"):
             self.require_args(expr, 1)
+            mask = self._constant_nibble(expr.args[0])
+            if mask is not None:
+                if name == "gpio_test":
+                    if mask == 0:
+                        self.emit("MOV R1, 0")
+                        return NIBBLE
+                    if mask.bit_count() == 1:
+                        bit = mask.bit_length() - 1
+                        self.emit(f"BIT R3, {bit}")
+                        self.emit("MOV R1, 0")
+                        self.emit("SKIP Z, 1")
+                        self.emit("INC R1")
+                        return NIBBLE
+                else:
+                    instruction = {
+                        "gpio_set": "BSET",
+                        "gpio_clear": "BCLR",
+                        "gpio_toggle": "BTG",
+                    }[name]
+                    for bit in range(4):
+                        if mask & (1 << bit):
+                            self.emit(f"{instruction} R3, {bit}")
+                    return VOID
+
             typ = self.compile_expr(expr.args[0], scope)
             self.coerce(typ, NIBBLE, expr.line)
             self.emit(f"GOSUB __bc_{name}")

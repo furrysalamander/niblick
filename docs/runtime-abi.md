@@ -117,8 +117,15 @@ The GPIO helpers honor `WrFlags.IOPos`:
 
 - `gpio_read()` reads `IN` at `0x0B` or `InB` at `0xFB`.
 - `gpio_write(n)` writes `OUT` at `0x0A` or `OutB` at `0xFA`.
-- `gpio_set/clear/toggle(mask)` read the output latch, modify it, and write it back.
-- `gpio_test(mask)` reads the input port and returns `1` if any masked bit is set.
+- `gpio_set/clear/toggle(mask)` read the output latch, modify it, and write
+  it back.
+- `gpio_test(mask)` reads the input port and returns `1` if any masked bit
+  is set.
+
+These routines are **not linked** when every call uses a constant mask:
+the compiler emits `BSET`/`BCLR`/`BTG`/`BIT` directly (see
+`docs/stdlib.md`). This matters for hot bit-bang loops and the hardware
+stack budget.
 
 Other SFR helpers are direct memory operations:
 

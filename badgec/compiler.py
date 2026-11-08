@@ -183,6 +183,7 @@ class FunctionSymbol:
     decl: ast.FunctionDecl
     label: str
     params: list[VarSymbol] = field(default_factory=list)
+    locals: list[VarSymbol] = field(default_factory=list)
     labels_seen: set[str] = field(default_factory=set)
 
 
@@ -1368,16 +1369,16 @@ class Compiler:
                     f"{location(self.filename, stmt.line)}: initializer for const "
                     f"{stmt.name!r} must be a compile-time constant"
                 )
-            scope.define(
-                VarSymbol(
-                    name=stmt.name,
-                    type=stmt.type,
-                    is_const=True,
-                    line=stmt.line,
-                    const_value=value,
-                ),
-                self.filename,
+            symbol = VarSymbol(
+                name=stmt.name,
+                type=stmt.type,
+                is_const=True,
+                line=stmt.line,
+                const_value=value,
             )
+            scope.define(symbol, self.filename)
+            if self.current_function is not None:
+                self.current_function.locals.append(symbol)
             return
         size = (stmt.array_len or 1) * stmt.type.ram_size
         address = self.mem.alloc(size, stmt.name, self.filename, stmt.line)
@@ -1390,6 +1391,8 @@ class Compiler:
             line=stmt.line,
         )
         scope.define(symbol, self.filename)
+        if self.current_function is not None:
+            self.current_function.locals.append(symbol)
         if stmt.init is not None:
             if stmt.array_len is not None:
                 raise BadgeCompileError(

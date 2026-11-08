@@ -64,6 +64,17 @@ def build_debug_map(asm_text: str, compiler) -> dict[str, Any]:
                 }
                 for param in fn.params
             ],
+            "locals": [
+                {
+                    "name": local.name,
+                    "type": str(local.type),
+                    "address": local.address,
+                    "array_len": local.array_len,
+                    "const": local.is_const,
+                    "value": local.const_value,
+                }
+                for local in fn.locals
+            ],
         }
 
     globals_map: dict[str, Any] = {}

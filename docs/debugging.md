@@ -33,7 +33,9 @@ snippet in the debug configuration picker.
 - step over, step into, and step out;
 - registers `R0`–`R9`;
 - flags `C`, `Z`, `V`;
-- globals with their types and addresses;
+- globals and locals with their types and addresses;
+- watch expressions, including registers, locals, globals, array elements, and
+  arithmetic such as `x + 1` or `peek(0x40)`;
 - evaluate simple expressions (`x`, `R1`, `arr[2]`, `peek(0x40)`);
 - UART output in the Debug Console;
 - a basic source-level stack trace using the hardware return addresses.

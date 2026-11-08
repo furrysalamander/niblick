@@ -7,6 +7,7 @@ same emulator and debug map as the rest of the toolchain.
 
 from __future__ import annotations
 
+import ast as pyast
 import json
 import re
 import sys
@@ -49,6 +50,12 @@ class DebugSession:
             ):
                 return name
         return None
+
+    def _function_data(self, pc: int) -> Optional[dict]:
+        name = self.function_for_pc(pc)
+        if name is None:
+            return None
+        return self.debug_map.get("functions", {}).get(name)
 
     def _line_for_pc(self, pc: int) -> Optional[int]:
         source = self.source_for_pc(pc)
@@ -186,6 +193,39 @@ class DebugSession:
             value |= self.emulator.ram[(address + index) & 0xFF] << (4 * index)
         return value
 
+    def _symbol_data(self, name: str) -> Optional[dict]:
+        function = self._function_data(self.emulator.pc)
+        if function is not None:
+            for group in ("params", "locals"):
+                for item in function.get(group, []):
+                    if item.get("name") == name:
+                        return item
+        return self.debug_map.get("globals", {}).get(name)
+
+    def locals(self) -> list[dict]:
+        function = self._function_data(self.emulator.pc)
+        if function is None:
+            return []
+        result = []
+        for group in ("params", "locals"):
+            for data in function.get(group, []):
+                address = data.get("address")
+                if data.get("array_len") is not None:
+                    value = (
+                        f"<{data.get('type')}[{data['array_len']}] @ {address}>"
+                    )
+                else:
+                    value = self._read_global(data)
+                result.append(
+                    {
+                        "name": data.get("name"),
+                        "value": value,
+                        "type": data.get("type", ""),
+                        "address": address,
+                    }
+                )
+        return result
+
     def globals(self) -> list[dict]:
         result = []
         for name, data in sorted(self.debug_map.get("globals", {}).items()):
@@ -234,51 +274,138 @@ class DebugSession:
             )
         return frames
 
+    def _symbol_value(self, data: dict) -> Any:
+        if data.get("array_len") is not None:
+            address = data.get("address")
+            return f"<{data.get('type')}[{data['array_len']}] @ {address}>"
+        return self._read_global(data)
+
+    def _read_element(self, data: dict, index: int) -> Any:
+        address = data.get("address")
+        if address is None:
+            return data.get("value")
+        stride = {
+            "nibble": 1,
+            "char": 2,
+            "word": 4,
+            "dword": 8,
+            "flashptr": 3,
+        }.get(data.get("type"), 1)
+        element = {
+            "type": data.get("type", "nibble"),
+            "address": (address + index * stride) & 0xFF,
+        }
+        return self._read_global(element)
+
+    def _eval_node(self, node: pyast.AST) -> tuple[Any, str]:
+        if isinstance(node, pyast.Constant):
+            value = node.value
+            return value, "number"
+        if isinstance(node, pyast.Name):
+            name = node.id
+            match = re.fullmatch(r"R([0-9])", name, re.IGNORECASE)
+            if match is not None:
+                return self.emulator.ram[int(match.group(1))], "nibble"
+            if name.lower() == "pc":
+                return self.emulator.pc, "nibble"
+            if name.lower() == "sp":
+                return self.emulator.sp, "nibble"
+            data = self._symbol_data(name)
+            if data is None:
+                raise KeyError(name)
+            return self._symbol_value(data), data.get("type", "")
+        if isinstance(node, pyast.Subscript):
+            if not isinstance(node.value, pyast.Name):
+                raise ValueError("subscript base must be a name")
+            data = self._symbol_data(node.value.id)
+            if data is None:
+                raise KeyError(node.value.id)
+            index, _ = self._eval_node(node.slice)
+            return self._read_element(data, int(index)), data.get("type", "")
+        if isinstance(node, pyast.BinOp):
+            left, _ = self._eval_node(node.left)
+            right, _ = self._eval_node(node.right)
+            operations = {
+                pyast.Add: lambda a, b: a + b,
+                pyast.Sub: lambda a, b: a - b,
+                pyast.Mult: lambda a, b: a * b,
+                pyast.Div: lambda a, b: a // b,
+                pyast.FloorDiv: lambda a, b: a // b,
+                pyast.Mod: lambda a, b: a % b,
+                pyast.LShift: lambda a, b: a << b,
+                pyast.RShift: lambda a, b: a >> b,
+                pyast.BitOr: lambda a, b: a | b,
+                pyast.BitAnd: lambda a, b: a & b,
+                pyast.BitXor: lambda a, b: a ^ b,
+            }
+            operation = operations.get(type(node.op))
+            if operation is None:
+                raise ValueError("unsupported operator")
+            return operation(int(left), int(right)), "number"
+        if isinstance(node, pyast.UnaryOp):
+            value, _ = self._eval_node(node.operand)
+            if isinstance(node.op, pyast.USub):
+                return -int(value), "number"
+            if isinstance(node.op, pyast.Invert):
+                return ~int(value), "number"
+            if isinstance(node.op, pyast.Not):
+                return (0 if value else 1), "nibble"
+            raise ValueError("unsupported unary operator")
+        if isinstance(node, pyast.BoolOp):
+            values = [self._eval_node(item)[0] for item in node.values]
+            if isinstance(node.op, pyast.And):
+                return (1 if all(values) else 0), "nibble"
+            return (1 if any(values) else 0), "nibble"
+        if isinstance(node, pyast.Compare):
+            left, _ = self._eval_node(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                right, _ = self._eval_node(comparator)
+                if isinstance(op, pyast.Eq):
+                    result = left == right
+                elif isinstance(op, pyast.NotEq):
+                    result = left != right
+                elif isinstance(op, pyast.Lt):
+                    result = left < right
+                elif isinstance(op, pyast.LtE):
+                    result = left <= right
+                elif isinstance(op, pyast.Gt):
+                    result = left > right
+                elif isinstance(op, pyast.GtE):
+                    result = left >= right
+                else:
+                    raise ValueError("unsupported comparison")
+                if not result:
+                    return 0, "nibble"
+                left = right
+            return 1, "nibble"
+        if isinstance(node, pyast.Call):
+            if not isinstance(node.func, pyast.Name):
+                raise ValueError("unsupported call")
+            name = node.func.id
+            args = [self._eval_node(arg)[0] for arg in node.args]
+            if name == "peek" and len(args) == 1:
+                return self.emulator.ram[int(args[0]) & 0xFF], "nibble"
+            if name == "high_nibble" and len(args) == 1:
+                return (int(args[0]) >> 4) & 0xF, "nibble"
+            if name == "low_nibble" and len(args) == 1:
+                return int(args[0]) & 0xF, "nibble"
+            raise ValueError(f"unsupported function {name}")
+        raise ValueError("unsupported expression")
+
     def evaluate(self, expression: str) -> dict:
         text = expression.strip()
-        match = re.fullmatch(r"R([0-9])", text, re.IGNORECASE)
-        if match is not None:
-            return {"result": self.emulator.ram[int(match.group(1))], "type": "nibble"}
-        if text.lower() == "pc":
-            return {"result": self.emulator.pc, "type": "nibble"}
-        if text.lower() == "sp":
-            return {"result": self.emulator.sp, "type": "nibble"}
-
-        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\[(\d+)\])?", text)
-        if match is not None:
-            name, index_text = match.groups()
-            data = self.debug_map.get("globals", {}).get(name)
-            if data is not None:
-                address = data.get("address")
-                if address is None:
-                    return {"result": data.get("value"), "type": data.get("type")}
-                if index_text is not None:
-                    stride = {
-                        "nibble": 1,
-                        "char": 2,
-                        "word": 4,
-                        "dword": 8,
-                        "flashptr": 3,
-                    }.get(data.get("type"), 1)
-                    element = address + int(index_text) * stride
-                    return {
-                        "result": self.emulator.ram[element & 0xFF],
-                        "type": data.get("type"),
-                    }
-                return {
-                    "result": self._read_global(data),
-                    "type": data.get("type"),
-                }
-
-        match = re.fullmatch(r"peek\(\s*(0x[0-9A-Fa-f]+|\d+)\s*\)", text)
-        if match is not None:
-            address = int(match.group(1), 0)
-            return {"result": self.emulator.ram[address & 0xFF], "type": "nibble"}
-
+        text = re.sub(r"\btrue\b", "True", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bfalse\b", "False", text, flags=re.IGNORECASE)
+        text = text.replace("&&", " and ").replace("||", " or ")
         try:
-            return {"result": int(text, 0), "type": "number"}
-        except ValueError:
-            return {"result": f"unknown expression: {expression}", "type": "error"}
+            tree = pyast.parse(text, mode="eval")
+            value, type_name = self._eval_node(tree.body)
+            return {"result": value, "type": type_name or "number"}
+        except Exception:
+            return {
+                "result": f"unknown expression: {expression}",
+                "type": "error",
+            }
 
 
 class DebugService:
@@ -314,6 +441,8 @@ class DebugService:
                 return self.session.flags()
             if scope == "globals":
                 return self.session.globals()
+            if scope == "locals":
+                return self.session.locals()
             return []
         if command == "stackTrace":
             return self.session.stack_frames()

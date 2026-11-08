@@ -256,6 +256,7 @@ class BadgeCDebugSession extends DebugSession {
         new Scope("Registers", 1, false),
         new Scope("Flags", 2, false),
         new Scope("Globals", 3, false),
+        new Scope("Locals", 4, false),
       ],
     };
     this.sendResponse(response);
@@ -267,7 +268,9 @@ class BadgeCDebugSession extends DebugSession {
         ? "registers"
         : args.variablesReference === 2
           ? "flags"
-          : "globals";
+          : args.variablesReference === 4
+            ? "locals"
+            : "globals";
     this.command("variables", { scope })
       .then((items: any[]) => {
         response.body = {

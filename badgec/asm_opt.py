@@ -53,7 +53,7 @@ def _code(line: str) -> str:
 
 
 def _is_label(line: str) -> bool:
-    return bool(_LABEL_RE.match(line.strip()))
+    return bool(_LABEL_RE.match(_code(line).strip()))
 
 
 def _opaque_mask(lines: list[str]) -> list[bool]:

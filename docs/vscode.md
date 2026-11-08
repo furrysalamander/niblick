@@ -77,6 +77,8 @@ Or use **Extensions: Install from VSIX...** in the command palette.
   across files.
 - Compile current file and run it in the BadgeC emulator from the command
   palette.
+- Debug launch configurations with breakpoints, stepping, registers, flags,
+  globals, and UART output. See [debugging.md](debugging.md).
 - Snippets for functions, loops, imports, assembly modules, and assembly
   routines.
 
@@ -120,6 +122,9 @@ For another project, add:
 - **BadgeC: Run Current File in Emulator** — compiles and runs the active
   `.badge` file with the headless emulator.
 - **BadgeC: Restart Language Server**
+
+Debugging uses the normal VS Code Run and Debug view with a `badgec` launch
+configuration. See [debugging.md](debugging.md).
 
 ## Troubleshooting
 

@@ -284,6 +284,8 @@ class Compiler:
         self.flash_counter = 0
         self.label_counter = 0
         self.asm_counter = 0
+        self.current_source: tuple[str, int] | None = None
+        self.last_emitted_source: tuple[str, int] | None = None
         self.current_function: Optional[FunctionSymbol] = None
         self.loop_stack: list[tuple[str, str]] = []  # (break label, continue label)
         self.calls: list[tuple[str, str, bool, int, str]] = []  # caller, callee, tail, line, file
@@ -318,11 +320,13 @@ class Compiler:
         self.prepare_functions()
         if "main" not in self.functions:
             raise BadgeCompileError(f"{self.filename}: no main() function found")
+        self.current_source = None
         self.emit("; BadgeC generated assembly")
         self.emit("GOTO fn_main")
         for fn in self.program.functions:
             self.compile_function(self.functions[fn.name])
         self.emit("")
+        self.current_source = None
         self.all_asm_scans = self.scan_asm_sources(self.program.asm_sources)
         self.emitted_asm_sources = self.kept_asm_sources()
         self.asm_scans = self.scan_asm_sources(self.emitted_asm_sources)
@@ -342,6 +346,8 @@ class Compiler:
         for index in range(24):
             token = f"__D32_{index:02d}"
             runtime_text = runtime_text.replace(token, f"0x{(base + index) & 0xFF:02X}")
+        self.current_source = None
+        self.emit("; @badgec-src-end")
         self.emit(runtime_text)
         self.emit_flash_data()
         self.validate_call_graph()
@@ -1045,6 +1051,7 @@ class Compiler:
         return PLACEHOLDER_RE.sub(replace, code) + comment
 
     def emit_asm_sources(self, sources: list[ast.AsmSource]) -> None:
+        self.current_source = None
         for source in sources:
             file_opaque = has_file_marker(source.text, NO_OPTIMIZE)
             self.emit(f"; imported assembly: {source.path}")
@@ -1063,15 +1070,27 @@ class Compiler:
                     elif not label.startswith("."):
                         scope = Scope()
 
-                self.emit(
-                    self._substitute_placeholders(
-                        line, scope, source.path, line_number
-                    )
+                substituted = self._substitute_placeholders(
+                    line, scope, source.path, line_number
                 )
+                stripped = line.strip().lower()
+                if stripped in {
+                    NO_OPTIMIZE.lower(),
+                    NO_OPTIMIZE_BEGIN.lower(),
+                    NO_OPTIMIZE_END.lower(),
+                }:
+                    self.emit(substituted)
+                else:
+                    self.emit(
+                        f"{substituted} ; @badgec-src "
+                        f"{source.path}:{line_number}"
+                    )
 
             if file_opaque:
                 self.emit(NO_OPTIMIZE_END)
             self.emit("")
+        self.current_source = None
+        self.emit("; @badgec-src-end")
 
     # ------------------------------------------------------------------
     # Function code generation
@@ -1087,16 +1106,28 @@ class Compiler:
         for param in fn.params:
             scope.define(param, self.filename)
 
+        self.current_source = (
+            fn.decl.file or self.filename,
+            max(1, fn.decl.line),
+        )
         self.emit(f"; function {fn.name}")
         self.emit(f"{fn.label}:")
         if fn.name == "main":
             for symbol, expr in self.global_inits:
+                self.current_source = (
+                    expr.file or self.filename,
+                    max(1, expr.line),
+                )
                 typ = self.compile_expr(expr, scope)
                 self.coerce(typ, symbol.type, expr.line)
                 self.store_symbol(symbol, expr.line)
 
         self.compile_block(fn.decl.body, scope, tail=False)
 
+        self.current_source = (
+            fn.decl.file or self.filename,
+            max(1, fn.decl.line),
+        )
         if fn.name == "main":
             self.emit("JR -1")
         else:
@@ -1113,6 +1144,10 @@ class Compiler:
             self.compile_stmt(stmt, child, is_tail)
 
     def compile_stmt(self, stmt: ast.Stmt, scope: Scope, tail: bool = False) -> None:
+        self.current_source = (
+            stmt.file or self.filename,
+            max(1, stmt.line),
+        )
         if isinstance(stmt, ast.Block):
             self.compile_block(stmt, scope, tail=tail)
 
@@ -1260,12 +1295,14 @@ class Compiler:
         self.emit(NO_OPTIMIZE_BEGIN)
         self.emit(f"; inline assembly (source line {stmt.line})")
         self.emit(f"{self.new_asm_label()}:")
+        self.current_source = None
         for index, line in enumerate(text.splitlines(), 1):
             source_line = base_line + index - 1
             self.emit(
                 self._substitute_placeholders(
                     line, scope, path, source_line
                 )
+                + f" ; @badgec-src {path}:{source_line}"
             )
         self.emit(NO_OPTIMIZE_END)
 
@@ -3961,9 +3998,15 @@ class Compiler:
                     f"levels (the hardware stack has 5)"
                 )
 
+    def debug_map(self) -> dict:
+        """Return a PC-to-source map for the optimized program."""
+
+        from .debugmap import build_debug_map
+
+        return build_debug_map(self.asm_text, self)
+
     def code_sizes(self, total_words: Optional[int] = None) -> dict:
         """Return per-function, per-runtime, and flash word counts."""
-
         labels = {fn.label for fn in self.functions.values()}
         labels.update(self.linked_runtime)
         labels.add("__bc_flash_data")
@@ -4086,4 +4129,16 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def emit(self, line: str) -> None:
+        stripped = line.strip()
+        if self.current_source is None:
+            self.last_emitted_source = None
+        if (
+            self.current_source is not None
+            and self.current_source != self.last_emitted_source
+            and stripped
+            and not stripped.startswith(";")
+        ):
+            file, source_line = self.current_source
+            self.lines.append(f"; @badgec-src {file}:{source_line}")
+            self.last_emitted_source = self.current_source
         self.lines.append(line)

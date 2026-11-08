@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,56 @@ from .errors import BadgeCompileError
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSEMBLER = ROOT / "vendor" / "2022-Supercon6-Badge-Tools" / "assembler" / "assemble.py"
+
+_SOURCE_MARKER_RE = re.compile(
+    r";\s*@badgec-src\s+(?P<file>.+):(?P<line>\d+)\s*$"
+)
+_ASSEMBLER_LINE_RE = re.compile(r"Line\s+(\d+):")
+
+
+def _assembler_error(
+    asm_path: Path, output: str
+) -> BadgeCompileError:
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    message = "assembler failed"
+    for index, line in enumerate(lines):
+        if not line.startswith("E::"):
+            continue
+        parts: list[str] = []
+        for detail in lines[index:]:
+            if _ASSEMBLER_LINE_RE.search(detail):
+                break
+            if detail.startswith("E::"):
+                detail = detail[3:].strip()
+            if detail:
+                parts.append(detail)
+        message = ": ".join(parts) or "assembler failed"
+        break
+    else:
+        if lines:
+            message = lines[0]
+
+    line_match = _ASSEMBLER_LINE_RE.search(output)
+    if line_match is not None:
+        index = int(line_match.group(1))
+        try:
+            generated = asm_path.read_text().splitlines()
+        except OSError:
+            generated = []
+        if 0 <= index < len(generated):
+            source_match = _SOURCE_MARKER_RE.search(generated[index])
+            if source_match is not None:
+                return BadgeCompileError(
+                    message,
+                    file=source_match.group("file").strip(),
+                    line=int(source_match.group("line")),
+                    column=1,
+                )
+            message = (
+                f"{message} (generated assembly line {index + 1}: "
+                f"{generated[index].strip()})"
+            )
+    return BadgeCompileError(message)
 
 
 def assemble_file(asm_path: str | Path, hex_path: str | Path | None = None) -> Path:
@@ -39,9 +90,7 @@ def assemble_file(asm_path: str | Path, hex_path: str | Path | None = None) -> P
     )
     output = (proc.stdout or "") + (proc.stderr or "")
     if proc.returncode != 0 or not expected.exists():
-        raise BadgeCompileError(
-            f"assembler failed for {asm_path}\n{output.strip() or '<no output>'}"
-        )
+        raise _assembler_error(asm_path, output)
 
     if hex_path is not None:
         hex_path = Path(hex_path)

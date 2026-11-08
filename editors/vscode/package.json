@@ -93,6 +93,62 @@
         "command": "badgec.restartServer",
         "title": "BadgeC: Restart Language Server"
       }
+    ],
+    "debuggers": [
+      {
+        "type": "badgec",
+        "label": "BadgeC Emulator",
+        "program": "./out/debugAdapter.js",
+        "runtime": "node",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "BadgeC source file to compile and debug."
+              },
+              "hex": {
+                "type": "string",
+                "description": "Existing .hex file to debug instead of compiling source."
+              },
+              "debugMap": {
+                "type": "string",
+                "description": "Debug map JSON for an existing .hex file."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": true,
+                "description": "Stop at the first source line."
+              },
+              "pythonPath": {
+                "type": "string",
+                "default": "",
+                "description": "Python interpreter. Empty auto-detects .venv/venv."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for compilation and the debug service."
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "BadgeC: Launch Program",
+            "body": {
+              "type": "badgec",
+              "request": "launch",
+              "name": "BadgeC: Run Program",
+              "program": "${file}",
+              "cwd": "${workspaceFolder}",
+              "stopOnEntry": true
+            }
+          }
+        ]
+      }
     ]
   },
   "scripts": {
@@ -101,6 +157,7 @@
     "package": "vsce package"
   },
   "dependencies": {
+    "@vscode/debugadapter": "^1.68.0",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {

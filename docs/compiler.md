@@ -80,6 +80,11 @@ the current statement position. They resolve `${...}` against the current
 lexical scope and are wrapped in opaque optimizer markers. See
 [inline-asm.md](inline-asm.md).
 
+The compiler also emits `; @badgec-src file:line` markers. The optimized
+assembly is scanned into a PC-to-source map by `badgec/debugmap.py`, exposed
+with `--debug-map`, and consumed by the emulator debugger. See
+[debugging.md](debugging.md).
+
 Dead-declaration elimination runs after inlining:
 
 - functions unreachable from `main` (or a kept global initializer) are

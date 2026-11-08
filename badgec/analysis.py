@@ -9,21 +9,19 @@ code generation where possible.
 from __future__ import annotations
 
 import copy
-import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from .asm_link import scan_asm
+from .assembler import assemble_file
 from .compiler import Compiler
+from .diagnostics import Diagnostic
 from .errors import BadgeError
 from .loader import load_program
 from .runtime_linker import ROUTINE_LABELS
 from .symbols import Definition, ProgramIndex
-# Matches the compiler's ``file:line[:column]: message`` error format.
-_LOCATION_RE = re.compile(
-    r"^(?P<file>.+?):(?P<line>\d+)(?::(?P<column>\d+))?:\s*(?P<message>.*)$"
-)
 
 
 @dataclass(frozen=True)
@@ -31,15 +29,6 @@ class Location:
     file: str
     line: int
     column: int = 1
-
-
-@dataclass(frozen=True)
-class Diagnostic:
-    file: str
-    line: int
-    column: int
-    message: str
-    severity: str = "error"
 
 
 @dataclass
@@ -68,20 +57,22 @@ def _override_map(
 def _diagnostic_from_error(
     exc: BadgeError, fallback_file: str
 ) -> Diagnostic:
-    message = str(exc)
-    match = _LOCATION_RE.match(message)
-    if match is None:
+    if exc.file:
         return Diagnostic(
-            file=fallback_file,
-            line=1,
-            column=1,
-            message=message,
+            file=_normalise(exc.file),
+            line=max(1, exc.line),
+            column=max(1, exc.column),
+            message=exc.message,
+            severity=exc.severity,
+            end_line=exc.end_line,
+            end_column=exc.end_column,
+            code=exc.code,
         )
     return Diagnostic(
-        file=_normalise(match.group("file")),
-        line=int(match.group("line")),
-        column=int(match.group("column") or 1),
-        message=match.group("message"),
+        file=fallback_file,
+        line=1,
+        column=1,
+        message=str(exc),
     )
 
 
@@ -134,8 +125,21 @@ class Analysis:
         assert self.program is not None
         has_main = any(fn.name == "main" for fn in self.program.functions)
         program = copy.deepcopy(self.program) if has_main else self.program
+        if has_main:
+            try:
+                asm = Compiler(program, _normalise(self.entry)).compile()
+                with tempfile.TemporaryDirectory(prefix="badgec-lsp-") as temp:
+                    asm_path = Path(temp) / "program.asm"
+                    asm_path.write_text(asm)
+                    assemble_file(asm_path, Path(temp) / "program.hex")
+            except BadgeError as exc:
+                return [
+                    _diagnostic_from_error(exc, _normalise(self.entry))
+                ]
+            return []
+
         try:
-            Compiler(program, _normalise(self.entry)).check(prune=has_main)
+            Compiler(program, _normalise(self.entry)).check(prune=False)
         except BadgeError as exc:
             return [_diagnostic_from_error(exc, _normalise(self.entry))]        # The compiler's check path intentionally does not scan imported
         # assembly; surface asm syntax/call errors and validate the extern
@@ -277,6 +281,9 @@ class Analysis:
 
     def asm_labels(self, file: str | Path) -> list[Definition]:
         return self._ensure_index().asm_labels_for(file)
+
+    def inline_asm_at(self, file: str | Path, line: int):
+        return self._ensure_index().inline_asm_at(file, line)
 
     def document_symbols(self, file: str | Path) -> list[Symbol]:
         target = _normalise(file)

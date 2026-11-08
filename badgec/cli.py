@@ -25,6 +25,7 @@ def compile_source(
     strip_runtime: bool = True,
     asm_optimize: bool = True,
     map_json: str | Path | None = None,
+    debug_map_path: str | Path | None = None,
     show_symbols: bool = False,
     show_callgraph: bool = False,
     show_stack: bool = False,
@@ -86,6 +87,12 @@ def compile_source(
             data["code_words"] = words
         Path(map_json).write_text(json.dumps(data, indent=2) + "\n")
         print(f"  map written to {map_json}")
+
+    if debug_map_path is not None:
+        Path(debug_map_path).write_text(
+            json.dumps(compiler.debug_map(), indent=2) + "\n"
+        )
+        print(f"  debug map written to {debug_map_path}")
 
     if run:
         if hex_path is None:
@@ -278,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-steps", type=int, default=100000, help="emulator step limit for --run")
     parser.add_argument("--map", action="store_true", help="print the global memory map")
     parser.add_argument("--map-json", help="write a JSON symbol map")
+    parser.add_argument("--debug-map", help="write a JSON PC-to-source debug map")
     parser.add_argument("--symbols", action="store_true", help="print functions, sizes, and flash labels")
     parser.add_argument("--callgraph", action="store_true", help="print the user call graph")
     parser.add_argument("--stack", action="store_true", help="print call-depth and runtime stack costs")
@@ -303,6 +311,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="disable peephole and branch-relaxation optimizations",
     )
+    parser.add_argument(
+        "--diagnostics-json",
+        action="store_true",
+        help="print compiler errors as a JSON array",
+    )
     args = parser.parse_args(argv)
 
     run = (
@@ -325,6 +338,7 @@ def main(argv: list[str] | None = None) -> int:
             strip_runtime=not args.keep_runtime,
             asm_optimize=not args.no_optimize,
             map_json=args.map_json,
+            debug_map_path=args.debug_map,
             show_symbols=args.symbols,
             show_callgraph=args.callgraph,
             show_stack=args.stack,
@@ -337,7 +351,10 @@ def main(argv: list[str] | None = None) -> int:
             dump_sfr=args.dump_sfr,
         )
     except BadgeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        if args.diagnostics_json:
+            print(json.dumps([exc.diagnostic().to_dict()]))
+        else:
+            print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0
 

@@ -23,7 +23,7 @@ Working today:
 - `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
 - Inline `asm { ... }` blocks inside BadgeC functions, with lexical `${...}` placeholders, local labels, call-graph integration, and optimizer opacity
-- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, go-to-definition, references, and rename
+- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, go-to-definition, references, rename, and an emulator debugger
 - Flash strings and `RET`-table iteration
 - UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
 - RAM helpers: `peek`, `poke`, `memset`, `uart_write`, `delay`
@@ -358,6 +358,7 @@ nothing until you use it. See `docs/stdlib.md` and
 - `docs/asm-imports.md` — imported `.asm` modules, `extern fn`, placeholders, and optimizer markers
 - `docs/inline-asm.md` — raw `asm { ... }` blocks inside BadgeC functions
 - `docs/vscode.md` — VS Code language support and language-server development
+- `docs/debugging.md` — emulator debugger, breakpoints, variables, and debug maps
 - `docs/testing.md` — test layers and hardware development loop
 - `docs/keys.md` — measured front-panel key codes
 - `docs/toolchain.md` — assembler/emulator usage

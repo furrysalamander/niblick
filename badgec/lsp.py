@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 from urllib.parse import unquote, urlparse
@@ -81,8 +82,21 @@ def _range(line: int, column: int, length: int = 1) -> types.Range:
 
 
 def _lsp_diagnostic(diagnostic: Diagnostic) -> types.Diagnostic:
+    if diagnostic.end_line is not None and diagnostic.end_column is not None:
+        diagnostic_range = types.Range(
+            start=types.Position(
+                line=max(0, diagnostic.line - 1),
+                character=max(0, diagnostic.column - 1),
+            ),
+            end=types.Position(
+                line=max(0, diagnostic.end_line - 1),
+                character=max(0, diagnostic.end_column - 1),
+            ),
+        )
+    else:
+        diagnostic_range = _range(diagnostic.line, diagnostic.column, 1)
     return types.Diagnostic(
-        range=_range(diagnostic.line, diagnostic.column, 1),
+        range=diagnostic_range,
         message=diagnostic.message,
         severity=(
             types.DiagnosticSeverity.Error
@@ -469,7 +483,64 @@ def create_server() -> LanguageServer:
 
         try:
             analysis = analysis_for(uri)
-            if path.suffix.lower() == ".asm":
+            line = params.position.line + 1
+            column = params.position.character + 1
+            inline = analysis.inline_asm_at(path, line)
+            if inline is not None:
+                text_lines = inline.text.splitlines()
+                relative = line - inline.start_line
+                prefix = (
+                    text_lines[relative][: column - 1]
+                    if 0 <= relative < len(text_lines)
+                    else ""
+                )
+                inside_placeholder = prefix.rfind("${") > prefix.rfind("}")
+
+                for definition in inline.visible:
+                    if inside_placeholder:
+                        add(
+                            definition.name,
+                            _completion_kind(definition.kind),
+                            definition.detail,
+                        )
+                    else:
+                        add(
+                            f"${{{definition.name}}}",
+                            _completion_kind(definition.kind),
+                            definition.detail,
+                        )
+
+                if not inside_placeholder:
+                    for word in ASM_KEYWORDS:
+                        add(word, types.CompletionItemKind.Keyword, "Voja4 instruction")
+                    for word in ASM_PSEUDO_OPS:
+                        add(word, types.CompletionItemKind.Keyword, "Voja4 pseudo-op")
+                    for word in ASM_DIRECTIVES:
+                        add(word, types.CompletionItemKind.Keyword, "assembler directive")
+                    for word in ASM_CONDITIONS:
+                        add(word, types.CompletionItemKind.Constant, "skip condition")
+                    for word in ASM_REGISTERS:
+                        add(word, types.CompletionItemKind.Variable, "register")
+                    for label in re.findall(
+                        r"^\s*(\.[A-Za-z0-9_]+):",
+                        inline.text,
+                        re.MULTILINE,
+                    ):
+                        add(label, types.CompletionItemKind.Reference, "local asm label")
+                    for item in analysis.completions(path, line, column):
+                        if item.kind == "function":
+                            add(
+                                f"fn_{item.name}",
+                                types.CompletionItemKind.Function,
+                                item.detail,
+                            )
+                        elif item.kind == "runtime":
+                            add(
+                                item.name,
+                                _completion_kind(item.kind),
+                                item.detail,
+                            )
+            elif path.suffix.lower() == ".asm":
                 for word in ASM_KEYWORDS:
                     add(word, types.CompletionItemKind.Keyword, "Voja4 instruction")
                 for word in ASM_PSEUDO_OPS:

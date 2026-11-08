@@ -87,6 +87,15 @@ class RenameEdit:
     new_text: str
 
 
+@dataclass
+class InlineAsmContext:
+    file: str
+    start_line: int
+    end_line: int
+    text: str
+    visible: list[Definition]
+
+
 def _rename_placeholder(
     text: str,
     target_kind: str,
@@ -168,6 +177,7 @@ class ProgramIndex:
         self.locals: dict[str, list[Definition]] = {}
         self.occurrences: list[Occurrence] = []
         self.function_ranges: list[tuple[str, int, int, Definition]] = []
+        self.inline_asm_contexts: list[InlineAsmContext] = []
         self._build()
 
     # ------------------------------------------------------------------
@@ -361,6 +371,22 @@ class ProgramIndex:
             for (path, _), definition in self.asm_labels.items()
             if path == target
         ]
+
+    def inline_asm_at(
+        self, file: str | Path, line: int
+    ) -> Optional[InlineAsmContext]:
+        target = _normalise(file)
+        matches = [
+            context
+            for context in self.inline_asm_contexts
+            if context.file == target
+            and context.start_line <= line <= context.end_line
+        ]
+        if not matches:
+            return None
+        return min(
+            matches, key=lambda context: context.end_line - context.start_line
+        )
 
     def function_at(
         self, file: str | Path, line: int
@@ -719,6 +745,20 @@ class ProgramIndex:
                 self._visit_expr(statement.value, scopes, function_name)
         elif isinstance(statement, ast.InlineAsm):
             self._visit_inline_asm(statement, scopes)
+            visible: list[Definition] = []
+            for scope in scopes:
+                visible.extend(scope.values())
+            visible.extend(self.globals.values())
+            file = _normalise(statement.file or self.entry)
+            self.inline_asm_contexts.append(
+                InlineAsmContext(
+                    file=file,
+                    start_line=statement.line,
+                    end_line=_max_line(statement),
+                    text=statement.text,
+                    visible=visible,
+                )
+            )
 
     def _visit_inline_asm(
         self,

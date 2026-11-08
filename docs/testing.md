@@ -21,6 +21,8 @@ and can exercise UART transmit/receive without hardware.
 | Imported assembly | `tests/test_asm_imports.py` | `.asm` imports, `extern fn`, placeholders, runtime linking, optimizer markers |
 | Inline assembly | `tests/test_inline_asm.py` | Raw `asm { ... }` blocks, scoped placeholders, labels, runtime calls, optimizer opacity |
 | Editor analysis | `tests/test_analysis.py`, `tests/test_lsp.py` | Source positions, loader overrides, diagnostics, symbols, hover, completion, definitions, references, rename, LSP handlers |
+| Diagnostics | `tests/test_diagnostics.py` | Structured errors, JSON output, assembler-to-source mapping |
+| Debugger | `tests/test_debugmap.py`, `tests/test_debug.py` | PC-to-source maps, breakpoints, stepping, variables, stack frames |
 | W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | Fast SPI runtime helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
 | Examples | `tests/test_examples.py` | Every checked-in example still compiles and fits |

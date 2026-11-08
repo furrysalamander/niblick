@@ -202,3 +202,28 @@ def test_rename_handler(tmp_path: Path) -> None:
     edits = result.changes[source.as_uri()]
     assert len(edits) == 3
     assert any(edit.new_text == "${value}" for edit in edits)
+
+
+def test_completion_inside_inline_asm(tmp_path: Path) -> None:
+    text = (
+        "fn main() {\n"
+        "    nibble x;\n"
+        "    x = 1;\n"
+        "    asm {\n"
+        "        MOV R0, [${x}]\n"
+        "    }\n"
+        "}\n"
+    )
+    source = tmp_path / "inline.badge"
+    source.write_text(text)
+    server = create_server()
+    completion = server.protocol.fm._features["textDocument/completion"]
+    line, character = position(text, "MOV")
+    result = completion(
+        types.CompletionParams(
+            text_document=types.TextDocumentIdentifier(uri=source.as_uri()),
+            position=types.Position(line=line, character=character),
+        )
+    )
+    labels = {item.label for item in result.items}
+    assert {"MOV", "R1", "${x}", "fn_main"}.issubset(labels)

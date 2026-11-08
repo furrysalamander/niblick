@@ -21,3 +21,4 @@ epaper_badge/data/graphics/supercon_photo*.png
 editors/vscode/node_modules/
 editors/vscode/out/
 editors/vscode/*.vsix
+.badgec-build/

@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
@@ -37,7 +38,7 @@ function pythonExecutable(): string {
   return "python3";
 }
 
-function makeServerOptions(): ServerOptions {
+function pythonEnvironment(): { [key: string]: string | undefined } {
   const includePaths = vscode.workspace
     .getConfiguration("badgec")
     .get<string[]>("includePaths", []);
@@ -47,14 +48,17 @@ function makeServerOptions(): ServerOptions {
   if (includePaths.length > 0) {
     env.BADGEC_PATH = includePaths.join(path.delimiter);
   }
+  return env;
+}
 
+function makeServerOptions(): ServerOptions {
   return {
     command: pythonExecutable(),
     args: ["-m", "badgec.lsp", "--stdio"],
     transport: TransportKind.stdio,
     options: {
-      cwd: root,
-      env: env as NodeJS.ProcessEnv,
+      cwd: workspaceRoot(),
+      env: pythonEnvironment() as NodeJS.ProcessEnv,
     },
   };
 }
@@ -93,6 +97,48 @@ async function startClient(): Promise<void> {
   await client.start();
 }
 
+function activeBadgeFile(): string | undefined {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || !editor.document.fileName.toLowerCase().endsWith(".badge")) {
+    void vscode.window.showErrorMessage(
+      "Open a .badge file before running this command.",
+    );
+    return undefined;
+  }
+  return editor.document.fileName;
+}
+
+function runCompilerCommand(label: string, extraArgs: string[]): void {
+  const file = activeBadgeFile();
+  if (file === undefined) {
+    return;
+  }
+  const outDir = path.join(workspaceRoot(), ".badgec-build");
+  const python = pythonExecutable();
+  const args = ["-m", "badgec", file, "-o", outDir, ...extraArgs];
+  outputChannel.show(true);
+  outputChannel.appendLine(`> ${python} ${args.join(" ")}`);
+
+  const child = spawn(python, args, {
+    cwd: workspaceRoot(),
+    env: pythonEnvironment() as NodeJS.ProcessEnv,
+  });
+  child.stdout?.on("data", (data) => outputChannel.append(data.toString()));
+  child.stderr?.on("data", (data) => outputChannel.append(data.toString()));
+  child.on("error", (error) => {
+    outputChannel.appendLine(`${label} failed to start: ${String(error)}`);
+    void vscode.window.showErrorMessage(`${label} failed to start.`);
+  });
+  child.on("close", (code) => {
+    outputChannel.appendLine(`[${label} exited with code ${code ?? "?"}]`);
+    if (code !== 0) {
+      void vscode.window.showWarningMessage(
+        `${label} failed. See the BadgeC output channel.`,
+      );
+    }
+  });
+}
+
 async function fixBadgeLanguageMode(
   document: vscode.TextDocument,
 ): Promise<void> {
@@ -122,6 +168,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument((document) => {
       void fixBadgeLanguageMode(document);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("badgec.compile", () => {
+      runCompilerCommand("BadgeC compile", []);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("badgec.run", () => {
+      runCompilerCommand("BadgeC run", ["--run"]);
     }),
   );
 

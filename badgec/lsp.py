@@ -5,8 +5,9 @@ Run with::
     python3 -m badgec.lsp --stdio
 
 The server reuses the compiler front end through :mod:`badgec.analysis`.  It
-supports diagnostics and document symbols in this first version; navigation
-and completion build on the same analysis layer.
+supports diagnostics, document symbols, hover, completion, and
+go-to-definition, including links between ``extern fn`` declarations and
+imported assembly entry points.
 """
 
 from __future__ import annotations
@@ -31,6 +32,26 @@ from .analysis import Analysis, Diagnostic, Symbol, analyze_asm
 
 LOGGER = logging.getLogger(__name__)
 DEBOUNCE_SECONDS = 0.25
+
+ASM_KEYWORDS = [
+    "ADD", "ADC", "SUB", "SBB", "OR", "AND", "XOR", "MOV",
+    "CP", "INC", "DEC", "DSZ", "EXR", "BIT", "BSET", "BCLR", "BTG",
+    "RRC", "RET", "SKIP", "JR",
+]
+ASM_PSEUDO_OPS = ["GOTO", "GOSUB", "NOP", "CPL", "NEG", "LSR", "SL", "RLC"]
+ASM_DIRECTIVES = ["EQU", "ORG", "BYTE", "ASCII", "NIBBLE"]
+ASM_CONDITIONS = ["C", "NC", "Z", "NZ", "GTE", "LT", "EQ", "NE"]
+ASM_REGISTERS = [f"R{index}" for index in range(16)] + [
+    "OUT", "OUTB", "IN", "INB", "JSR", "PCL", "PCM", "PCH",
+    "PAGE", "CLOCK", "SYNC", "WRFLAGS", "RDFLAGS", "SERCTRL",
+    "SERLOW", "SERHIGH", "RECEIVED", "AUTOOFF", "KEYSTATUS",
+    "KEYREG", "DIMMER", "RANDOM",
+]
+BADGEC_KEYWORDS = [
+    "fn", "nibble", "char", "word", "dword", "flashptr", "void",
+    "const", "if", "else", "while", "for", "return", "break",
+    "continue", "import", "extern", "true", "false",
+]
 
 
 def uri_to_path(uri: str) -> Path:
@@ -93,6 +114,29 @@ def _lsp_symbol(symbol: Symbol) -> types.DocumentSymbol:
     )
 
 
+def _lsp_location(definition) -> types.Location:
+    return types.Location(
+        uri=path_to_uri(definition.file),
+        range=_range(
+            definition.line,
+            definition.column,
+            max(1, len(definition.name)),
+        ),
+    )
+
+
+def _completion_kind(kind: str) -> types.CompletionItemKind:
+    if kind in ("function", "asm_function"):
+        return types.CompletionItemKind.Function
+    if kind in ("constant", "asm_label"):
+        return types.CompletionItemKind.Constant
+    if kind in ("param", "local", "global", "variable"):
+        return types.CompletionItemKind.Variable
+    if kind == "runtime":
+        return types.CompletionItemKind.Module
+    return types.CompletionItemKind.Text
+
+
 def create_server() -> LanguageServer:
     server = LanguageServer(
         "badgec-lsp",
@@ -103,6 +147,10 @@ def create_server() -> LanguageServer:
     tasks: dict[str, asyncio.Task] = {}
     include_paths: list[str] = []
     reported: dict[str, set[str]] = {}
+    analysis_cache: dict[str, Analysis] = {}
+
+    def clear_analysis_cache() -> None:
+        analysis_cache.clear()
 
     def overrides_for(entry_uri: str) -> dict[str, str]:
         # The analysis API wants filesystem keys, not URIs.
@@ -114,11 +162,65 @@ def create_server() -> LanguageServer:
                 continue
         return result
 
-    def analysis_for(entry_uri: str) -> Analysis:
-        return Analysis(
-            uri_to_path(entry_uri),
-            source_overrides=overrides_for(entry_uri),
+    def project_uri_for(entry_uri: str) -> Optional[str]:
+        path = uri_to_path(entry_uri)
+        if path.suffix.lower() != ".asm":
+            return entry_uri
+        target = str(path)
+        for candidate in documents:
+            candidate_path = uri_to_path(candidate)
+            if candidate_path.suffix.lower() != ".badge":
+                continue
+            try:
+                analysis = cached_analysis(
+                    candidate,
+                    uri_to_path(candidate),
+                    extra_asm=None,
+                )
+            except Exception:
+                continue
+            if analysis.program is None:
+                continue
+            if any(
+                str(Path(source.path).resolve()) == target
+                for source in analysis.program.asm_sources
+            ):
+                return candidate
+        return None
+
+    def cached_analysis(
+        cache_key: str,
+        path: Path,
+        extra_asm: dict[str, str] | None,
+    ) -> Analysis:
+        cached = analysis_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        analysis = Analysis(
+            path,
+            source_overrides=overrides_for(cache_key),
             search_paths=include_paths or None,
+            extra_asm=extra_asm,
+        )
+        analysis_cache[cache_key] = analysis
+        return analysis
+
+    def analysis_for(entry_uri: str) -> Analysis:
+        project_uri = project_uri_for(entry_uri)
+        if project_uri is not None:
+            return cached_analysis(
+                project_uri,
+                uri_to_path(project_uri),
+                extra_asm=None,
+            )
+        path = uri_to_path(entry_uri)
+        text = documents.get(entry_uri)
+        if text is None:
+            text = path.read_text()
+        return cached_analysis(
+            entry_uri,
+            path,
+            extra_asm={str(path): text},
         )
 
     def publish(uri: str) -> None:
@@ -188,6 +290,7 @@ def create_server() -> LanguageServer:
         paths = badgec.get("includePaths") or []
         if isinstance(paths, list):
             include_paths[:] = [str(item) for item in paths]
+        clear_analysis_cache()
         for uri in documents:
             schedule(uri)
 
@@ -195,6 +298,7 @@ def create_server() -> LanguageServer:
     def did_open(params: types.DidOpenTextDocumentParams) -> None:
         document = params.text_document
         documents[document.uri] = document.text
+        clear_analysis_cache()
         schedule(document.uri)
 
     @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
@@ -204,18 +308,21 @@ def create_server() -> LanguageServer:
             return
         # The extension registers full-document synchronization.
         documents[params.text_document.uri] = changes[-1].text
+        clear_analysis_cache()
         schedule(params.text_document.uri)
 
     @server.feature(types.TEXT_DOCUMENT_DID_SAVE)
     def did_save(params: types.DidSaveTextDocumentParams) -> None:
         if params.text is not None:
             documents[params.text_document.uri] = params.text
+        clear_analysis_cache()
         schedule(params.text_document.uri)
 
     @server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
     def did_close(params: types.DidCloseTextDocumentParams) -> None:
         uri = params.text_document.uri
         documents.pop(uri, None)
+        clear_analysis_cache()
         task = tasks.pop(uri, None)
         if task is not None:
             task.cancel()
@@ -240,6 +347,106 @@ def create_server() -> LanguageServer:
             LOGGER.exception("document symbols failed for %s", uri)
             return []
         return [_lsp_symbol(symbol) for symbol in symbols]
+
+    @server.feature(types.TEXT_DOCUMENT_HOVER)
+    def hover(params: types.HoverParams) -> Optional[types.Hover]:
+        uri = params.text_document.uri
+        try:
+            text = analysis_for(uri).hover(
+                uri_to_path(uri),
+                params.position.line + 1,
+                params.position.character + 1,
+            )
+        except Exception:
+            LOGGER.exception("hover failed for %s", uri)
+            return None
+        if not text:
+            return None
+        return types.Hover(
+            contents=types.MarkupContent(
+                kind=types.MarkupKind.Markdown,
+                value=text,
+            )
+        )
+
+    @server.feature(types.TEXT_DOCUMENT_DEFINITION)
+    def definition(params: types.DefinitionParams) -> Optional[types.Location]:
+        uri = params.text_document.uri
+        try:
+            target = analysis_for(uri).definition(
+                uri_to_path(uri),
+                params.position.line + 1,
+                params.position.character + 1,
+            )
+        except Exception:
+            LOGGER.exception("definition failed for %s", uri)
+            return None
+        if target is None or not target.file:
+            return None
+        return _lsp_location(target)
+
+    @server.feature(types.TEXT_DOCUMENT_COMPLETION)
+    def completion(params: types.CompletionParams) -> types.CompletionList:
+        uri = params.text_document.uri
+        path = uri_to_path(uri)
+        items: list[types.CompletionItem] = []
+        seen: set[str] = set()
+
+        def add(
+            label: str,
+            kind: types.CompletionItemKind,
+            detail: str = "",
+        ) -> None:
+            if label in seen:
+                return
+            seen.add(label)
+            items.append(
+                types.CompletionItem(
+                    label=label,
+                    kind=kind,
+                    detail=detail,
+                    insert_text=label,
+                    sort_text=label,
+                )
+            )
+
+        try:
+            analysis = analysis_for(uri)
+            if path.suffix.lower() == ".asm":
+                for word in ASM_KEYWORDS:
+                    add(word, types.CompletionItemKind.Keyword, "Voja4 instruction")
+                for word in ASM_PSEUDO_OPS:
+                    add(word, types.CompletionItemKind.Keyword, "Voja4 pseudo-op")
+                for word in ASM_DIRECTIVES:
+                    add(word, types.CompletionItemKind.Keyword, "assembler directive")
+                for word in ASM_CONDITIONS:
+                    add(word, types.CompletionItemKind.Constant, "skip condition")
+                for word in ASM_REGISTERS:
+                    add(word, types.CompletionItemKind.Variable, "register")
+                for label in analysis.asm_labels(path):
+                    add(label.name, _completion_kind(label.kind), label.detail)
+                for item in analysis.completions(
+                    path,
+                    params.position.line + 1,
+                    params.position.character + 1,
+                ):
+                    if item.kind in ("runtime", "builtin"):
+                        add(item.name, _completion_kind(item.kind), item.detail)
+            else:
+                for word in BADGEC_KEYWORDS:
+                    add(word, types.CompletionItemKind.Keyword, "BadgeC keyword")
+                for item in analysis.completions(
+                    path,
+                    params.position.line + 1,
+                    params.position.character + 1,
+                ):
+                    if item.kind == "runtime":
+                        continue
+                    add(item.name, _completion_kind(item.kind), item.detail)
+        except Exception:
+            LOGGER.exception("completion failed for %s", uri)
+
+        return types.CompletionList(is_incomplete=False, items=items)
 
     return server
 

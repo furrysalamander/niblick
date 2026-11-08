@@ -70,7 +70,14 @@ def has_file_marker(text: str, marker: str) -> bool:
 
 
 def label_name(line: str) -> str | None:
+    span = label_span(line)
+    return span[0] if span is not None else None
+
+
+def label_span(line: str) -> tuple[str, int] | None:
+    """Return the label name and its 1-based column."""
+
     match = LABEL_RE.match(code_part(line))
     if match is None:
         return None
-    return match.group(1)
+    return match.group(1), match.start(1) + 1

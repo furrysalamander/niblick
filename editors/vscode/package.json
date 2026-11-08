@@ -82,6 +82,14 @@
     },
     "commands": [
       {
+        "command": "badgec.compile",
+        "title": "BadgeC: Compile Current File"
+      },
+      {
+        "command": "badgec.run",
+        "title": "BadgeC: Run Current File in Emulator"
+      },
+      {
         "command": "badgec.restartServer",
         "title": "BadgeC: Restart Language Server"
       }

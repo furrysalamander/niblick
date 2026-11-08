@@ -22,7 +22,7 @@ Working today:
 - Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
 - `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
-- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, and document symbols
+- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, and go-to-definition
 - Flash strings and `RET`-table iteration
 - UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
 - RAM helpers: `peek`, `poke`, `memset`, `uart_write`, `delay`
@@ -298,14 +298,15 @@ otherwise empty void world in creative mode.
 - Badge: `192.168.1.50:25565`
 - Client: vanilla 1.8.9 / protocol 47, offline mode
 - One player, no encryption, no compression, no world storage
-- **4089 / 4096 words**, **124 / 208 RAM nibbles**, max call depth 4
+- **4035 / 4096 words**, **133 / 208 RAM nibbles**, max call depth 4
 
 Use a 1.8.9 client; modern clients can display the MOTD but cannot join. The
 server never sends an Encryption Request, so it behaves like an offline-mode
 server. The Login Success name is fixed to `Player` to keep the packet in
 flash, and the world is one chunk section with a 16x16 stone platform at
-y=64, full light, and the void biome. There is no other terrain and no
-persistence. Run
+y=64, full light, and the void biome. Players can break blocks and place
+stone on all six faces; the server confirms changes with Block Change
+packets. There is no world storage, so the platform regenerates on reconnect. Run
 `examples/w5500_probe.badge` first to confirm the W5500 link, then flash
 `examples/mc_void.hex` and connect with a 1.8.9 client.
 

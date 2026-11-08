@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .asm_text import PLACEHOLDER_RE, Placeholder, code_part, label_name
+from .asm_text import PLACEHOLDER_RE, Placeholder, code_part, label_span
 from .errors import BadgeCompileError, location
 
 
@@ -20,6 +20,7 @@ class AsmCall:
     target_label: str
     tail: bool
     line: int
+    column: int = 1
 
 
 @dataclass(frozen=True)
@@ -27,12 +28,14 @@ class AsmRuntimeCall:
     caller_label: str
     target_label: str
     line: int
+    column: int = 1
 
 
 @dataclass
 class AsmScan:
     path: str
     labels: dict[str, int] = field(default_factory=dict)
+    label_columns: dict[str, int] = field(default_factory=dict)
     function_labels: list[str] = field(default_factory=list)
     calls: list[AsmCall] = field(default_factory=list)
     runtime_calls: list[AsmRuntimeCall] = field(default_factory=list)
@@ -62,12 +65,15 @@ def scan_asm(text: str, path: str) -> AsmScan:
     local_labels: set[str] = set()
 
     for line_number, line in enumerate(text.splitlines(), 1):
-        code = code_part(line).strip()
+        raw_code = code_part(line)
+        code = raw_code.strip()
         if not code:
             continue
+        leading = len(raw_code) - len(raw_code.lstrip())
 
-        label = label_name(line)
+        label = label_span(line)
         if label is not None:
+            label, label_column = label
             if label.startswith("."):
                 scoped = (current_global or "") + label
                 if scoped in local_labels:
@@ -78,6 +84,7 @@ def scan_asm(text: str, path: str) -> AsmScan:
             if label in scan.labels:
                 raise _error(path, line_number, f"duplicate label {label!r}")
             scan.labels[label] = line_number
+            scan.label_columns[label] = label_column
             current_global = label
             if label.startswith("__bc_"):
                 raise _error(
@@ -101,8 +108,8 @@ def scan_asm(text: str, path: str) -> AsmScan:
                     current_function,
                     Placeholder(
                         line=line_number,
-                        start=match.start(),
-                        end=match.end(),
+                        start=match.start() + leading,
+                        end=match.end() + leading,
                         text=match.group(1).strip(),
                     ),
                 )
@@ -116,6 +123,10 @@ def scan_asm(text: str, path: str) -> AsmScan:
             if not args:
                 raise _error(path, line_number, f"{op} requires a target")
             target = args.split()[0]
+            target_column = code.find(target, len(op))
+            target_column = (
+                target_column + 1 + leading if target_column >= 0 else 1
+            )
             kind = _target_kind(target)
             tail = op == "GOTO"
 
@@ -143,7 +154,9 @@ def scan_asm(text: str, path: str) -> AsmScan:
                         "runtime calls must appear inside a fn_* function",
                     )
                 scan.runtime_calls.append(
-                    AsmRuntimeCall(current_function, target, line_number)
+                    AsmRuntimeCall(
+                        current_function, target, line_number, target_column
+                    )
                 )
                 continue
 
@@ -155,7 +168,13 @@ def scan_asm(text: str, path: str) -> AsmScan:
                         "function calls must appear inside a fn_* function",
                     )
                 scan.calls.append(
-                    AsmCall(current_function, target, tail, line_number)
+                    AsmCall(
+                        current_function,
+                        target,
+                        tail,
+                        line_number,
+                        target_column,
+                    )
                 )
                 continue
 

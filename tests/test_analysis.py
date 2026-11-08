@@ -10,6 +10,17 @@ from badgec.loader import load_program
 from badgec.parser import parse
 
 
+def position(source: str, needle: str, occurrence: int = 1) -> tuple[int, int]:
+    index = -1
+    start = 0
+    for _ in range(occurrence):
+        index = source.index(needle, start)
+        start = index + len(needle)
+    line = source.count("\n", 0, index) + 1
+    column = index - source.rfind("\n", 0, index)
+    return line, column
+
+
 def test_parser_records_positions_and_files() -> None:
     program = parse(
         "const nibble PIN = 1;\n"
@@ -154,3 +165,110 @@ def test_document_symbols_for_asm_file(tmp_path: Path) -> None:
         ("fn_driver", "function"),
         ("table", "variable"),
     ]
+
+
+def test_navigation_and_hover_for_badgec_symbols(tmp_path: Path) -> None:
+    source_text = (
+        "nibble g;\n"
+        "fn nibble add(nibble a, nibble b) {\n"
+        "    nibble c;\n"
+        "    c = a + b;\n"
+        "    return c;\n"
+        "}\n"
+        "fn main() {\n"
+        "    nibble x;\n"
+        "    x = add(g, 2);\n"
+        "}\n"
+    )
+    entry = tmp_path / "nav.badge"
+    entry.write_text(source_text)
+    analysis = Analysis(entry)
+
+    # Local assignment target resolves to its declaration.
+    line, column = position(source_text, "c = a")
+    target = analysis.definition(entry, line, column)
+    assert target is not None
+    assert target.name == "c"
+    assert target.line == 3
+
+    # Parameter reference.
+    line, column = position(source_text, "a + b")
+    target = analysis.definition(entry, line, column)
+    assert target is not None
+    assert target.kind == "param"
+    assert target.name == "a"
+
+    # Global reference in a call argument.
+    line, column = position(source_text, "g, 2")
+    target = analysis.definition(entry, line, column)
+    assert target is not None
+    assert target.kind == "global"
+
+    # Function call and hover signature.
+    line, column = position(source_text, "add(g")
+    target = analysis.definition(entry, line, column)
+    assert target is not None
+    assert target.name == "add"
+    hover = analysis.hover(entry, line, column)
+    assert hover is not None
+    assert "nibble add(nibble a, nibble b)" in hover
+
+    # Completion includes visible params, locals, globals, and functions.
+    line, column = position(source_text, "a + b")
+    names = {item.name for item in analysis.completions(entry, line, column)}
+    assert {"a", "b", "c", "g", "add"}.issubset(names)
+
+
+def test_navigation_into_imported_asm(tmp_path: Path) -> None:
+    source_text = (
+        'import "impl.asm";\n'
+        "extern fn nibble add3(nibble x);\n"
+        "nibble result;\n"
+        "fn main() {\n"
+        "    result = add3(4);\n"
+        "}\n"
+    )
+    entry = tmp_path / "main.badge"
+    entry.write_text(source_text)
+    asm_text = (
+        "fn_add3:\n"
+        "    MOV R0, [${x}]\n"
+        "    ADD R0, 3\n"
+        "    MOV R1, R0\n"
+        "    RET R0, 0\n"
+    )
+    asm = tmp_path / "impl.asm"
+    asm.write_text(asm_text)
+
+    analysis = Analysis(entry)
+
+    # A call to an extern function goes to its assembly entry point.
+    line, column = position(source_text, "add3(4)")
+    target = analysis.definition(entry, line, column)
+    assert target is not None
+    assert target.file == str(asm.resolve())
+    assert target.line == 1
+
+    # A placeholder in assembly resolves to the C parameter.
+    line, column = position(asm_text, "${x}")
+    target = analysis.definition(asm, line, column + 2)
+    assert target is not None
+    assert target.name == "x"
+    assert target.file == str(entry.resolve())
+    assert target.line == 2
+
+    # Hover on the asm label shows the entry point.
+    line, column = position(asm_text, "fn_add3")
+    hover = analysis.hover(asm, line, column)
+    assert hover is not None
+    assert "assembly entry point" in hover
+
+
+def test_asm_completions_include_instructions_and_labels(tmp_path: Path) -> None:
+    entry = tmp_path / "main.badge"
+    entry.write_text("fn main() { while (1) { } }\n")
+    asm = tmp_path / "impl.asm"
+    asm.write_text("fn_impl:\n    RET R0, 0\n")
+    analysis = Analysis(entry, extra_asm={asm: asm.read_text()})
+    labels = {item.name for item in analysis.asm_labels(asm)}
+    assert "fn_impl" in labels

@@ -67,6 +67,13 @@ Or use **Extensions: Install from VSIX...** in the command palette.
 - Diagnostics for imported `.asm` modules.
 - Document symbols for functions, extern functions, globals, consts, and
   assembly entry points.
+- Hover for function signatures, types, constants, and assembly symbols.
+- Completion for keywords, types, functions, globals, parameters, locals,
+  assembly mnemonics, registers, and labels.
+- Go-to-definition for functions, globals, parameters, locals, and imported
+  assembly entry points.
+- Compile current file and run it in the BadgeC emulator from the command
+  palette.
 - Snippets for functions, loops, imports, assembly modules, and assembly
   routines.
 
@@ -105,6 +112,10 @@ For another project, add:
 
 ## Commands
 
+- **BadgeC: Compile Current File** — compiles the active `.badge` file into
+  `.badgec-build/` and shows compiler output.
+- **BadgeC: Run Current File in Emulator** — compiles and runs the active
+  `.badge` file with the headless emulator.
 - **BadgeC: Restart Language Server**
 
 ## Troubleshooting
@@ -147,8 +158,7 @@ the server. Compiler and project knowledge stays in Python.
 
 - The parser and compiler still stop at the first error, so the editor
   publishes one diagnostic per analysis pass.
-- Hover, completion, go-to-definition, references, and rename are not
-  implemented yet. They will build on `badgec.analysis`.
+- References and rename are not implemented yet.
 - The language server analyzes the open file as its entry point, using open
   buffers as source overrides.
 - A file without `main` is checked with all of its functions active, so a

@@ -19,6 +19,7 @@ from .compiler import Compiler
 from .errors import BadgeError
 from .loader import load_program
 from .runtime_linker import ROUTINE_LABELS
+from .symbols import Definition, ProgramIndex
 # Matches the compiler's ``file:line[:column]: message`` error format.
 _LOCATION_RE = re.compile(
     r"^(?P<file>.+?):(?P<line>\d+)(?::(?P<column>\d+))?:\s*(?P<message>.*)$"
@@ -103,12 +104,15 @@ class Analysis:
         entry: str | Path,
         source_overrides: dict[str | Path, str] | None = None,
         search_paths: list[str | Path] | None = None,
+        extra_asm: dict[str | Path, str] | None = None,
     ) -> None:
         self.entry = Path(entry).expanduser().resolve()
         self.overrides = _override_map(source_overrides)
         self.search_paths = search_paths
+        self.extra_asm = _override_map(extra_asm)
         self.program = None
         self.load_error: Optional[BadgeError] = None
+        self._index: Optional[ProgramIndex] = None
         self._load()
 
     def _load(self) -> None:
@@ -233,6 +237,32 @@ class Analysis:
                     )
                 ]
         return []
+
+    def _ensure_index(self) -> ProgramIndex:
+        if self._index is None:
+            self._index = ProgramIndex(
+                self.program,
+                self.entry,
+                self.overrides,
+                self.extra_asm,
+            )
+        return self._index
+
+    def definition(
+        self, file: str | Path, line: int, column: int
+    ) -> Optional[Definition]:
+        return self._ensure_index().definition_at(file, line, column)
+
+    def hover(self, file: str | Path, line: int, column: int) -> Optional[str]:
+        return self._ensure_index().hover_at(file, line, column)
+
+    def completions(
+        self, file: str | Path, line: int, column: int
+    ) -> list[Definition]:
+        return self._ensure_index().completions_at(file, line, column)
+
+    def asm_labels(self, file: str | Path) -> list[Definition]:
+        return self._ensure_index().asm_labels_for(file)
 
     def document_symbols(self, file: str | Path) -> list[Symbol]:
         target = _normalise(file)

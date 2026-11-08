@@ -284,6 +284,7 @@ User-facing errors carry `file:line:column` where possible. The CLI catches
 `BadgeError` and prints a single line without a traceback. Internal
 exceptions are not hidden; they indicate a compiler bug.
 
-Editor tooling reuses the front end through `badgec/analysis.py`; the LSP
-server in `badgec/lsp.py` exposes diagnostics and document symbols. See
+Editor tooling reuses the front end through `badgec/analysis.py` and
+`badgec/symbols.py`; the LSP server in `badgec/lsp.py` exposes diagnostics,
+document symbols, hover, completion, and go-to-definition. See
 [vscode.md](vscode.md).

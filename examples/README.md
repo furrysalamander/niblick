@@ -21,6 +21,7 @@
 | `w5500_probe.badge` | Read W5500 `VERSIONR`/`PHYCFGR` over SPI and print on UART |
 | `w5500_udp.badge` | Send UDP datagrams from `192.168.1.50` to `192.168.1.10:5001` |
 | `w5500_http.badge` | Minimal HTTP server at `http://192.168.1.50/` |
+| `mc_void.badge` | Minimal Minecraft 1.8.9 server; join a void world over Ethernet |
 
 Compile one with:
 

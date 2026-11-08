@@ -1,11 +1,14 @@
 # BadgeC standard library
 
-BadgeC has two library layers:
+BadgeC has three library layers:
 
 - **Builtins** are recognized by the compiler and lowered to inline code or
   calls into `badgec/runtime/runtime.asm`.
 - **Modules** are ordinary BadgeC files under `lib/`, pulled in with
   `import`.
+- **Assembly modules** are `.asm` files under `lib/`, pulled in with
+  `import` and exposed through `extern fn` declarations. See
+  [asm-imports.md](asm-imports.md).
 
 ```c
 import "lib/uart.badge";
@@ -218,6 +221,12 @@ Bit-banged SPI mode 0 on the main I/O connector. Default pins:
 | `spi_init()` | Select GPIO bank 0, CS high, clock/data low |
 | `spi_begin()` / `spi_end()` | Assert / release CS |
 | `spi_xfer(byte)` | Exchange one byte, MSB first |
+| `spi_tx_fast(byte)` | Runtime helper: send one byte, ignore MISO; bank 0 only |
+| `spi_xfer_fast(byte)` | Runtime helper: exchange one byte; bank 0 only |
+
+The fast helpers are hand-written assembly runtime builtins. They assume
+`WrFlags.IOPos == 0` and the pin mapping above, so they are intended for the
+W5500 driver rather than code that switches GPIO banks.
 
 ### `lib/w5500.badge`
 
@@ -232,10 +241,29 @@ Minimal W5500 register/socket access over `lib/spi.badge`. Assumes W5500
 | `w5500_read16` / `w5500_write16` | 16-bit big-endian registers |
 | `w5500_version()` | `VERSIONR`, should return `0x04` |
 | `w5500_phy()` | `PHYCFGR`; bit 0 is link status |
+| `w5500_set_tx_size(socket, kb)` | Set one socket's TX buffer size (0/1/2/4/8/16 KB) |
+| `w5500_rx_available()` | Bytes waiting in socket 0's RX buffer |
+| `w5500_rx_peek(offset)` | Peek one byte without consuming it |
+| `w5500_rx_consume(count)` | Advance RX_RD and issue `RECV` |
+| `w5500_tx_free()` | Free bytes in socket 0's TX buffer |
+| `w5500_tx_pointer()` / `w5500_tx_set_pointer(p)` | Read/write `Sn_TX_WR`; the read side is in `lib/asm/w5500.asm` |
+| `w5500_tx_stream_begin(hi, lo)` | Start a TX-buffer write burst |
+| `w5500_rx_stream_begin(hi, lo)` | Start an RX-buffer read burst |
+| `w5500_stream_end()` | Release CS after a burst |
+| `w5500_send_command()` | Issue and wait for `SEND` |
 | `w5500_open_udp(port_hi, port_lo)` | Open socket 0 as UDP |
 | `w5500_open_tcp(port_hi, port_lo)` | Open socket 0 as a TCP listener |
 | `w5500_send_flash(msg)` | Send a flash string through socket 0 |
 | `w5500_discard_rx()` | Read and discard up to 200 received bytes |
+
+W5500 block-select values are `0` for common registers and `3*n+1` /
+`3*n+2` / `3*n+3` for socket *n*'s register / TX / RX blocks. The generic
+`w5500_read`/`w5500_write` helpers take a 4-bit BSB (so socket 0); use
+`w5500_set_tx_size` for sockets whose register block is above 15.
+
+`w5500_tx_pointer()` is an imported assembly routine rather than a compiler
+runtime builtin. See [asm-imports.md](asm-imports.md) for the `extern fn` and
+`${...}` placeholder mechanism.
 
 `examples/w5500_udp.badge` configures badge `192.168.1.50`, sends
 `hello from badge\n` to `192.168.1.10:5001` from source port `5000`, and
@@ -247,6 +275,14 @@ a short `200 OK` response. With the host at `192.168.1.10`:
 ```bash
 curl http://192.168.1.50/
 ```
+
+`examples/w5500_dashboard.badge` serves a compact button-only page for setting
+matrix patterns and the dimmer. It uses `/api/pattern?p=N` and
+`/api/dimmer?v=N`.
+
+`examples/mc_void.badge` uses the byte-level helpers and a 16 KB socket-0 TX
+buffer to speak Minecraft 1.8.9 (protocol 47). See the main README for the
+void-world server and its limits.
 
 The W5500 needs a clean 3.3 V supply and about 130 mA. Do not assume the
 badge's battery `+3V` rail is suitable; use a separate 3.3 V supply with a

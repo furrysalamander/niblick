@@ -117,6 +117,58 @@ __bc_uart_puts_loop:
     GOTO __bc_uart_puts_loop
 
 ; ---------------------------------------------------------------------------
+; Fast bit-banged SPI (bank 0)
+; ---------------------------------------------------------------------------
+; These routines assume WrFlags.IOPos=0 and the wiring used by lib/spi.badge:
+;   OUT1 = CS, OUT2 = SCLK, OUT3 = MOSI, IN0 = MISO.
+; The caller owns CS.  Both routines send MSB first, mode 0.
+
+; Send the char in R1:R2, ignoring MISO.
+__bc_spi_tx_fast:
+    MOV R4, 8
+__bc_spi_tx_fast_loop:
+    BIT R2, 3
+    SKIP Z, 1
+    BSET R3, 3
+    BIT R2, 3
+    SKIP NZ, 1
+    BCLR R3, 3
+    BSET R3, 2
+    ADD R1, R1
+    ADC R2, R2
+    BCLR R3, 2
+    DSZ R4
+    GOTO __bc_spi_tx_fast_loop
+    RET R0, 0
+
+; Exchange the char in R1:R2, returning MISO in R1:R2.
+__bc_spi_xfer_fast:
+    MOV R4, 8
+    MOV R6, 0
+    MOV R7, 0
+__bc_spi_xfer_fast_loop:
+    BIT R2, 3
+    SKIP Z, 1
+    BSET R3, 3
+    BIT R2, 3
+    SKIP NZ, 1
+    BCLR R3, 3
+    BSET R3, 2
+    ADD R6, R6
+    ADC R7, R7
+    BIT R3, 0
+    SKIP Z, 1
+    INC R6
+    ADD R1, R1
+    ADC R2, R2
+    BCLR R3, 2
+    DSZ R4
+    GOTO __bc_spi_xfer_fast_loop
+    MOV R1, R6
+    MOV R2, R7
+    RET R0, 0
+
+; ---------------------------------------------------------------------------
 ; GPIO / I/O port
 ; ---------------------------------------------------------------------------
 

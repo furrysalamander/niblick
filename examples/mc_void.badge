@@ -1,0 +1,424 @@
+// Minimal Minecraft 1.8.9 (protocol 47) server on a Voja4 badge.
+//
+// The badge listens on 192.168.1.50:25565, answers the server-list ping,
+// and lets one vanilla 1.8.9 client join a void world.  No encryption, no
+// compression, no world storage, no terrain.
+//
+// Wiring is the same as the other W5500 examples:
+//   OUT0 = W5500 RST, OUT1 = CS, OUT2 = SCLK, OUT3 = MOSI, IN0 = MISO.
+//
+// The client must be in offline mode (the badge never sends an encryption
+// request).  That is automatic: vanilla clients connect to offline servers.
+
+import "lib/spi.badge";
+import "lib/w5500.badge";
+
+const char PORT_HI = 0x63;          // 25565
+const char PORT_LO = 0xDD;
+
+const char LOGIN_SUCCESS[45] = {
+    0x02, 0x24,
+    // Fixed offline UUID: 00000000-0000-0000-0000-000000000000
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x2D,
+    0x30, 0x30, 0x30, 0x30, 0x2D,
+    0x30, 0x30, 0x30, 0x30, 0x2D,
+    0x30, 0x30, 0x30, 0x30, 0x2D,
+    0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
+    // Name length 6 and "Player"; the display name is fixed to keep the
+    // packet in flash rather than buffering the client's Login Start name.
+    0x06, 0x50, 0x6C, 0x61, 0x79, 0x65, 0x72
+};
+
+const char STATUS_JSON[] =
+    "{\"version\":{\"name\":\"1.8.9\",\"protocol\":47},\"players\":{\"max\":1,\"online\":0},\"description\":{\"text\":\"Voja4 server\"}}";
+
+const char NET_CFG[] = {
+    192, 168, 1, 10,          // gateway
+    255, 255, 255, 0,         // subnet
+    0x02, 0x08, 0xDC, 0x50, 0x00, 0x01,  // MAC
+    192, 168, 1, 50           // badge
+};
+
+const char JOIN_GAME[15] = {
+    0x01, 0x00, 0x00, 0x00, 0x01,   // entity id 1
+    0x01, 0x00, 0x00, 0x01,         // creative, overworld, peaceful, max 1
+    0x04, 'f', 'l', 'a', 't',       // level type
+    0x00                            // reduced debug
+};
+
+const char POSITION[34] = {
+    0x08,
+    0x3F, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // x = 0.5
+    0x40, 0x50, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,  // y = 65.0
+    0x3F, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // z = 0.5
+    0x00, 0x00, 0x00, 0x00,                          // yaw
+    0x00, 0x00, 0x00, 0x00,                          // pitch
+    0x00                                             // absolute
+};
+
+const char CHUNK_HEADER[16] = {
+    0x8E, 0x62,                     // packet length 12558
+    0x21,                           // chunk data
+    0x00, 0x00, 0x00, 0x00,         // chunk x
+    0x00, 0x00, 0x00, 0x00,         // chunk z
+    0x01,                           // ground-up continuous
+    0x00, 0x10,                     // section 4
+    0x80, 0x62                      // data length 12544
+};
+
+const char KEEPALIVE[2] = { 0x00, 0x00 };
+
+// Current inbound packet.
+word pkt_body_len;
+word pkt_total_len;
+word pkt_pos;
+
+// Handshake state.
+nibble next_state;
+
+// Outbound TX buffer cursor (mirrors Sn_TX_WR while a packet is being built).
+word tx_wr;
+
+// Shared timeout counter for the RX/TX readiness loops.
+word timer;
+
+char socket_status;
+
+// Temporary buffer for the status-ping payload.
+char pong[8];
+
+// ---------------------------------------------------------------------------
+// TX helpers
+// ---------------------------------------------------------------------------
+
+fn void mc_tx_begin() {
+    tx_wr = w5500_tx_pointer();
+    gpio_clear(SPI_CS);
+    spi_xfer_fast((char)(tx_wr >> 8));
+    spi_xfer_fast((char)tx_wr);
+    spi_xfer_fast(0x14);                // BSB 2, write
+}
+
+fn void mc_tx_put(char value) {
+    spi_tx_fast(value);
+    tx_wr = tx_wr + 1;
+}
+
+fn void mc_tx_end() {
+    gpio_set(SPI_CS);
+    w5500_write(1, 0x00, 0x24, (char)(tx_wr >> 8));
+    w5500_write(1, 0x00, 0x25, (char)tx_wr);
+    w5500_write(1, 0x00, 0x01, 0x20);   // SEND
+    delay(15);
+}
+
+fn void mc_tx_flash(flashptr source, word count) {
+    flashptr p;
+    word i;
+    char c;
+
+    p = source;
+    i = 0;
+    while (i < count) {
+        c = flash_next(&p);
+        mc_tx_put(c);
+        i = i + 1;
+    }
+}
+
+// Send a packet whose body (ID + fields) is a constant flash table.  All
+// fixed packets here are shorter than 128 bytes, so the length prefix is one
+// byte.
+fn void mc_send_fixed(flashptr body, word body_len) {
+    mc_tx_begin();
+    mc_tx_put((char)body_len);
+    mc_tx_flash(body, body_len);
+    mc_tx_end();
+}
+
+// ---------------------------------------------------------------------------
+// RX helpers
+// ---------------------------------------------------------------------------
+
+fn nibble mc_try_packet() {
+    word avail;
+
+    avail = w5500_rx_available();
+    if (avail == 0) {
+        return 0;
+    }
+
+    // The handshake/login/play packets a 1.8.9 client sends here are all
+    // shorter than 128 bytes, so the length prefix is a single byte.
+    pkt_body_len = (word)w5500_rx_peek(0);
+    pkt_total_len = pkt_body_len + 1;
+    if (pkt_total_len > 1900) {
+        return 0;
+    }
+    if (avail < pkt_total_len) {
+        return 0;
+    }
+    pkt_pos = 1;
+    return 1;
+}
+
+fn char mc_rx_byte() {
+    pkt_pos = pkt_pos + 1;
+    return w5500_rx_peek(pkt_pos - 1);
+}
+
+fn word mc_rx_varint() {
+    char b;
+    char b2;
+
+    b = mc_rx_byte();
+    if ((b & 0x80) == 0) {
+        pkt_body_len = (word)b;
+    } else {
+        b2 = mc_rx_byte();
+        pkt_body_len = (word)(b & 0x7F) | ((word)b2 << 7);
+    }
+    return pkt_body_len;
+}
+
+fn void mc_packet_end() {
+    w5500_rx_consume(pkt_total_len);
+}
+
+// ---------------------------------------------------------------------------
+// Packets
+// ---------------------------------------------------------------------------
+
+fn void mc_send_status() {
+    nibble i;
+
+    timer = 0;
+    while (mc_try_packet() == 0) {
+        if (w5500_read(1, 0x00, 0x03) != 0x17) {
+            return;
+        }
+        delay(1);
+        timer = timer + 1;
+        if (timer > 3000) {
+            return;
+        }
+    }
+    if (mc_rx_byte() != 0) {
+        mc_packet_end();
+        return;
+    }
+    mc_packet_end();
+
+    // STATUS_JSON is 104 bytes: body 106, total packet 107.
+    mc_tx_begin();
+    mc_tx_put(106);
+    mc_tx_put(0x00);
+    mc_tx_put(104);
+    mc_tx_flash(STATUS_JSON, 104);
+    mc_tx_end();
+
+    // The client normally follows with a ping; echo it as a pong.
+    timer = 0;
+    while (mc_try_packet() == 0) {
+        if (w5500_read(1, 0x00, 0x03) != 0x17) {
+            return;
+        }
+        delay(1);
+        timer = timer + 1;
+        if (timer > 3000) {
+            return;
+        }
+    }
+    if (mc_rx_byte() != 1) {
+        mc_packet_end();
+        return;
+    }
+    i = 0;
+    while (i < 8) {
+        pong[(nibble)i] = mc_rx_byte();
+        i = i + 1;
+    }
+    mc_packet_end();
+
+    mc_tx_begin();
+    mc_tx_put(9);
+    mc_tx_put(0x01);
+    i = 0;
+    while (i < 8) {
+        mc_tx_put(pong[(nibble)i]);
+        i = i + 1;
+    }
+    mc_tx_end();
+}
+
+fn void mc_send_chunk() {
+    // One empty section at y=64 (section 4), full block light and sky light,
+    // void biome 127.  Header + data = 12560 bytes.  Socket 0 owns the full
+    // 16 KB TX buffer, so the whole packet fits in one burst.
+    if (w5500_tx_free() < 12560) {
+        return;
+    }
+    mc_tx_begin();
+    mc_tx_flash(CHUNK_HEADER, 16);
+    // 12544 bytes: 8192 block-data bytes, 2048 block-light bytes, 2048
+    // sky-light bytes, then 256 void-biome bytes.  The first 512 block
+    // bytes are the y=64 layer: 256 little-endian stone block states
+    // (0x10, 0x00), making a 16x16 platform.
+    pkt_total_len = 512;
+    while (pkt_total_len > 0) {
+        spi_tx_fast(0x10);
+        spi_tx_fast(0x00);
+        tx_wr = tx_wr + 2;
+        pkt_total_len = pkt_total_len - 2;
+    }
+    pkt_total_len = 12032;
+    while (pkt_total_len > 0) {
+        if (pkt_total_len > 4352) {
+            spi_tx_fast(0x00);
+        } else if (pkt_total_len > 256) {
+            spi_tx_fast(0xFF);
+        } else {
+            spi_tx_fast(0x7F);
+        }
+        tx_wr = tx_wr + 1;
+        pkt_total_len = pkt_total_len - 1;
+    }
+    mc_tx_end();
+}
+
+// ---------------------------------------------------------------------------
+// Connection flow
+// ---------------------------------------------------------------------------
+
+fn nibble mc_read_handshake() {
+    if (mc_rx_byte() != 0x00) {
+        return 0;
+    }
+    mc_rx_varint();
+    pkt_body_len = mc_rx_varint();
+    pkt_pos = pkt_pos + pkt_body_len;
+    pkt_pos = pkt_pos + 2;
+    next_state = (nibble)mc_rx_varint();
+    return 1;
+}
+
+fn void mc_login() {
+    word i;
+
+    timer = 0;
+    while (mc_try_packet() == 0) {
+        if (w5500_read(1, 0x00, 0x03) != 0x17) {
+            return;
+        }
+        delay(1);
+        timer = timer + 1;
+        if (timer > 3000) {
+            return;
+        }
+    }
+    if (mc_rx_byte() != 0x00) {
+        mc_packet_end();
+        return;
+    }
+    pkt_body_len = mc_rx_varint();
+    pkt_pos = pkt_pos + pkt_body_len;
+    mc_packet_end();
+
+    mc_send_fixed(LOGIN_SUCCESS, 45);
+    mc_send_fixed(JOIN_GAME, 15);
+    mc_send_chunk();
+    mc_send_fixed(POSITION, 34);
+
+    // Play loop: drain client packets and keep the connection alive.
+    i = 0;
+    while (1) {
+        if (w5500_read(1, 0x00, 0x03) != 0x17) {
+            break;
+        }
+        if (mc_try_packet() != 0) {
+            mc_rx_byte();
+            mc_packet_end();
+        } else if (w5500_rx_available() > 1900) {
+            break;
+        }
+        i = i + 1;
+        if (i > 400) {
+            mc_send_fixed(KEEPALIVE, 2);
+            i = 0;
+        }
+        delay(1);
+    }
+}
+
+fn void network_init() {
+    char i;
+    char v;
+    flashptr p;
+
+    // Socket 0 owns the whole 16 KB TX buffer.  The RX buffers keep their
+    // 2 KB defaults.
+    w5500_set_tx_size(0, 16);
+    i = 1;
+    while (i < 8) {
+        w5500_set_tx_size(i, 0);
+        i = i + 1;
+    }
+
+    i = 0x01;
+    p = NET_CFG;
+    while (i < 0x13) {
+        v = flash_next(&p);
+        w5500_write(0, 0x00, i, v);
+        i = i + 1;
+    }
+}
+
+fn main() {
+    spi_init();
+    w5500_reset();
+
+    while ((w5500_phy() & 1) == 0) {
+        delay(15);
+    }
+
+    network_init();
+    w5500_open_tcp(PORT_HI, PORT_LO);
+    tx_wr = 0;
+
+    while (1) {
+        socket_status = w5500_read(1, 0x00, 0x03);
+        if (socket_status == 0x17) {
+            timer = 0;
+            while (mc_try_packet() == 0) {
+                if (w5500_read(1, 0x00, 0x03) != 0x17) {
+                    break;
+                }
+                delay(1);
+                timer = timer + 1;
+                if (timer > 3000) {
+                    break;
+                }
+            }
+            if (mc_try_packet() != 0) {
+                if (mc_read_handshake() != 0) {
+                    mc_packet_end();
+                    if (next_state == 1) {
+                        mc_send_status();
+                    } else if (next_state == 2) {
+                        mc_login();
+                    }
+                } else {
+                    mc_packet_end();
+                }
+            }
+            w5500_write(1, 0x00, 0x01, 0x10);   // CLOSE
+            delay(15);
+            w5500_open_tcp(PORT_HI, PORT_LO);
+            tx_wr = 0;
+        } else if (socket_status == 0x1C || socket_status == 0x00) {
+            w5500_open_tcp(PORT_HI, PORT_LO);
+            tx_wr = 0;
+        }
+        delay(1);
+    }
+}

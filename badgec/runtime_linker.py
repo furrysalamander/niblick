@@ -36,6 +36,8 @@ ROUTINE_LABELS = {
     "__bc_gpio_clear",
     "__bc_gpio_toggle",
     "__bc_gpio_test",
+    "__bc_spi_tx_fast",
+    "__bc_spi_xfer_fast",
     "__bc_random",
     "__bc_seed",
     "__bc_dimmer",

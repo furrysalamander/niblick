@@ -99,6 +99,32 @@ All runtime routines may clobber `R0`–`R9`. They do not preserve flags.
 Internally, the flash reader uses `R6/R7/R8` as the 12-bit pointer and
 `R5` as a scratch nibble.
 
+## User assembly modules
+
+Hand-written routines can live in imported `.asm` files instead of the core
+runtime. They use the same static-slot calling convention as BadgeC
+functions:
+
+```c
+import "my_driver.asm";
+
+extern fn char read_byte(char addr_lo);
+```
+
+```asm
+fn_read_byte:
+    MOV R0, [${addr_lo}]
+    ...
+    RET R0, 0
+```
+
+Parameters are allocated in RAM by the compiler; the assembly reads them with
+`${param}`. Results follow the normal expression-result registers. The
+compiler scans `GOSUB`/`GOTO` in imported assembly so runtime linking, the
+call graph, and stack reports remain accurate. See
+[asm-imports.md](asm-imports.md) for placeholders, labels, restrictions, and
+optimizer markers.
+
 ### UART details
 
 - `SerCtrl` at `0xF5`: baud index (`3` = 9600, the reset default).

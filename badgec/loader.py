@@ -51,7 +51,9 @@ def _load(
     path: Path,
     stack: list[Path],
     loaded: set[Path],
+    loaded_asm: set[Path],
     roots: list[Path],
+    source_overrides: dict[Path, str] | None = None,
 ) -> ast.Program:
     if path in stack:
         chain = " -> ".join(str(item) for item in stack + [path])
@@ -59,18 +61,30 @@ def _load(
     if path in loaded:
         return ast.Program()
 
-    if not path.is_file():
+    text = source_overrides.get(path) if source_overrides else None
+    if not path.is_file() and text is None:
         raise BadgeCompileError(f"source file not found: {path}")
 
-    parsed = parse(path.read_text(), str(path))
+    if text is None:
+        text = path.read_text()
+    parsed = parse(text, str(path))
     stack.append(path)
 
     merged = ast.Program()
     for declaration in parsed.imports:
         target = _resolve_import(path, declaration.path, roots)
-        imported = _load(target, stack, loaded, roots)
+        if target.suffix.lower() == ".asm":
+            if target not in loaded_asm:
+                loaded_asm.add(target)
+                asm_text = source_overrides.get(target) if source_overrides else None
+                if asm_text is None:
+                    asm_text = target.read_text()
+                merged.asm_sources.append(ast.AsmSource(str(target), asm_text))
+            continue
+        imported = _load(target, stack, loaded, loaded_asm, roots, source_overrides)
         merged.globals.extend(imported.globals)
         merged.functions.extend(imported.functions)
+        merged.asm_sources.extend(imported.asm_sources)
 
     stack.pop()
     merged.globals.extend(parsed.globals)
@@ -80,18 +94,31 @@ def _load(
 
 
 def load_program(
-    path: str | Path, search_paths: list[str | Path] | None = None
+    path: str | Path,
+    search_paths: list[str | Path] | None = None,
+    source_overrides: dict[str | Path, str] | None = None,
 ) -> ast.Program:
-    """Parse *path* and every file it imports into one program."""
+    """Parse *path* and every file it imports into one program.
+
+    ``source_overrides`` maps resolved paths to in-memory text, allowing an
+    editor to analyze unsaved buffers without writing them to disk.
+    """
 
     entry = Path(path).expanduser().resolve()
-    return _load(entry, [], set(), _search_roots(search_paths))
+    overrides: dict[Path, str] | None = None
+    if source_overrides:
+        overrides = {
+            Path(key).expanduser().resolve(): value
+            for key, value in source_overrides.items()
+        }
+    return _load(entry, [], set(), set(), _search_roots(search_paths), overrides)
 
 
 def load_source(
     source: str,
     filename: str = "<input>",
     search_paths: list[str | Path] | None = None,
+    source_overrides: dict[str | Path, str] | None = None,
 ) -> ast.Program:
     """Parse in-memory source, resolving imports relative to *filename*."""
 
@@ -99,12 +126,28 @@ def load_source(
     base = Path(filename)
     roots = _search_roots(search_paths)
     loaded: set[Path] = set()
+    loaded_asm: set[Path] = set()
+    overrides: dict[Path, str] | None = None
+    if source_overrides:
+        overrides = {
+            Path(key).expanduser().resolve(): value
+            for key, value in source_overrides.items()
+        }
     merged = ast.Program()
     for declaration in parsed.imports:
         target = _resolve_import(base, declaration.path, roots)
-        imported = _load(target, [], loaded, roots)
+        if target.suffix.lower() == ".asm":
+            if target not in loaded_asm:
+                loaded_asm.add(target)
+                asm_text = overrides.get(target) if overrides else None
+                if asm_text is None:
+                    asm_text = target.read_text()
+                merged.asm_sources.append(ast.AsmSource(str(target), asm_text))
+            continue
+        imported = _load(target, [], loaded, loaded_asm, roots, overrides)
         merged.globals.extend(imported.globals)
         merged.functions.extend(imported.functions)
+        merged.asm_sources.extend(imported.asm_sources)
     merged.globals.extend(parsed.globals)
     merged.functions.extend(parsed.functions)
     return merged

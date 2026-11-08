@@ -21,6 +21,8 @@ Working today:
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
 - Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
 - `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
+- Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
+- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, and document symbols
 - Flash strings and `RET`-table iteration
 - UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
 - RAM helpers: `peek`, `poke`, `memset`, `uart_write`, `delay`
@@ -38,6 +40,7 @@ Not implemented yet:
 - General pointers and pointer arithmetic
 - Structs, varargs, dynamic allocation
 - Register allocation, local overlay, and a broader peephole/optimization pipeline
+- Inline `asm { ... }` blocks inside BadgeC functions (imported `.asm` modules are supported)
 - UART interrupt-driven or buffered I/O beyond the hardware FIFO
 
 32-bit `*`, `/`, and `%` are implemented but deliberately size-conscious:
@@ -120,6 +123,10 @@ source.badge
    -> vendored assemble.py
    -> .hex
 ```
+
+Imported `.asm` modules are read by the loader and appended at link time;
+`extern fn` declarations give the compiler their signatures and static
+parameter slots.
 
 Expression results use fixed registers:
 
@@ -277,12 +284,45 @@ minimal TCP listener on port 80:
 curl http://192.168.1.50/
 ```
 
+`examples/w5500_dashboard.badge` adds a compact interactive page with matrix
+pattern and dimmer buttons. It is deliberately minified to fit the badge's
+4096-word flash: about **4031 words**.
+
+## Minecraft 1.8.9 void server
+
+`examples/mc_void.badge` turns the badge and W5500 into a minimal Minecraft
+Java Edition 1.8.9 (protocol 47) server. It answers the server-list ping and
+lets one vanilla 1.8.9 client join a small 16x16 stone platform in an
+otherwise empty void world in creative mode.
+
+- Badge: `192.168.1.50:25565`
+- Client: vanilla 1.8.9 / protocol 47, offline mode
+- One player, no encryption, no compression, no world storage
+- **4089 / 4096 words**, **124 / 208 RAM nibbles**, max call depth 4
+
+Use a 1.8.9 client; modern clients can display the MOTD but cannot join. The
+server never sends an Encryption Request, so it behaves like an offline-mode
+server. The Login Success name is fixed to `Player` to keep the packet in
+flash, and the world is one chunk section with a 16x16 stone platform at
+y=64, full light, and the void biome. There is no other terrain and no
+persistence. Run
+`examples/w5500_probe.badge` first to confirm the W5500 link, then flash
+`examples/mc_void.hex` and connect with a 1.8.9 client.
+
+The protocol path is covered by `tests/test_mc_void.py`, which runs the
+firmware in the emulator against a localhost 1.8.9 protocol client through the
+W5500/TCP model in `tests/w5500_sim.py`. The same status/login/chunk/keepalive
+exchange has also been run against the badge hardware over Ethernet; a real
+vanilla client is the remaining check. See [docs/minecraft.md](docs/minecraft.md)
+for the packet sequence and firmware limits.
+
 ## Library modules
 
 `lib/` contains opt-in BadgeC modules for UART formatting, strings, math,
 two's-complement signed helpers and Q4.4 fixed point, nibble memory and bit
 operations, key helpers, clock/sync helpers, bit-banged SPI, and a minimal
-W5500 Ethernet driver:
+W5500 Ethernet driver. `lib/asm/` contains hand-written assembly modules
+exposed to BadgeC with `extern fn` declarations.
 
 ```c
 import "lib/uart.badge";
@@ -312,6 +352,8 @@ nothing until you use it. See `docs/stdlib.md` and
 - `docs/stdlib.md` — builtins and runtime routines
 - `docs/runtime-abi.md` — BadgeC calling convention and runtime
 - `docs/compiler.md` — compiler internals and optimization roadmap
+- `docs/asm-imports.md` — imported `.asm` modules, `extern fn`, placeholders, and optimizer markers
+- `docs/vscode.md` — VS Code language support and language-server development
 - `docs/testing.md` — test layers and hardware development loop
 - `docs/keys.md` — measured front-panel key codes
 - `docs/toolchain.md` — assembler/emulator usage

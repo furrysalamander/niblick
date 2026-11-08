@@ -13,14 +13,25 @@ call stack is used for GOSUB/RET; tail calls become GOTO.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from . import ast_nodes as ast
+from .asm_link import AsmScan, scan_asm
 from .asm_opt import asm_word_count, optimize_asm, word_sizes
+from .asm_text import (
+    NO_OPTIMIZE,
+    NO_OPTIMIZE_BEGIN,
+    NO_OPTIMIZE_END,
+    PLACEHOLDER_RE,
+    has_file_marker,
+    label_name,
+)
 from .inline import optimize as optimize_program
 from .runtime_linker import (
+    ROUTINE_LABELS,
     link_runtime,
     reachable_labels,
     routine_labels,
@@ -93,6 +104,8 @@ BUILTINS = {
     "delay": VOID,
     "memset": VOID,
     "memcpy": VOID,
+    "spi_tx_fast": VOID,
+    "spi_xfer_fast": CHAR,
 }
 
 
@@ -129,6 +142,8 @@ RUNTIME_ENTRY = {
     "key_just": "__bc_key_just",
     "key_last": "__bc_key_last",
     "delay": "__bc_delay",
+    "spi_tx_fast": "__bc_spi_tx_fast",
+    "spi_xfer_fast": "__bc_spi_xfer_fast",
 }
 
 _COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
@@ -253,6 +268,7 @@ class Compiler:
     ) -> None:
         self.program = program
         self.filename = filename
+        self.declared_functions = {fn.name: fn for fn in program.functions}
         self.strip_runtime = strip_runtime
         self.asm_optimize = asm_optimize
         self.used_runtime: set[str] = set()
@@ -267,8 +283,8 @@ class Compiler:
         self.label_counter = 0
         self.current_function: Optional[FunctionSymbol] = None
         self.loop_stack: list[tuple[str, str]] = []  # (break label, continue label)
-        self.calls: list[tuple[str, str, bool, int]] = []  # caller, callee, tail, line
-        self.runtime_calls: list[tuple[str, str, int]] = []  # caller, runtime entry, line
+        self.calls: list[tuple[str, str, bool, int, str]] = []  # caller, callee, tail, line, file
+        self.runtime_calls: list[tuple[str, str, int, str]] = []  # caller, runtime entry, line, file
         self.function_depths: dict[str, int] = {}
         self.deepest_path: list[str] = []
         self.stack_call_sites: list[dict] = []
@@ -280,6 +296,9 @@ class Compiler:
         self.asm_text = ""
         self.runtime_text = ""
         self.linked_runtime: set[str] = set()
+        self.asm_scans: list[AsmScan] = []
+        self.all_asm_scans: list[AsmScan] = []
+        self.emitted_asm_sources: list[ast.AsmSource] = []
 
     # ------------------------------------------------------------------
     # Entry point
@@ -296,11 +315,17 @@ class Compiler:
         self.prepare_functions()
         if "main" not in self.functions:
             raise BadgeCompileError(f"{self.filename}: no main() function found")
-
         self.emit("; BadgeC generated assembly")
         self.emit("GOTO fn_main")
         for fn in self.program.functions:
             self.compile_function(self.functions[fn.name])
+        self.emit("")
+        self.all_asm_scans = self.scan_asm_sources(self.program.asm_sources)
+        self.emitted_asm_sources = self.kept_asm_sources()
+        self.asm_scans = self.scan_asm_sources(self.emitted_asm_sources)
+        self.apply_asm_scans()
+        self.validate_extern_labels()
+        self.emit_asm_sources(self.emitted_asm_sources)
         self.emit("")
         runtime_full = Path(__file__).with_name("runtime").joinpath("runtime.asm").read_text()
         self.runtime_text = runtime_full
@@ -323,6 +348,30 @@ class Compiler:
         self.asm_text = asm
         return asm
 
+    def check(self, prune: bool = False) -> None:
+        """Run semantic checks without requiring ``main`` or emitting output.
+
+        This is the analysis entry point used by the editor.  When ``prune``
+        is true and the program has a ``main`` function, dead-declaration
+        elimination runs first so the check matches a real build.  Library
+        analysis can leave it disabled to inspect every declaration.
+
+        The caller should pass a copy of the program when pruning, because
+        dead-declaration elimination mutates the AST.
+        """
+
+        if self.program.imports:
+            raise BadgeCompileError(
+                f"{self.filename}: imports must be resolved first; "
+                "load the program with badgec.loader.load_program()"
+            )
+        if prune and "main" in {fn.name for fn in self.program.functions}:
+            optimize_program(self.program)
+        self.prepare_globals()
+        self.prepare_functions()
+        for fn in self.program.functions:
+            self.compile_function(self.functions[fn.name])
+
     # ------------------------------------------------------------------
     # Declarations and allocation
     # ------------------------------------------------------------------
@@ -336,12 +385,23 @@ class Compiler:
         self.label_counter += 1
         return f"{hint}{self.label_counter}"
 
-    def use_runtime(self, entry: str, line: int) -> None:
+    def use_runtime(
+        self,
+        entry: str,
+        line: int,
+        caller: Optional[str] = None,
+        filename: Optional[str] = None,
+    ) -> None:
         """Record a runtime helper call for linking and stack reporting."""
 
         self.used_runtime.add(entry)
-        if self.current_function is not None:
-            self.runtime_calls.append((self.current_function.name, entry, line))
+        caller_name = caller
+        if caller_name is None and self.current_function is not None:
+            caller_name = self.current_function.name
+        if caller_name is not None:
+            self.runtime_calls.append(
+                (caller_name, entry, line, filename or self.filename)
+            )
 
     @staticmethod
     def _width_mask(typ: Type) -> int:
@@ -639,6 +699,10 @@ class Compiler:
                 raise BadgeCompileError(
                     f"{location(self.filename, decl.line)}: main() must not take parameters"
                 )
+            if decl.name == "main" and decl.is_extern:
+                raise BadgeCompileError(
+                    f"{location(self.filename, decl.line)}: main() cannot be extern"
+                )
             fn = FunctionSymbol(
                 name=decl.name,
                 decl=decl,
@@ -660,10 +724,356 @@ class Compiler:
             self.functions[decl.name] = fn
 
     # ------------------------------------------------------------------
+    # Imported assembly
+    # ------------------------------------------------------------------
+
+    def scan_asm_sources(self, sources: list[ast.AsmSource]) -> list[AsmScan]:
+        return [scan_asm(source.text, source.path) for source in sources]
+
+    def kept_asm_sources(self) -> list[ast.AsmSource]:
+        """Drop sections for asm entry points that are no longer reachable.
+
+        A source file without any ``fn_*`` label (for example, a table-only
+        module) is kept whole.  Otherwise the preamble before the first
+        entry point is kept, and each ``fn_*`` section is kept only when its
+        function survived dead-declaration elimination.  Dropped sections
+        become blank lines so diagnostics keep the original file line
+        numbers.
+        """
+
+        reachable = set(self.functions)
+        kept: list[ast.AsmSource] = []
+
+        for source in self.program.asm_sources:
+            lines = source.text.splitlines()
+            keep = [True] * len(lines)
+            first_section: int | None = None
+            current_keep = True
+            kept_sections = False
+
+            for index, line in enumerate(lines):
+                label = label_name(line)
+                if label is not None and label.startswith("fn_"):
+                    if first_section is None:
+                        first_section = index
+                    current_keep = label[3:] in reachable
+                    kept_sections = kept_sections or current_keep
+                keep[index] = current_keep
+
+            preamble_end = first_section if first_section is not None else len(lines)
+            has_preamble_code = any(
+                line.strip() and not line.lstrip().startswith(";")
+                for line in lines[:preamble_end]
+            )
+            if first_section is not None and not kept_sections and not has_preamble_code:
+                continue
+
+            kept.append(
+                ast.AsmSource(
+                    source.path,
+                    "\n".join(
+                        line if keep[index] else ""
+                        for index, line in enumerate(lines)
+                    ),
+                )
+            )
+
+        return kept
+
+    def apply_asm_scans(self) -> None:
+        """Turn assembly calls into linker and call-graph information."""
+
+        for scan in self.asm_scans:
+            for call in scan.runtime_calls:
+                if call.target_label not in ROUTINE_LABELS:
+                    raise BadgeCompileError(
+                        f"{location(scan.path, call.line)}: unknown runtime routine "
+                        f"{call.target_label!r}"
+                    )
+                caller = (
+                    call.caller_label[3:]
+                    if call.caller_label.startswith("fn_")
+                    else call.caller_label
+                )
+                self.use_runtime(
+                    call.target_label,
+                    call.line,
+                    caller=caller,
+                    filename=scan.path,
+                )
+
+            for call in scan.calls:
+                caller = (
+                    call.caller_label[3:]
+                    if call.caller_label.startswith("fn_")
+                    else call.caller_label
+                )
+                callee = (
+                    call.target_label[3:]
+                    if call.target_label.startswith("fn_")
+                    else call.target_label
+                )
+                if caller not in self.functions:
+                    raise BadgeCompileError(
+                        f"{location(scan.path, call.line)}: call from undeclared "
+                        f"assembly routine {call.caller_label!r}"
+                    )
+                if callee not in self.functions:
+                    raise BadgeCompileError(
+                        f"{location(scan.path, call.line)}: call to undeclared "
+                        f"function {call.target_label!r}; add an extern fn declaration"
+                    )
+                self.calls.append(
+                    (caller, callee, call.tail, call.line, scan.path)
+                )
+
+    def validate_extern_labels(self) -> None:
+        """Check that every asm entry point has a declaration, and vice versa."""
+
+        locations: dict[str, tuple[str, int]] = {}
+        for scan in self.all_asm_scans:
+            for label, line in scan.labels.items():
+                if label in locations:
+                    path, first_line = locations[label]
+                    raise BadgeCompileError(
+                        f"{location(scan.path, line)}: duplicate assembly label "
+                        f"{label!r} (already defined at {location(path, first_line)})"
+                    )
+                locations[label] = (scan.path, line)
+
+        for label, (path, line) in locations.items():
+            if label in {"__bc_flash_data"} or any(
+                item.label == label for item in self.flash
+            ):
+                raise BadgeCompileError(
+                    f"{location(path, line)}: assembly label {label!r} collides with "
+                    "compiler-generated flash data"
+                )
+            if not label.startswith("fn_"):
+                continue
+            name = label[3:]
+            declaration = self.declared_functions.get(name)
+            if declaration is None:
+                raise BadgeCompileError(
+                    f"{location(path, line)}: assembly defines {label!r} but there is "
+                    f"no extern fn {name}() declaration"
+                )
+            if not declaration.is_extern:
+                raise BadgeCompileError(
+                    f"{location(path, line)}: assembly redefines BadgeC function "
+                    f"{name!r}"
+                )
+
+        for name, fn in self.functions.items():
+            if fn.decl.is_extern and fn.label not in locations:
+                raise BadgeCompileError(
+                    f"{location(self.filename, fn.decl.line)}: extern function "
+                    f"{name!r} has no {fn.label}: definition in imported assembly"
+                )
+
+    def _asm_scope(self, function_label: str) -> Scope:
+        scope = Scope()
+        fn = self.functions.get(function_label[3:])
+        if fn is not None:
+            for param in fn.params:
+                if param.name not in scope.symbols:
+                    scope.define(param, self.filename)
+        return scope
+
+    def _asm_symbol(
+        self, name: str, scope: Scope, path: str, line: int
+    ) -> VarSymbol:
+        if "." in name:
+            function_name, param_name = name.split(".", 1)
+            fn = self.functions.get(function_name)
+            if fn is None:
+                raise BadgeCompileError(
+                    f"{location(path, line)}: unknown function {function_name!r} "
+                    f"in asm placeholder"
+                )
+            for param in fn.params:
+                if param.name == param_name:
+                    return param
+            raise BadgeCompileError(
+                f"{location(path, line)}: function {function_name!r} has no parameter "
+                f"{param_name!r}"
+            )
+
+        symbol = scope.lookup(name)
+        if symbol is None:
+            symbol = self.globals.get(name)
+        if symbol is None:
+            raise BadgeCompileError(
+                f"{location(path, line)}: unknown asm placeholder {name!r}"
+            )
+        return symbol
+
+    def _asm_symbol_value(
+        self, symbol: VarSymbol, path: str, line: int
+    ) -> int | str:
+        if symbol.const_value is not None:
+            return symbol.const_value & self._width_mask(symbol.type)
+        if symbol.flash_label is not None:
+            return symbol.flash_label
+        if symbol.address is not None:
+            return symbol.address
+        raise BadgeCompileError(
+            f"{location(path, line)}: {symbol.name!r} has no address for inline assembly"
+        )
+
+    _ASM_OFFSET_RE = re.compile(
+        r"^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"
+        r"\s*([+-])\s*(0[xX][0-9A-Fa-f]+|\d+)$"
+    )
+    _ASM_QUALIFIED_RE = re.compile(
+        r"^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$"
+    )
+
+    def resolve_asm_placeholder(
+        self, text: str, scope: Scope, path: str, line: int
+    ) -> str:
+        text = text.strip()
+        address_of = text.startswith("&")
+        if address_of:
+            text = text[1:].strip()
+
+        if address_of:
+            if not (
+                re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text)
+                or self._ASM_QUALIFIED_RE.fullmatch(text)
+            ):
+                raise BadgeCompileError(
+                    f"{location(path, line)}: '&' in an asm placeholder requires "
+                    "a variable name"
+                )
+            symbol = self._asm_symbol(text, scope, path, line)
+            if symbol.const_value is not None and symbol.address is None and symbol.flash_label is None:
+                raise BadgeCompileError(
+                    f"{location(path, line)}: cannot take the address of const "
+                    f"{symbol.name!r}"
+                )
+            value = self._asm_symbol_value(symbol, path, line)
+            return value if isinstance(value, str) else f"0x{value:X}"
+
+        offset_match = self._ASM_OFFSET_RE.match(text)
+        if offset_match is not None:
+            base_name, operator, amount_text = offset_match.groups()
+            symbol = self._asm_symbol(base_name, scope, path, line)
+            base = self._asm_symbol_value(symbol, path, line)
+            amount = int(amount_text, 0)
+            if operator == "-":
+                amount = -amount
+            if isinstance(base, int):
+                value = base + amount
+                if value < 0:
+                    raise BadgeCompileError(
+                        f"{location(path, line)}: asm address expression "
+                        f"{text!r} is negative"
+                    )
+                return f"0x{value:X}"
+            if amount:
+                raise BadgeCompileError(
+                    f"{location(path, line)}: cannot add an offset to flash label "
+                    f"{base!r} in an asm placeholder"
+                )
+            return base
+
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", text) or self._ASM_QUALIFIED_RE.fullmatch(text):
+            symbol = self._asm_symbol(text, scope, path, line)
+            value = self._asm_symbol_value(symbol, path, line)
+            return value if isinstance(value, str) else f"0x{value:X}"
+
+        try:
+            number = int(text, 0)
+        except ValueError:
+            number = None
+        if number is not None:
+            if number < 0:
+                return str(number)
+            return f"0x{number:X}"
+
+        # Fall back to the normal constant-expression evaluator for things
+        # like ``CONST << 2`` or ``(char)0x123``.
+        from .lexer import tokenize
+        from .parser import Parser
+
+        try:
+            parser = Parser(tokenize(text, path), path)
+            expr = parser.parse_expression()
+            if not parser.at_end():
+                raise ValueError("trailing tokens")
+        except Exception as exc:
+            raise BadgeCompileError(
+                f"{location(path, line)}: invalid asm placeholder {text!r}: {exc}"
+            ) from exc
+
+        folded = self.eval_const(expr, scope)
+        if folded is None:
+            raise BadgeCompileError(
+                f"{location(path, line)}: asm placeholder {text!r} is not a "
+                "compile-time constant or variable address"
+            )
+        value, _ = folded
+        return f"0x{value:X}"
+
+    def _substitute_placeholders(
+        self, line: str, scope: Scope, path: str, line_number: int
+    ) -> str:
+        comment_index = line.find(";")
+        if comment_index < 0:
+            code = line
+            comment = ""
+        else:
+            code = line[:comment_index]
+            comment = line[comment_index:]
+
+        if "${" not in code:
+            return line
+
+        def replace(match: re.Match[str]) -> str:
+            return self.resolve_asm_placeholder(
+                match.group(1), scope, path, line_number
+            )
+
+        return PLACEHOLDER_RE.sub(replace, code) + comment
+
+    def emit_asm_sources(self, sources: list[ast.AsmSource]) -> None:
+        for source in sources:
+            file_opaque = has_file_marker(source.text, NO_OPTIMIZE)
+            self.emit(f"; imported assembly: {source.path}")
+            if file_opaque:
+                self.emit(NO_OPTIMIZE_BEGIN)
+
+            scope = Scope()
+            for line_number, line in enumerate(source.text.splitlines(), 1):
+                if file_opaque and line.strip().lower() == NO_OPTIMIZE.lower():
+                    continue
+
+                label = label_name(line)
+                if label is not None:
+                    if label.startswith("fn_"):
+                        scope = self._asm_scope(label)
+                    elif not label.startswith("."):
+                        scope = Scope()
+
+                self.emit(
+                    self._substitute_placeholders(
+                        line, scope, source.path, line_number
+                    )
+                )
+
+            if file_opaque:
+                self.emit(NO_OPTIMIZE_END)
+            self.emit("")
+
+    # ------------------------------------------------------------------
     # Function code generation
     # ------------------------------------------------------------------
 
     def compile_function(self, fn: FunctionSymbol) -> None:
+        if fn.decl.is_extern:
+            # The body and fn_* label come from an imported .asm file.
+            return
         self.current_function = fn
         self.loop_stack = []
         scope = Scope()
@@ -1901,7 +2311,9 @@ class Compiler:
             self.store_symbol(param, arg.line)
 
         self.emit(f"GOSUB {fn.label}")
-        self.calls.append((self.current_function.name, fn.name, False, expr.line))
+        self.calls.append(
+            (self.current_function.name, fn.name, False, expr.line, self.filename)
+        )
         return fn.decl.return_type
 
     def compile_tail_call(self, expr: ast.Call, scope: Scope) -> Type:
@@ -1930,7 +2342,9 @@ class Compiler:
             self.store_symbol(param, expr.line)
 
         self.emit(f"GOTO {fn.label}")
-        self.calls.append((self.current_function.name, fn.name, True, expr.line))
+        self.calls.append(
+            (self.current_function.name, fn.name, True, expr.line, self.filename)
+        )
         self.temp.reset(mark)
         return fn.decl.return_type
 
@@ -2066,6 +2480,20 @@ class Compiler:
             self.emit(f"MOV R5, {addr & 0xF}")
             self.emit("GOSUB __bc_uart_write")
             return VOID
+
+        if name == "spi_tx_fast":
+            self.require_args(expr, 1)
+            typ = self.compile_expr(expr.args[0], scope)
+            self.coerce(typ, CHAR, expr.line)
+            self.emit("GOSUB __bc_spi_tx_fast")
+            return VOID
+
+        if name == "spi_xfer_fast":
+            self.require_args(expr, 1)
+            typ = self.compile_expr(expr.args[0], scope)
+            self.coerce(typ, CHAR, expr.line)
+            self.emit("GOSUB __bc_spi_xfer_fast")
+            return CHAR
 
         if name == "gpio_read":
             self.require_args(expr, 0)
@@ -3292,12 +3720,8 @@ class Compiler:
                 for value in item.values:
                     self.emit(f"NIBBLE 0x{value & 0xF:X}")
             elif item.type is CHAR:
-                # Emit two NIBBLE directives per byte instead of BYTE.
-                # The upstream assembler miscounts BYTE/ASCII data when a
-                # later label is resolved, but NIBBLE is one word per line.
                 for value in item.values:
-                    self.emit(f"NIBBLE 0x{value & 0xF:X}")
-                    self.emit(f"NIBBLE 0x{(value >> 4) & 0xF:X}")
+                    self.emit(f"BYTE 0x{value & 0xFF:02X}")
             elif item.type is WORD:
                 for value in item.values:
                     for index in range(4):
@@ -3315,34 +3739,34 @@ class Compiler:
     # ------------------------------------------------------------------
 
     def validate_call_graph(self) -> None:
-        edges: dict[str, list[tuple[str, bool, int]]] = {}
-        for caller, callee, tail, line in self.calls:
-            edges.setdefault(caller, []).append((callee, tail, line))
+        edges: dict[str, list[tuple[str, bool, int, str]]] = {}
+        for caller, callee, tail, line, filename in self.calls:
+            edges.setdefault(caller, []).append((callee, tail, line, filename))
 
         on_stack: set[str] = set()
         visited: set[str] = set()
-        path: list[tuple[str, str, bool, int]] = []
+        path: list[tuple[str, str, bool, int, str]] = []
 
         def visit(node: str) -> None:
             if node in visited:
                 return
             on_stack.add(node)
-            for callee, tail, line in edges.get(node, []):
+            for callee, tail, line, filename in edges.get(node, []):
                 if callee in on_stack:
                     # Locate the start of the cycle on the path.
                     start = 0
-                    for index, (src, dst, _, _) in enumerate(path):
+                    for index, (src, dst, _, _, _) in enumerate(path):
                         if src == callee or dst == callee:
                             start = index
                             break
-                    cycle = path[start:] + [(node, callee, tail, line)]
-                    if not all(edge_tail for _, _, edge_tail, _ in cycle):
+                    cycle = path[start:] + [(node, callee, tail, line, filename)]
+                    if not all(edge_tail for _, _, edge_tail, _, _ in cycle):
                         raise BadgeCompileError(
-                            f"{location(self.filename, line)}: non-tail recursion involving "
+                            f"{location(filename, line)}: non-tail recursion involving "
                             f"{callee!r} is not supported; rewrite it as a loop or a tail call"
                         )
                 else:
-                    path.append((node, callee, tail, line))
+                    path.append((node, callee, tail, line, filename))
                     visit(callee)
                     path.pop()
             on_stack.remove(node)
@@ -3361,7 +3785,7 @@ class Compiler:
                 return 0
             visiting.add(node)
             best = 0
-            for callee, tail, _ in edges.get(node, []):
+            for callee, tail, _, _ in edges.get(node, []):
                 child = depth(callee, visiting)
                 if not tail:
                     child += 1
@@ -3383,16 +3807,16 @@ class Compiler:
         # calls do not add a stack entry, so a tail-call cycle terminates
         # because the candidate depth stops increasing.
         self.function_depths = {"main": 0}
-        parents: dict[str, tuple[str, bool, int]] = {}
+        parents: dict[str, tuple[str, bool, int, str]] = {}
         work = ["main"]
         while work:
             caller = work.pop()
             base = self.function_depths[caller]
-            for callee, tail, line in edges.get(caller, []):
+            for callee, tail, line, filename in edges.get(caller, []):
                 candidate = base + (0 if tail else 1)
                 if candidate > self.function_depths.get(callee, -1):
                     self.function_depths[callee] = candidate
-                    parents[callee] = (caller, tail, line)
+                    parents[callee] = (caller, tail, line, filename)
                     work.append(callee)
 
         if self.function_depths:
@@ -3410,7 +3834,7 @@ class Compiler:
         self.runtime_costs = runtime_stack_costs(self.runtime_text)
         self.stack_call_sites = []
         self.stack_warnings = []
-        for caller, entry, line in self.runtime_calls:
+        for caller, entry, line, filename in self.runtime_calls:
             cost = self.runtime_costs.get(entry, 1)
             user_depth = self.function_depths.get(caller, 0)
             total = user_depth + cost
@@ -3419,6 +3843,7 @@ class Compiler:
                     "caller": caller,
                     "entry": entry,
                     "line": line,
+                    "file": filename,
                     "user_depth": user_depth,
                     "cost": cost,
                     "total": total,
@@ -3426,7 +3851,7 @@ class Compiler:
             )
             if total > 5:
                 self.stack_warnings.append(
-                    f"{location(self.filename, line)}: {caller} calls {entry} at user "
+                    f"{location(filename, line)}: {caller} calls {entry} at user "
                     f"depth {user_depth}; runtime cost {cost} needs {total} stack "
                     f"levels (the hardware stack has 5)"
                 )
@@ -3503,6 +3928,7 @@ class Compiler:
                     "label": fn.label,
                     "return_type": str(fn.decl.return_type),
                     "words": sizes["functions"].get(name, 0),
+                    "extern": fn.decl.is_extern,
                     "params": [
                         {
                             "name": param.name,
@@ -3530,8 +3956,14 @@ class Compiler:
             "functions": functions_data,
             "flash": flash_data,
             "calls": [
-                {"caller": caller, "callee": callee, "tail": tail, "line": line}
-                for caller, callee, tail, line in self.calls
+                {
+                    "caller": caller,
+                    "callee": callee,
+                    "tail": tail,
+                    "line": line,
+                    "file": filename,
+                }
+                for caller, callee, tail, line, filename in self.calls
             ],
             "runtime": sorted(self.used_runtime),
             "runtime_linked": sorted(self.linked_runtime),

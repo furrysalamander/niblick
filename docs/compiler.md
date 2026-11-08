@@ -4,11 +4,12 @@
 
 ```text
 .badge source
-  -> badgec/loader.py       resolve imports into one AST
+  -> badgec/loader.py       resolve imports; collect .asm modules
   -> badgec/lexer.py        tokens
   -> badgec/parser.py       AST (badgec/ast_nodes.py)
   -> badgec/inline.py       inline tiny functions, remove dead declarations
   -> badgec/compiler.py     semantic checks, allocation, code generation
+  -> badgec/asm_link.py     scan imported assembly for calls and symbols
   -> badgec/asm_opt.py      peepholes, copy propagation, branch relaxation
   -> .asm
   -> vendor assembler       .hex
@@ -68,16 +69,27 @@ to the repository root and any `BADGEC_PATH` entries. Each file is parsed
 once, cycles are rejected, and the declarations are merged into a single
 `ast.Program`.
 
+`import "lib/asm/w5500.asm";` imports assembly instead. The file is read and
+kept as text on the program; it is not parsed as BadgeC. Assembly modules
+declare their entry points with `extern fn ...;` and are scanned for labels,
+`GOSUB`/`GOTO` targets, placeholders, and runtime calls before linking. See
+[asm-imports.md](asm-imports.md).
+
 Dead-declaration elimination runs after inlining:
 
 - functions unreachable from `main` (or a kept global initializer) are
   removed;
 - globals that are not referenced by reachable code and whose initializer has
-  no calls are removed, including unreferenced const flash tables.
+  no calls are removed, including unreferenced const flash tables;
+- functions and globals referenced only by imported assembly placeholders or
+  `fn_*` calls are kept;
+- an imported assembly `fn_*` section whose extern function is unreachable is
+  stripped, and its parameter slots are not allocated.
 
 This is what makes importing a module free when only part of it is used.
-Error locations inside imported files currently report the entry file's
-name, because AST nodes carry a line but not a filename.
+Error locations inside imported files report that file's path and line for
+`.`asm` modules; `.badge` AST nodes still carry a line but not a filename, so
+errors in imported BadgeC report the entry file's name.
 
 ## Calls, tail calls, and recursion
 
@@ -173,6 +185,9 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   initializers.
 - Runtime stripping: only the `__bc_*` routines reachable from used builtins
   are emitted.
+- Imported `.asm` modules with `extern fn` declarations, scoped `${...}`
+  symbol placeholders, call-graph/runtime-linker scanning, and per-file or
+  per-region `; @badgec: no-optimize` markers.
 - Peephole removal of redundant `MOV`s.
 - Basic-block copy propagation: a `MOV Rd,Rs` is dropped when `Rd` already
   holds `Rs`'s value.
@@ -268,3 +283,7 @@ unchanged.
 User-facing errors carry `file:line:column` where possible. The CLI catches
 `BadgeError` and prints a single line without a traceback. Internal
 exceptions are not hidden; they indicate a compiler bug.
+
+Editor tooling reuses the front end through `badgec/analysis.py`; the LSP
+server in `badgec/lsp.py` exposes diagnostics and document symbols. See
+[vscode.md](vscode.md).

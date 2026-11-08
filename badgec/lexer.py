@@ -26,6 +26,7 @@ KEYWORDS = {
     "true",
     "false",
     "import",
+    "extern",
 }
 
 # Longest operators first.

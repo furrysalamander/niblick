@@ -18,8 +18,14 @@ and can exercise UART transmit/receive without hardware.
 | Emulator semantics | `tests/test_emulator.py` | All 31 instructions, flags, memory, stack, jumps, flash tables |
 | Lexer/parser | `tests/test_parser.py` | Tokens, strings, literals, for-update, syntax errors |
 | End-to-end compiler | `tests/test_compiler.py` | Source -> asm -> hex -> emulator behavior |
+| Imported assembly | `tests/test_asm_imports.py` | `.asm` imports, `extern fn`, placeholders, runtime linking, optimizer markers |
+| Editor analysis | `tests/test_analysis.py`, `tests/test_lsp.py` | Source positions, loader overrides, diagnostics, document symbols, LSP handlers |
+| W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | Fast SPI runtime helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
 | Examples | `tests/test_examples.py` | Every checked-in example still compiles and fits |
+
+The LSP tests are skipped when `pygls` is not installed. Install the optional
+extra with `pip install -e ".[lsp]"` to run them.
 
 ## Emulator model
 

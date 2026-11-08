@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 
+from .asm_text import NO_OPTIMIZE, NO_OPTIMIZE_BEGIN, NO_OPTIMIZE_END
+
 _LABEL_RE = re.compile(r"^[A-Za-z_.][A-Za-z0-9_.]*:\s*$")
 _SKIP_RE = re.compile(r"^SKIP\s+([A-Za-z]+)\s*,\s*(\d+)\s*$", re.IGNORECASE)
 _MOV_RE = re.compile(r"^MOV\s+([A-Za-z0-9]+)\s*,\s*([A-Za-z0-9]+)\s*$", re.IGNORECASE)
@@ -54,6 +56,38 @@ def _is_label(line: str) -> bool:
     return bool(_LABEL_RE.match(line.strip()))
 
 
+def _opaque_mask(lines: list[str]) -> list[bool]:
+    """Mark lines inside a ``; @badgec: no-optimize`` region."""
+
+    mask = [False] * len(lines)
+    depth = 0
+    file_opaque = False
+    begin = NO_OPTIMIZE_BEGIN.lower()
+    end = NO_OPTIMIZE_END.lower()
+    file_marker = NO_OPTIMIZE.lower()
+    for index, line in enumerate(lines):
+        stripped = line.strip().lower()
+        if stripped == file_marker:
+            file_opaque = True
+            mask[index] = True
+            continue
+        if file_opaque:
+            mask[index] = True
+            continue
+        if stripped == begin:
+            depth += 1
+            mask[index] = True
+            continue
+        if stripped == end:
+            mask[index] = True
+            if depth > 0:
+                depth -= 1
+            continue
+        if depth > 0:
+            mask[index] = True
+    return mask
+
+
 def _mov(line: str):
     match = _MOV_RE.match(_code(line))
     if not match:
@@ -63,7 +97,11 @@ def _mov(line: str):
 
 def peephole(lines: list[str]) -> list[str]:
     out: list[str] = []
-    for line in lines:
+    opaque = _opaque_mask(lines)
+    for index, line in enumerate(lines):
+        if opaque[index]:
+            out.append(line)
+            continue
         code = _code(line)
         if not code:
             out.append(line)
@@ -110,6 +148,7 @@ def copy_propagate(lines: list[str]) -> list[str]:
     known: dict[str, int] = {}
     next_value = 0
     out: list[str] = []
+    opaque = _opaque_mask(lines)
 
     def value_of(reg: str) -> int:
         # At a block boundary a register has an arbitrary value.  Give it a
@@ -126,7 +165,11 @@ def copy_propagate(lines: list[str]) -> list[str]:
         next_value += 1
         known[reg] = next_value
 
-    for line in lines:
+    for index, line in enumerate(lines):
+        if opaque[index]:
+            known.clear()
+            out.append(line)
+            continue
         stripped = line.strip()
         if _is_label(stripped):
             known.clear()
@@ -320,6 +363,7 @@ def dead_register_writes(lines: list[str]) -> list[str]:
     """Remove register writes whose value is never read in the same block."""
 
     protected = _skip_protected_lines(lines)
+    opaque = _opaque_mask(lines)
     remove: set[int] = set()
     segment: list[int] = []
 
@@ -345,6 +389,10 @@ def dead_register_writes(lines: list[str]) -> list[str]:
             live = (live - writes) | reads
 
     for index, line in enumerate(lines):
+        if opaque[index]:
+            flush()
+            segment = []
+            continue
         code = _code(line)
         barrier = (
             not code
@@ -367,6 +415,12 @@ def _word_size(line: str) -> int:
     if not code or _is_label(line):
         return 0
     upper = code.upper()
+    parts = upper.split(None, 1)
+    op = parts[0]
+    args = parts[1] if len(parts) > 1 else ""
+
+    if re.match(r"^[A-Za-z_.][A-Za-z0-9_.]*\s+EQU\b", upper):
+        return 0
     if upper.startswith("GOTO ") or upper.startswith("GOSUB "):
         return 2
     if upper.startswith("BYTE "):
@@ -377,6 +431,10 @@ def _word_size(line: str) -> int:
         # Count characters between the quotes.
         match = re.search(r'"(.*)"', code)
         return 2 * len(match.group(1)) if match else 2
+    if op == "CPL":
+        return 1 if len([item for item in args.split(",") if item.strip()]) == 1 else 2
+    if op in ("NEG", "SL", "RLC", "LSR"):
+        return 2
     return 1
 
 
@@ -425,10 +483,14 @@ def _addresses(lines: list[str]) -> dict[str, int]:
 
 def _relax_once(lines: list[str]) -> tuple[list[str], bool]:
     addresses = _addresses(lines)
+    opaque = _opaque_mask(lines)
     changed = False
     out: list[str] = []
 
     for index, line in enumerate(lines):
+        if opaque[index]:
+            out.append(line)
+            continue
         code = _code(line)
         upper = code.upper()
         if not upper.startswith("GOTO "):
@@ -452,7 +514,7 @@ def _relax_once(lines: list[str]) -> tuple[list[str], bool]:
         skip_index = len(out) - 1
         while skip_index >= 0 and not _code(out[skip_index]):
             skip_index -= 1
-        if skip_index >= 0 and not _is_label(out[skip_index]):
+        if skip_index >= 0 and not _is_label(out[skip_index]) and not opaque[skip_index]:
             skip_match = _SKIP_RE.match(_code(out[skip_index]))
             if skip_match:
                 count = int(skip_match.group(2))

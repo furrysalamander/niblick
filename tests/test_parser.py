@@ -54,3 +54,23 @@ def test_parser_accepts_c_style_function_definition() -> None:
     program = parse("nibble add(nibble a, nibble b) { return a + b; }", "test.badge")
     assert program.functions[0].name == "add"
     assert program.functions[0].return_type.name == "nibble"
+
+
+def test_parser_accepts_extern_function_declarations() -> None:
+    program = parse(
+        """
+        extern fn char convert(char value);
+        extern word read16(nibble addr);
+        fn main() { }
+        """,
+        "test.badge",
+    )
+    convert, read16, main = program.functions
+    assert convert.name == "convert"
+    assert convert.is_extern
+    assert convert.body.statements == []
+    assert convert.params[0].name == "value"
+    assert convert.return_type.name == "char"
+    assert read16.is_extern
+    assert read16.return_type.name == "word"
+    assert not main.is_extern

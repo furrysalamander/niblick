@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Optional
 
 from . import ast_nodes as ast
@@ -83,11 +84,14 @@ class Parser:
         return self.advance()
 
     def expect_ident(self) -> str:
+        return str(self.expect_ident_token().value)
+
+    def expect_ident_token(self) -> Token:
         token = self.current()
         if token.kind not in ("ident", "keyword"):
             raise self.error(f"expected identifier, got {token.value!r}")
         self.advance()
-        return str(token.value)
+        return token
 
     def expect_type(self) -> Type:
         token = self.current()
@@ -107,16 +111,19 @@ class Parser:
         program = ast.Program()
         while not self.at_end():
             if self.check("import", "keyword"):
-                line = self.current().line
                 self.advance()
                 path = self.current()
                 if path.kind != "string":
                     raise self.error(f"expected a quoted import path, got {path.value!r}")
                 self.advance()
                 self.expect(";")
-                program.imports.append(ast.ImportDecl(str(path.value), line=line))
+                program.imports.append(
+                    ast.ImportDecl(str(path.value), line=path.line, column=path.column)
+                )
             elif self.check("fn", "keyword"):
                 program.functions.append(self.parse_function())
+            elif self.check("extern", "keyword"):
+                program.functions.append(self.parse_extern_function())
             elif self.check("const", "keyword"):
                 program.globals.append(self.parse_const_global())
             elif self.at_type():
@@ -127,39 +134,97 @@ class Parser:
                     program.globals.append(self.parse_global())
             else:
                 raise self.error(f"unexpected top-level token {self.current().value!r}")
+        _annotate_program(program, self.filename)
         return program
 
     def parse_function(self) -> ast.FunctionDecl:
-        line = self.current().line
+        start = self.current()
+        line = start.line
+        column = start.column
         if self.match("fn", "keyword"):
             if self.at_type():
                 return_type = self.expect_type()
             else:
                 return_type = type_from_name("void")
-            name = self.expect_ident()
+            name_token = self.expect_ident_token()
         else:
             return_type = self.expect_type()
-            name = self.expect_ident()
+            name_token = self.expect_ident_token()
 
+        params = self.parse_params()
+        body = self.parse_block()
+        return ast.FunctionDecl(
+            str(name_token.value),
+            return_type,
+            params,
+            body,
+            line=line,
+            column=column,
+            name_line=name_token.line,
+            name_column=name_token.column,
+        )
+
+    def parse_extern_function(self) -> ast.FunctionDecl:
+        """Parse ``extern fn [type] name(params);``.
+
+        The implementation lives in an imported .asm file and must define a
+        ``fn_name:`` entry point.
+        """
+
+        start = self.expect("extern", "keyword")
+        line = start.line
+        column = start.column
+        if self.match("fn", "keyword"):
+            if self.at_type():
+                return_type = self.expect_type()
+            else:
+                return_type = type_from_name("void")
+            name_token = self.expect_ident_token()
+        else:
+            return_type = self.expect_type()
+            name_token = self.expect_ident_token()
+
+        params = self.parse_params()
+        self.expect(";")
+        return ast.FunctionDecl(
+            str(name_token.value),
+            return_type,
+            params,
+            ast.Block(line=line, column=column),
+            line=line,
+            column=column,
+            name_line=name_token.line,
+            name_column=name_token.column,
+            is_extern=True,
+        )
+
+    def parse_params(self) -> list[ast.Param]:
         self.expect("(")
         params: list[ast.Param] = []
         if not self.check(")"):
             while True:
-                param_line = self.current().line
                 param_type = self.expect_type()
-                param_name = self.expect_ident()
-                params.append(ast.Param(param_name, param_type, line=param_line))
+                param_token = self.expect_ident_token()
+                params.append(
+                    ast.Param(
+                        str(param_token.value),
+                        param_type,
+                        line=param_token.line,
+                        column=param_token.column,
+                    )
+                )
                 if not self.match(","):
                     break
         self.expect(")")
-        body = self.parse_block()
-        return ast.FunctionDecl(name, return_type, params, body, line=line)
+        return params
 
     def parse_const_global(self) -> ast.GlobalDecl:
-        line = self.current().line
         self.expect("const", "keyword")
         type_ = self.expect_type()
-        name = self.expect_ident()
+        name_token = self.expect_ident_token()
+        name = str(name_token.value)
+        line = name_token.line
+        column = name_token.column
 
         if not self.check("["):
             # Scalar constant, e.g. ``const nibble PIN = 1;``.
@@ -172,6 +237,7 @@ class Parser:
                 init=init,
                 is_const=True,
                 line=line,
+                column=column,
             )
 
         self.expect("[")
@@ -218,12 +284,13 @@ class Parser:
             init_string=init_string,
             is_const=True,
             line=line,
+            column=column,
         )
 
     def parse_global(self) -> ast.GlobalDecl:
-        line = self.current().line
         type_ = self.expect_type()
-        name = self.expect_ident()
+        name_token = self.expect_ident_token()
+        name = str(name_token.value)
         array_len: Optional[int] = None
         if self.match("["):
             if not self.check("]"):
@@ -233,7 +300,14 @@ class Parser:
         if self.match("="):
             init = self.parse_expression()
         self.expect(";")
-        return ast.GlobalDecl(name, type_, array_len, init=init, line=line)
+        return ast.GlobalDecl(
+            name,
+            type_,
+            array_len,
+            init=init,
+            line=name_token.line,
+            column=name_token.column,
+        )
 
     def parse_const_int(self) -> int:
         token = self.current()
@@ -247,7 +321,9 @@ class Parser:
     # ------------------------------------------------------------------
 
     def parse_block(self) -> ast.Block:
-        line = self.current().line
+        start = self.current()
+        line = start.line
+        column = start.column
         self.expect("{")
         statements: list[ast.Stmt] = []
         while not self.check("}"):
@@ -255,7 +331,7 @@ class Parser:
                 raise self.error("unterminated block")
             statements.append(self.parse_statement())
         self.expect("}")
-        return ast.Block(statements, line=line)
+        return ast.Block(statements, line=line, column=column)
 
     def parse_statement(self) -> ast.Stmt:
         token = self.current()
@@ -273,22 +349,22 @@ class Parser:
             return self.parse_for()
 
         if self.check("return", "keyword"):
-            line = self.advance().line
+            token = self.advance()
             value = None
             if not self.check(";"):
                 value = self.parse_expression()
             self.expect(";")
-            return ast.Return(value, line=line)
+            return ast.Return(value, line=token.line, column=token.column)
 
         if self.check("break", "keyword"):
-            line = self.advance().line
+            token = self.advance()
             self.expect(";")
-            return ast.Break(line=line)
+            return ast.Break(line=token.line, column=token.column)
 
         if self.check("continue", "keyword"):
-            line = self.advance().line
+            token = self.advance()
             self.expect(";")
-            return ast.Continue(line=line)
+            return ast.Continue(line=token.line, column=token.column)
 
         if self.check("const", "keyword"):
             return self.parse_local_const()
@@ -298,20 +374,21 @@ class Parser:
 
         # Assignment or expression statement.
         line = token.line
+        column = token.column
         expr = self.parse_expression()
         if self.match("="):
             if not isinstance(expr, (ast.Var, ast.Index)):
                 raise self.error("left side of assignment must be a variable or array element")
             value = self.parse_expression()
             self.expect(";")
-            return ast.Assign(expr, value, line=line)
+            return ast.Assign(expr, value, line=line, column=column)
         self.expect(";")
-        return ast.ExprStmt(expr, line=line)
+        return ast.ExprStmt(expr, line=line, column=column)
 
     def parse_local_decl(self) -> ast.VarDecl:
-        line = self.current().line
         type_ = self.expect_type()
-        name = self.expect_ident()
+        name_token = self.expect_ident_token()
+        name = str(name_token.value)
         array_len: Optional[int] = None
         if self.match("["):
             if not self.check("]"):
@@ -321,13 +398,20 @@ class Parser:
         if self.match("="):
             init = self.parse_expression()
         self.expect(";")
-        return ast.VarDecl(name, type_, array_len, init, line=line)
+        return ast.VarDecl(
+            name,
+            type_,
+            array_len,
+            init,
+            line=name_token.line,
+            column=name_token.column,
+        )
 
     def parse_local_const(self) -> ast.VarDecl:
-        line = self.current().line
         self.expect("const", "keyword")
         type_ = self.expect_type()
-        name = self.expect_ident()
+        name_token = self.expect_ident_token()
+        name = str(name_token.value)
         array_len: Optional[int] = None
         if self.match("["):
             if not self.check("]"):
@@ -337,10 +421,18 @@ class Parser:
         if self.match("="):
             init = self.parse_expression()
         self.expect(";")
-        return ast.VarDecl(name, type_, array_len, init, is_const=True, line=line)
+        return ast.VarDecl(
+            name,
+            type_,
+            array_len,
+            init,
+            is_const=True,
+            line=name_token.line,
+            column=name_token.column,
+        )
 
     def parse_if(self) -> ast.If:
-        line = self.expect("if", "keyword").line
+        token = self.expect("if", "keyword")
         self.expect("(")
         condition = self.parse_expression()
         self.expect(")")
@@ -348,18 +440,28 @@ class Parser:
         else_block = None
         if self.match("else", "keyword"):
             else_block = self.parse_statement_as_block()
-        return ast.If(condition, then_block, else_block, line=line)
+        return ast.If(
+            condition,
+            then_block,
+            else_block,
+            line=token.line,
+            column=token.column,
+        )
 
     def parse_while(self) -> ast.While:
-        line = self.expect("while", "keyword").line
+        token = self.expect("while", "keyword")
         self.expect("(")
         condition = self.parse_expression()
         self.expect(")")
         body = self.parse_statement_as_block()
-        return ast.While(condition, body, line=line)
+        return ast.While(
+            condition, body, line=token.line, column=token.column
+        )
 
     def parse_for(self) -> ast.For:
-        line = self.expect("for", "keyword").line
+        token = self.expect("for", "keyword")
+        line = token.line
+        column = token.column
         self.expect("(")
         init: Optional[ast.Stmt] = None
         if not self.check(";"):
@@ -370,9 +472,16 @@ class Parser:
                 if self.match("="):
                     if not isinstance(init_expr, (ast.Var, ast.Index)):
                         raise self.error("left side of for-init must be a variable or array element")
-                    init = ast.Assign(init_expr, self.parse_expression(), line=line)
+                    init = ast.Assign(
+                        init_expr,
+                        self.parse_expression(),
+                        line=init_expr.line,
+                        column=init_expr.column,
+                    )
                 else:
-                    init = ast.ExprStmt(init_expr, line=line)
+                    init = ast.ExprStmt(
+                        init_expr, line=init_expr.line, column=init_expr.column
+                    )
                 self.expect(";")
         else:
             self.expect(";")
@@ -388,18 +497,25 @@ class Parser:
             if self.match("="):
                 if not isinstance(update_expr, (ast.Var, ast.Index)):
                     raise self.error("left side of for-update must be a variable or array element")
-                update = ast.Assign(update_expr, self.parse_expression(), line=line)
+                update = ast.Assign(
+                    update_expr,
+                    self.parse_expression(),
+                    line=update_expr.line,
+                    column=update_expr.column,
+                )
             else:
-                update = ast.ExprStmt(update_expr, line=line)
+                update = ast.ExprStmt(
+                    update_expr, line=update_expr.line, column=update_expr.column
+                )
         self.expect(")")
         body = self.parse_statement_as_block()
-        return ast.For(init, condition, update, body, line=line)
+        return ast.For(init, condition, update, body, line=line, column=column)
 
     def parse_statement_as_block(self) -> ast.Block:
         if self.check("{"):
             return self.parse_block()
         stmt = self.parse_statement()
-        return ast.Block([stmt], line=stmt.line)
+        return ast.Block([stmt], line=stmt.line, column=stmt.column)
 
     # ------------------------------------------------------------------
     # Expressions
@@ -416,7 +532,9 @@ class Parser:
                 break
             op = str(self.advance().value)
             right = self.parse_expression(precedence + 1)
-            left = ast.Binary(op, left, right, line=token.line)
+            left = ast.Binary(
+                op, left, right, line=token.line, column=token.column
+            )
         return left
 
     def parse_unary(self) -> ast.Expr:
@@ -425,8 +543,12 @@ class Parser:
             self.advance()
             operand = self.parse_unary()
             if token.value == "&":
-                return ast.AddressOf(operand, line=token.line)
-            return ast.Unary(str(token.value), operand, line=token.line)
+                return ast.AddressOf(
+                    operand, line=token.line, column=token.column
+                )
+            return ast.Unary(
+                str(token.value), operand, line=token.line, column=token.column
+            )
 
         # (type) expr cast.  A type keyword after '(' cannot start any other
         # expression, so it is unambiguous.
@@ -439,18 +561,27 @@ class Parser:
             self.advance()
             target = self.expect_type()
             self.expect(")")
-            return ast.Cast(target, self.parse_unary(), line=token.line)
+            return ast.Cast(
+                target, self.parse_unary(), line=token.line, column=token.column
+            )
 
         return self.parse_postfix()
 
     def parse_postfix(self) -> ast.Expr:
         expr = self.parse_primary()
         while True:
-            if self.match("["):
+            if self.check("["):
+                bracket = self.advance()
                 index = self.parse_expression()
                 self.expect("]")
-                expr = ast.Index(expr, index, line=expr.line)
-            elif self.match("("):
+                expr = ast.Index(
+                    expr,
+                    index,
+                    line=bracket.line,
+                    column=bracket.column,
+                )
+            elif self.check("("):
+                self.advance()
                 if not isinstance(expr, ast.Var):
                     raise self.error("only named functions can be called")
                 args: list[ast.Expr] = []
@@ -460,7 +591,12 @@ class Parser:
                         if not self.match(","):
                             break
                 self.expect(")")
-                expr = ast.Call(expr.name, args, line=expr.line)
+                expr = ast.Call(
+                    expr.name,
+                    args,
+                    line=expr.line,
+                    column=expr.column,
+                )
             else:
                 break
         return expr
@@ -470,15 +606,21 @@ class Parser:
 
         if token.kind == "number":
             self.advance()
-            return ast.Number(int(token.value), line=token.line)
+            return ast.Number(
+                int(token.value), line=token.line, column=token.column
+            )
 
         if token.kind == "string":
             self.advance()
-            return ast.StringLiteral(str(token.value), line=token.line)
+            return ast.StringLiteral(
+                str(token.value), line=token.line, column=token.column
+            )
 
         if token.kind in ("ident", "keyword"):
             self.advance()
-            return ast.Var(str(token.value), line=token.line)
+            return ast.Var(
+                str(token.value), line=token.line, column=token.column
+            )
 
         if self.match("("):
             expr = self.parse_expression()
@@ -486,6 +628,38 @@ class Parser:
             return expr
 
         raise self.error(f"unexpected token {token.value!r} in expression")
+
+
+_AST_NODE_TYPES = (
+    ast.Expr,
+    ast.Stmt,
+    ast.GlobalDecl,
+    ast.Param,
+    ast.FunctionDecl,
+    ast.ImportDecl,
+)
+
+
+def _annotate_file(node, filename: str) -> None:
+    if isinstance(node, _AST_NODE_TYPES):
+        node.file = filename
+    for field in dataclasses.fields(node):
+        value = getattr(node, field.name)
+        if isinstance(value, _AST_NODE_TYPES):
+            _annotate_file(value, filename)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, _AST_NODE_TYPES):
+                    _annotate_file(item, filename)
+
+
+def _annotate_program(program: ast.Program, filename: str) -> None:
+    for node in program.globals:
+        _annotate_file(node, filename)
+    for node in program.functions:
+        _annotate_file(node, filename)
+    for node in program.imports:
+        _annotate_file(node, filename)
 
 
 def parse(source: str, filename: str = "<input>") -> ast.Program:

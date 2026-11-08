@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from badgec.asm_opt import (
+    asm_word_count,
     copy_propagate,
     dead_register_writes,
     optimize_asm,
@@ -137,3 +138,47 @@ JR -1
 """
     result = "\n".join(relax_branches(source.splitlines()))
     assert "GOTO far" in result
+
+
+def test_word_size_counts_two_word_pseudo_ops() -> None:
+    source = """\
+CPL R0
+CPL R1, R0
+NEG R1, R0
+SL R1, R0
+RLC R1, R0
+LSR R1
+GOTO target
+EQU_VALUE EQU 3
+target:
+"""
+    assert asm_word_count(source) == 13
+
+
+def test_no_optimize_region_is_opaque() -> None:
+    source = """\
+; @badgec: no-optimize-begin
+MOV R1, R1
+GOTO target
+; @badgec: no-optimize-end
+MOV R2, R2
+target:
+JR -1
+"""
+    result = optimize_asm(source)
+    assert "MOV R1, R1" in result
+    assert "GOTO target" in result
+    assert "MOV R2, R2" not in result
+
+
+def test_file_no_optimize_marker_is_opaque() -> None:
+    source = """\
+; @badgec: no-optimize
+MOV R1, R1
+GOTO target
+target:
+JR -1
+"""
+    result = optimize_asm(source)
+    assert "MOV R1, R1" in result
+    assert "GOTO target" in result

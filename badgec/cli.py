@@ -164,8 +164,9 @@ def print_stack(compiler: Compiler) -> None:
     if not compiler.stack_call_sites:
         print("      (none)")
     for site in compiler.stack_call_sites:
+        source = f"{site.get('file', '')}:{site['line']}"
         print(
-            f"      {site['caller']}:{site['line']} -> {site['entry']} "
+            f"      {site['caller']} ({source}) -> {site['entry']} "
             f"(cost {site['cost']}) total {site['total']}/5"
         )
     print("    linked runtime costs:")
@@ -197,9 +198,9 @@ def print_callgraph(compiler: Compiler) -> None:
     print("  call graph:")
     if not compiler.calls:
         print("    (none)")
-    for caller, callee, tail, line in compiler.calls:
+    for caller, callee, tail, line, filename in compiler.calls:
         kind = "tail" if tail else "call"
-        print(f"    {caller} -> {callee} ({kind}, line {line})")
+        print(f"    {caller} -> {callee} ({kind}, {filename}:{line})")
 
 
 def print_state(emu: Emulator) -> None:

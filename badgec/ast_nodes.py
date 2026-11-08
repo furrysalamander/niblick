@@ -21,6 +21,8 @@ from .types import Type
 @dataclass(kw_only=True)
 class Expr:
     line: int = 0
+    column: int = 0
+    file: str = ""
 
 
 @dataclass
@@ -92,6 +94,8 @@ class Cast(Expr):
 @dataclass(kw_only=True)
 class Stmt:
     line: int = 0
+    column: int = 0
+    file: str = ""
 
 
 @dataclass
@@ -170,6 +174,8 @@ class GlobalDecl:
     init_string: Optional[str] = None
     is_const: bool = False
     line: int = 0
+    column: int = 0
+    file: str = ""
 
 
 @dataclass
@@ -177,6 +183,8 @@ class Param:
     name: str
     type: Type
     line: int = 0
+    column: int = 0
+    file: str = ""
 
 
 @dataclass
@@ -186,12 +194,30 @@ class FunctionDecl:
     params: list[Param]
     body: Block
     line: int = 0
+    column: int = 0
+    file: str = ""
+    name_line: int = 0
+    name_column: int = 0
+    # ``extern`` functions have no BadgeC body.  Their implementation is
+    # expected to appear as a ``fn_name:`` entry point in an imported .asm
+    # file.
+    is_extern: bool = False
 
 
 @dataclass
 class ImportDecl:
     path: str
     line: int = 0
+    column: int = 0
+    file: str = ""
+
+
+@dataclass
+class AsmSource:
+    """An imported .asm file, kept as text until code generation."""
+
+    path: str
+    text: str
 
 
 @dataclass
@@ -199,3 +225,4 @@ class Program:
     globals: list[GlobalDecl] = field(default_factory=list)
     functions: list[FunctionDecl] = field(default_factory=list)
     imports: list[ImportDecl] = field(default_factory=list)
+    asm_sources: list[AsmSource] = field(default_factory=list)

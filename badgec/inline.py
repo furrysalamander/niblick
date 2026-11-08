@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from typing import Iterable
 
 from . import ast_nodes as ast
+from .asm_link import scan_asm
+from .asm_text import IDENT_RE
 
 
 def _is_pure(expr: ast.Expr) -> bool:
@@ -221,11 +222,45 @@ def _eliminate_dead(program: ast.Program) -> None:
     by_function = {fn.name: fn for fn in program.functions}
     by_global = {decl.name: decl for decl in program.globals}
 
+    asm_calls: dict[str, set[str]] = {}
+    asm_globals: dict[str, set[str]] = {}
+    asm_function_refs: dict[str, set[str]] = {}
+    module_globals: set[str] = set()
+    module_functions: set[str] = set()
+    for source in program.asm_sources:
+        scan = scan_asm(source.text, source.path)
+        for call in scan.calls:
+            caller = (
+                call.caller_label[3:]
+                if call.caller_label.startswith("fn_")
+                else call.caller_label
+            )
+            callee = call.target_label[3:]
+            if caller in by_function and callee in by_function:
+                asm_calls.setdefault(caller, set()).add(callee)
+
+        for function_label, placeholder in scan.placeholders:
+            names = set(IDENT_RE.findall(placeholder.text))
+            globals_here = {name for name in names if name in by_global}
+            functions_here = {name for name in names if name in by_function}
+            if function_label is None:
+                module_globals.update(globals_here)
+                module_functions.update(functions_here)
+            else:
+                name = function_label[3:]
+                if globals_here:
+                    asm_globals.setdefault(name, set()).update(globals_here)
+                if functions_here:
+                    asm_function_refs.setdefault(name, set()).update(functions_here)
+
     kept_globals: set[str] = {
         decl.name for decl in program.globals if _global_has_side_effects(decl)
     }
+    kept_globals.update(module_globals)
     reachable: set[str] = set()
-    function_worklist: list[str] = ["main"] if "main" in by_function else []
+    function_worklist: list[str] = (
+        (["main"] if "main" in by_function else []) + sorted(module_functions)
+    )
     global_worklist: list[str] = list(kept_globals)
 
     while function_worklist or global_worklist:
@@ -242,6 +277,9 @@ def _eliminate_dead(program: ast.Program) -> None:
                 _collect_vars_stmt(stmt, names)
             function_worklist.extend(calls - reachable)
             global_worklist.extend(names - kept_globals)
+            function_worklist.extend(asm_calls.get(name, set()) - reachable)
+            function_worklist.extend(asm_function_refs.get(name, set()) - reachable)
+            global_worklist.extend(asm_globals.get(name, set()) - kept_globals)
 
         while global_worklist:
             name = global_worklist.pop()
@@ -267,7 +305,7 @@ def optimize(program: ast.Program) -> None:
     """Inline tiny return-only functions and remove dead declarations."""
     candidates: dict[str, ast.FunctionDecl] = {}
     for fn in program.functions:
-        if fn.name == "main":
+        if fn.name == "main" or fn.is_extern:
             continue
         if len(fn.body.statements) != 1:
             continue

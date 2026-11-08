@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.badge": "badgec",
+    "lib/asm/*.asm": "voja4-asm",
+    "**/lib/asm/*.asm": "voja4-asm"
+  }
+}

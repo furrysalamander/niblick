@@ -1,0 +1,173 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Voja4 Assembly",
+  "scopeName": "source.voja4-asm",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#labels" },
+    { "include": "#call-targets" },
+    { "include": "#directives" },
+    { "include": "#pseudo-ops" },
+    { "include": "#instructions" },
+    { "include": "#placeholders" },
+    { "include": "#registers" },
+    { "include": "#sfrs" },
+    { "include": "#conditions" },
+    { "include": "#numbers" },
+    { "include": "#strings" },
+    { "include": "#references" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.semicolon.voja4",
+          "match": ";.*$"
+        }
+      ]
+    },
+    "labels": {
+      "patterns": [
+        {
+          "match": "^\\s*(fn_[A-Za-z0-9_]+)\\s*:",
+          "captures": {
+            "1": { "name": "entity.name.function.voja4" }
+          }
+        },
+        {
+          "match": "^\\s*(__bc_[A-Za-z0-9_]+)\\s*:",
+          "captures": {
+            "1": { "name": "entity.name.function.runtime.voja4" }
+          }
+        },
+        {
+          "match": "^\\s*(\\.[A-Za-z0-9_]+)\\s*:",
+          "captures": {
+            "1": { "name": "entity.name.label.local.voja4" }
+          }
+        },
+        {
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*:",
+          "captures": {
+            "1": { "name": "entity.name.label.voja4" }
+          }
+        }
+      ]
+    },
+    "call-targets": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(GOSUB|GOTO)\\s+([A-Za-z_.][A-Za-z0-9_.]*)",
+          "captures": {
+            "1": { "name": "keyword.other.pseudo.voja4" },
+            "2": { "name": "entity.name.function.reference.voja4" }
+          }
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "keyword.other.directive.voja4",
+          "match": "(?i)\\b(EQU|ORG|BYTE|ASCII|NIBBLE)\\b"
+        }
+      ]
+    },
+    "pseudo-ops": {
+      "patterns": [
+        {
+          "name": "keyword.other.pseudo.voja4",
+          "match": "(?i)\\b(GOTO|GOSUB|NOP|CPL|NEG|LSR|SL|RLC)\\b"
+        }
+      ]
+    },
+    "instructions": {
+      "patterns": [
+        {
+          "name": "keyword.control.instruction.voja4",
+          "match": "(?i)\\b(ADD|ADC|SUB|SBB|OR|AND|XOR|MOV|CP|INC|DEC|DSZ|EXR|BIT|BSET|BCLR|BTG|RRC|RET|SKIP|JR)\\b"
+        }
+      ]
+    },
+    "placeholders": {
+      "patterns": [
+        {
+          "name": "variable.parameter.placeholder.voja4",
+          "match": "\\$\\{[^}]*\\}"
+        }
+      ]
+    },
+    "registers": {
+      "patterns": [
+        {
+          "name": "variable.other.register.voja4",
+          "match": "(?i)\\bR(?:[0-9]|1[0-5])\\b"
+        }
+      ]
+    },
+    "sfrs": {
+      "patterns": [
+        {
+          "name": "constant.language.sfr.voja4",
+          "match": "(?i)\\b(OUT|OUTB|IN|INB|JSR|PCL|PCM|PCH|PAGE|CLOCK|SYNC|WRFLAGS|RDFLAGS|SERCTRL|SERLOW|SERHIGH|RECEIVED|AUTOOFF|KEYSTATUS|KEYREG|DIMMER|RANDOM)\\b"
+        }
+      ]
+    },
+    "conditions": {
+      "patterns": [
+        {
+          "name": "constant.language.condition.voja4",
+          "match": "(?i)\\b(GTE|LT|EQ|NE|NC|NZ|C|Z)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.hexadecimal.voja4",
+          "match": "\\b0[xX][0-9A-Fa-f]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.binary.voja4",
+          "match": "\\b0[bB][01]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.decimal.voja4",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.voja4",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.voja4",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "references": {
+      "patterns": [
+        {
+          "name": "entity.name.function.reference.voja4",
+          "match": "\\b(?:fn_|__bc_)[A-Za-z0-9_]+\\b"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.voja4",
+          "match": "[\\[\\](),]"
+        }
+      ]
+    }
+  }
+}

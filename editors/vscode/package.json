@@ -1,0 +1,104 @@
+{
+  "name": "badgec-vscode",
+  "displayName": "BadgeC",
+  "description": "BadgeC language support for the Hackaday Supercon.6 badge",
+  "version": "0.1.0",
+  "publisher": "badgec",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:badgec",
+    "onLanguage:voja4-asm"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "badgec",
+        "aliases": [
+          "BadgeC",
+          "badgec"
+        ],
+        "extensions": [
+          ".badge"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "voja4-asm",
+        "aliases": [
+          "Voja4 Assembly",
+          "Badge Assembly"
+        ],
+        "configuration": "./language-configuration-asm.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "badgec",
+        "scopeName": "source.badgec",
+        "path": "./syntaxes/badgec.tmLanguage.json"
+      },
+      {
+        "language": "voja4-asm",
+        "scopeName": "source.voja4-asm",
+        "path": "./syntaxes/voja4-asm.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "badgec",
+        "path": "./snippets/badgec.json"
+      },
+      {
+        "language": "voja4-asm",
+        "path": "./snippets/voja4-asm.json"
+      }
+    ],
+    "configuration": {
+      "title": "BadgeC",
+      "properties": {
+        "badgec.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python executable used to launch the BadgeC language server. Leave empty to auto-detect .venv/venv, then fall back to python3."
+        },
+        "badgec.includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional import search roots, passed as BADGEC_PATH."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "badgec.restartServer",
+        "title": "BadgeC: Restart Language Server"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.4.0"
+  }
+}

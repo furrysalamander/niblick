@@ -12,9 +12,11 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pyserial>=3.5"]
+lsp = ["pygls>=2.0"]
 
 [project.scripts]
 badgec = "badgec.cli:main"
+badgec-lsp = "badgec.lsp:main"
 
 [tool.setuptools]
 packages = ["badgec"]

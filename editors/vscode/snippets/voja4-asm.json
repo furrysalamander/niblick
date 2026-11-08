@@ -1,0 +1,34 @@
+{
+  "Function entry point": {
+    "prefix": "fn",
+    "body": [
+      "fn_${1:name}:",
+      "\t$0",
+      "\tRET R0, 0"
+    ],
+    "description": "Voja4 assembly entry point for an extern fn"
+  },
+  "Call runtime routine": {
+    "prefix": "gosub",
+    "body": [
+      "GOSUB ${1:__bc_uart_putc}"
+    ],
+    "description": "Call a compiler runtime routine"
+  },
+  "Local loop": {
+    "prefix": "loop",
+    "body": [
+      ".${1:loop}:",
+      "\t$0",
+      "\tGOTO .${1:loop}"
+    ],
+    "description": "Local assembly loop"
+  },
+  "Return": {
+    "prefix": "ret",
+    "body": [
+      "RET R0, 0"
+    ],
+    "description": "Return from an assembly function"
+  }
+}

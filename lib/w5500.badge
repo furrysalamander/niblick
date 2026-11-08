@@ -11,6 +11,10 @@ import "spi.badge";
 import "asm/w5500.asm";
 
 extern fn word w5500_tx_pointer();
+extern fn char w5500_rx_peek(word offset);
+extern fn void w5500_rx_consume(word count);
+
+char w5500_scratch[4];
 
 const nibble W5500_RST = 1;
 
@@ -174,27 +178,6 @@ fn word w5500_rx_available() {
 fn word w5500_rx_pointer() {
     return ((word)w5500_read(1, 0x00, 0x28) << 8) |
            (word)w5500_read(1, 0x00, 0x29);
-}
-
-fn char w5500_rx_peek(word offset) {
-    word rd;
-
-    rd = ((word)w5500_read(1, 0x00, 0x28) << 8) |
-         (word)w5500_read(1, 0x00, 0x29);
-    rd = rd + offset;
-    return w5500_read(3, (char)(rd >> 8), (char)rd);
-}
-
-fn void w5500_rx_consume(word count) {
-    word rd;
-
-    rd = ((word)w5500_read(1, 0x00, 0x28) << 8) |
-         (word)w5500_read(1, 0x00, 0x29);
-    rd = rd + count;
-    w5500_write(1, 0x00, 0x28, (char)(rd >> 8));
-    w5500_write(1, 0x00, 0x29, (char)rd);
-    w5500_write(1, 0x00, 0x01, 0x40);   // RECV
-    delay(1);
 }
 
 fn word w5500_tx_free() {

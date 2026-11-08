@@ -12,6 +12,8 @@ configuration/registry phases.
 - Lets one vanilla 1.8.9 client join a 16x16 stone platform in a void world.
 - Sends one chunk section at y=64 with a 16x16 stone platform, full
   block/sky light, and the void biome (127).
+- Confirms block breaks and placements with `0x23 Block Change`; placement
+  always produces stone and supports all six faces.
 - Answers keepalives and ignores normal client play packets.
 
 It is **not** a full server: no terrain beyond the platform, no world storage, no encryption, no
@@ -25,7 +27,8 @@ Serverbound:
 1. Handshake (next state 1 for status, 2 for login)
 2. Status request, then Ping
 3. Login Start
-4. Normal play packets (client settings, position, keepalive, ...)
+4. Player Digging (`0x07`) and Block Placement (`0x08`)
+5. Normal play packets (client settings, position, keepalive, ...)
 
 Clientbound:
 
@@ -34,7 +37,8 @@ Clientbound:
 3. Join Game
 4. Chunk Data
 5. Player Position And Look
-6. Keep Alive every few seconds
+6. Block Change (`0x23`) for breaks/placements
+7. Keep Alive every few seconds
 
 ## Chunk packet
 
@@ -69,6 +73,13 @@ the remaining 7680 block bytes are air.
   login, and normal 1.8 play packets fit, but a very long hostname or chat
   message would not.
 - One connection at a time.
+- Placement is always stone and is limited to positions representable by the
+  simple packed-byte adjustment (this demo supports x/z up to 255 and y up to
+  4095; negative north/west targets are skipped).
+- Block changes are client-authoritative until reconnect; the platform is
+  regenerated from the chunk packet on each login. The client may keep
+  showing a different creative block locally even though the server's Block
+  Change is stone.
 - A real 1.8.9 client is required. Modern clients can see the MOTD but cannot
   join.
 

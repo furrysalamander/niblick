@@ -12,6 +12,9 @@
 
 import "lib/spi.badge";
 import "lib/w5500.badge";
+import "lib/asm/mc_void.asm";
+
+extern fn void mc_adjust_pos(char face);
 
 const char PORT_HI = 0x63;          // 25565
 const char PORT_LO = 0xDD;
@@ -251,6 +254,32 @@ fn void mc_send_status() {
     mc_tx_end();
 }
 
+
+fn void mc_read_pos() {
+    nibble j;
+
+    j = 0;
+    while (j < 8) {
+        pong[j] = mc_rx_byte();
+        j = j + 1;
+    }
+}
+
+fn void mc_send_block_change(char state) {
+    nibble j;
+
+    mc_tx_begin();
+    mc_tx_put(10);
+    mc_tx_put(0x23);
+    j = 0;
+    while (j < 8) {
+        mc_tx_put(pong[j]);
+        j = j + 1;
+    }
+    mc_tx_put(state);
+    mc_tx_end();
+}
+
 fn void mc_send_chunk() {
     // One empty section at y=64 (section 4), full block light and sky light,
     // void biome 127.  Header + data = 12560 bytes.  Socket 0 owns the full
@@ -304,6 +333,9 @@ fn nibble mc_read_handshake() {
 
 fn void mc_login() {
     word i;
+    nibble packet_id;
+    nibble dig_status;
+    nibble face;
 
     timer = 0;
     while (mc_try_packet() == 0) {
@@ -336,7 +368,19 @@ fn void mc_login() {
             break;
         }
         if (mc_try_packet() != 0) {
-            mc_rx_byte();
+            packet_id = (nibble)mc_rx_byte();
+            if (packet_id == 0x07) {
+                dig_status = (nibble)mc_rx_byte();
+                if (dig_status == 0 || dig_status == 2) {
+                    mc_read_pos();
+                    mc_send_block_change(0);
+                }
+            } else if (packet_id == 0x08) {
+                mc_read_pos();
+                face = (nibble)mc_rx_byte();
+                mc_adjust_pos((char)face);
+                mc_send_block_change(0x10);
+            }
             mc_packet_end();
         } else if (w5500_rx_available() > 1900) {
             break;

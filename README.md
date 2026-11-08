@@ -298,7 +298,7 @@ otherwise empty void world in creative mode.
 - Badge: `192.168.1.50:25565`
 - Client: vanilla 1.8.9 / protocol 47, offline mode
 - One player, no encryption, no compression, no world storage
-- **4035 / 4096 words**, **133 / 208 RAM nibbles**, max call depth 4
+- **4045 / 4096 words**, **133 / 208 RAM nibbles**, max call depth 4
 
 Use a 1.8.9 client; modern clients can display the MOTD but cannot join. The
 server never sends an Encryption Request, so it behaves like an offline-mode
@@ -306,7 +306,9 @@ server. The Login Success name is fixed to `Player` to keep the packet in
 flash, and the world is one chunk section with a 16x16 stone platform at
 y=64, full light, and the void biome. Players can break blocks and place
 stone on all six faces; the server confirms changes with Block Change
-packets. There is no world storage, so the platform regenerates on reconnect. Run
+packets. The client may keep showing a different creative block locally until
+reconnect; the server's authoritative placement is always stone. There is no
+world storage, so the platform regenerates on reconnect. Run
 `examples/w5500_probe.badge` first to confirm the W5500 link, then flash
 `examples/mc_void.hex` and connect with a 1.8.9 client.
 

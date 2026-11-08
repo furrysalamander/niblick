@@ -106,6 +106,26 @@ def connect_with_retry(timeout: float = 5.0) -> socket.socket:
             time.sleep(0.05)
 
 
+
+
+def pack_pos(x: int, y: int, z: int) -> bytes:
+    value = ((x & 0x3FFFFFF) << 38) | ((y & 0xFFF) << 26) | (z & 0x3FFFFFF)
+    return struct.pack(">Q", value)
+
+
+def expect_block_change(sock: socket.socket, position: bytes, state: int) -> None:
+    while True:
+        packet_id, payload = recv_packet(sock)
+        if packet_id == 0x23:
+            assert payload[:8] == position
+            block_state, _ = read_varint_bytes(payload, 8)
+            assert block_state == state
+            return
+        if packet_id == 0x00:
+            keepalive_id, _ = read_varint_bytes(payload, 0)
+            send_packet(sock, b"\x00" + varint(keepalive_id))
+        # Ignore other play packets.
+
 def status_test() -> None:
     with connect_with_retry() as sock:
         handshake(sock, 1)
@@ -184,6 +204,25 @@ def login_test() -> None:
         keepalive_id, _ = read_varint_bytes(payload, 0)
         send_packet(sock, b"\x00" + varint(keepalive_id))
         time.sleep(0.2)
+
+        # Break one platform block, then place stone on all six faces of a
+        # central platform block.
+        center = pack_pos(4, 64, 4)
+        send_packet(sock, b"\x07\x02" + center + b"\x01")
+        expect_block_change(sock, center, 0)
+
+        faces = [
+            (0, pack_pos(4, 63, 4)),
+            (1, pack_pos(4, 65, 4)),
+            (2, pack_pos(4, 64, 3)),
+            (3, pack_pos(4, 64, 5)),
+            (4, pack_pos(3, 64, 4)),
+            (5, pack_pos(5, 64, 4)),
+        ]
+        for face, target in faces:
+            body = b"\x08" + center + bytes([face]) + b"\xff\xff" + b"\x00\x00\x00"
+            send_packet(sock, body)
+            expect_block_change(sock, target, 0x10)
 
 
 def test_mc_void_status_and_login(tmp_path: Path) -> None:

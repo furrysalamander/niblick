@@ -31,6 +31,7 @@ def test_server_registers_diagnostics_symbols_and_navigation() -> None:
     assert "textDocument/documentSymbol" in features
     assert "textDocument/hover" in features
     assert "textDocument/definition" in features
+    assert "textDocument/references" in features
     assert "textDocument/completion" in features
 
 
@@ -146,3 +147,29 @@ def test_asm_completion_handler(tmp_path: Path) -> None:
     )
     labels = {item.label for item in result.items}
     assert {"fn_impl", "MOV", "R1", "RET", "GOSUB"}.issubset(labels)
+
+
+def test_references_handler(tmp_path: Path) -> None:
+    text = (
+        "nibble g;\n"
+        "fn main() {\n"
+        "    g = 1;\n"
+        "    asm {\n"
+        "        MOV R0, [${g}]\n"
+        "    }\n"
+        "}\n"
+    )
+    source = tmp_path / "refs.badge"
+    source.write_text(text)
+    server = create_server()
+    references = server.protocol.fm._features["textDocument/references"]
+    line, character = position(text, "g = 1")
+    result = references(
+        types.ReferenceParams(
+            text_document=types.TextDocumentIdentifier(uri=source.as_uri()),
+            position=types.Position(line=line, character=character),
+            context=types.ReferenceContext(include_declaration=True),
+        )
+    )
+    assert len(result) == 3
+    assert all(item.uri == source.as_uri() for item in result)

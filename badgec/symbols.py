@@ -171,6 +171,35 @@ class ProgramIndex:
             return occurrence.definition.hover_text()
         return occurrence.detail or None
 
+    def _reference_key(self, definition: Definition) -> tuple:
+        if definition.kind == "function":
+            return ("function", definition.name)
+        if definition.kind == "asm_function":
+            if definition.name.startswith("fn_"):
+                return ("function", definition.name[3:])
+            return ("asm_label", definition.file, definition.name)
+        if definition.kind == "asm_label":
+            return ("asm_label", definition.file, definition.name)
+        if definition.kind in ("global", "constant"):
+            return ("global", definition.name)
+        return ("local", id(definition))
+
+    def references_at(
+        self, file: str | Path, line: int, column: int
+    ) -> list[Occurrence]:
+        occurrence = self.occurrence_at(file, line, column)
+        if occurrence is None or occurrence.definition is None:
+            return []
+        if occurrence.definition.kind in ("builtin", "runtime"):
+            return []
+        key = self._reference_key(occurrence.definition)
+        return [
+            other
+            for other in self.occurrences
+            if other.definition is not None
+            and self._reference_key(other.definition) == key
+        ]
+
     def completions_at(
         self, file: str | Path, line: int, column: int
     ) -> list[Definition]:

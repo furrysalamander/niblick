@@ -5,9 +5,9 @@ Run with::
     python3 -m badgec.lsp --stdio
 
 The server reuses the compiler front end through :mod:`badgec.analysis`.  It
-supports diagnostics, document symbols, hover, completion, and
-go-to-definition, including links between ``extern fn`` declarations and
-imported assembly entry points.
+supports diagnostics, document symbols, hover, completion,
+go-to-definition, and find-all-references, including links between
+``extern fn`` declarations and imported assembly entry points.
 """
 
 from __future__ import annotations
@@ -121,6 +121,17 @@ def _lsp_location(definition) -> types.Location:
             definition.line,
             definition.column,
             max(1, len(definition.name)),
+        ),
+    )
+
+
+def _lsp_occurrence_location(occurrence) -> types.Location:
+    return types.Location(
+        uri=path_to_uri(occurrence.file),
+        range=_range(
+            occurrence.line,
+            occurrence.column,
+            max(1, occurrence.length),
         ),
     )
 
@@ -384,6 +395,29 @@ def create_server() -> LanguageServer:
         if target is None or not target.file:
             return None
         return _lsp_location(target)
+
+    @server.feature(types.TEXT_DOCUMENT_REFERENCES)
+    def references(params: types.ReferenceParams) -> list[types.Location]:
+        uri = params.text_document.uri
+        try:
+            occurrences = analysis_for(uri).references(
+                uri_to_path(uri),
+                params.position.line + 1,
+                params.position.character + 1,
+            )
+        except Exception:
+            LOGGER.exception("references failed for %s", uri)
+            return []
+        if not params.context.include_declaration:
+            occurrences = [
+                occurrence
+                for occurrence in occurrences
+                if occurrence.kind != "declaration"
+            ]
+        return [
+            _lsp_occurrence_location(occurrence)
+            for occurrence in occurrences
+        ]
 
     @server.feature(types.TEXT_DOCUMENT_COMPLETION)
     def completion(params: types.CompletionParams) -> types.CompletionList:

@@ -298,3 +298,23 @@ def test_inline_asm_placeholder_navigation(tmp_path: Path) -> None:
     hover = analysis.hover(entry, line, column + 2)
     assert hover is not None
     assert "nibble x" in hover
+
+
+def test_references_across_badgec_and_inline_asm(tmp_path: Path) -> None:
+    text = (
+        "nibble g;\n"
+        "fn main() {\n"
+        "    g = 1;\n"
+        "    asm {\n"
+        "        MOV R0, [${g}]\n"
+        "    }\n"
+        "}\n"
+    )
+    entry = tmp_path / "refs.badge"
+    entry.write_text(text)
+    analysis = Analysis(entry)
+    line, column = position(text, "g = 1")
+    references = analysis.references(entry, line, column)
+    assert len(references) == 3
+    assert any(item.kind == "declaration" for item in references)
+    assert any(item.kind == "asm_placeholder" for item in references)

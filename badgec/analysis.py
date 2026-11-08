@@ -256,6 +256,11 @@ class Analysis:
     def hover(self, file: str | Path, line: int, column: int) -> Optional[str]:
         return self._ensure_index().hover_at(file, line, column)
 
+    def references(
+        self, file: str | Path, line: int, column: int
+    ) -> list:
+        return self._ensure_index().references_at(file, line, column)
+
     def completions(
         self, file: str | Path, line: int, column: int
     ) -> list[Definition]:

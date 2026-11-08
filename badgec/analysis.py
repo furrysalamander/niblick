@@ -261,6 +261,15 @@ class Analysis:
     ) -> list:
         return self._ensure_index().references_at(file, line, column)
 
+    def rename(
+        self,
+        file: str | Path,
+        line: int,
+        column: int,
+        new_name: str,
+    ) -> list:
+        return self._ensure_index().rename_at(file, line, column, new_name)
+
     def completions(
         self, file: str | Path, line: int, column: int
     ) -> list[Definition]:

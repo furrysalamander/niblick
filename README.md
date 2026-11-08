@@ -23,7 +23,7 @@ Working today:
 - `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
 - Inline `asm { ... }` blocks inside BadgeC functions, with lexical `${...}` placeholders, local labels, call-graph integration, and optimizer opacity
-- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, and go-to-definition
+- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, go-to-definition, references, and rename
 - Flash strings and `RET`-table iteration
 - UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
 - RAM helpers: `peek`, `poke`, `memset`, `uart_write`, `delay`

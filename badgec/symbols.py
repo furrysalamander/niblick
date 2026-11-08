@@ -78,6 +78,45 @@ class Occurrence:
     detail: str = ""
 
 
+@dataclass
+class RenameEdit:
+    file: str
+    line: int
+    column: int
+    length: int
+    new_text: str
+
+
+def _rename_placeholder(
+    text: str,
+    target_kind: str,
+    old_name: str,
+    new_name: str,
+) -> str:
+    match = re.match(
+        r"^(&\s*)?([A-Za-z_][A-Za-z0-9_]*)"
+        r"(?:\.([A-Za-z_][A-Za-z0-9_]*))?(.*)$",
+        text,
+    )
+    if match is None:
+        return text
+    amp, first, second, rest = match.groups()
+    if target_kind in ("function", "asm_function"):
+        if first == old_name:
+            first = new_name
+        elif second == old_name:
+            second = new_name
+    elif target_kind == "param":
+        if second == old_name:
+            second = new_name
+        elif first == old_name:
+            first = new_name
+    elif first == old_name:
+        first = new_name
+    qualified = f".{second}" if second else ""
+    return f"${{{amp or ''}{first}{qualified}{rest}}}"
+
+
 def _max_line(node) -> int:
     if isinstance(node, ast.InlineAsm):
         return node.line + max(0, len(node.text.splitlines()) - 1)
@@ -199,6 +238,97 @@ class ProgramIndex:
             if other.definition is not None
             and self._reference_key(other.definition) == key
         ]
+
+    def rename_at(
+        self,
+        file: str | Path,
+        line: int,
+        column: int,
+        new_name: str,
+    ) -> list[RenameEdit]:
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", new_name) is None:
+            return []
+        occurrence = self.occurrence_at(file, line, column)
+        if occurrence is None or occurrence.definition is None:
+            return []
+        definition = occurrence.definition
+        if definition.kind in ("builtin", "runtime"):
+            return []
+
+        key = self._reference_key(definition)
+        occurrences = [
+            other
+            for other in self.occurrences
+            if other.definition is not None
+            and self._reference_key(other.definition) == key
+        ]
+
+        if definition.kind in ("function", "asm_function"):
+            target_kind = definition.kind
+            old_name = (
+                definition.name[3:]
+                if definition.kind == "asm_function"
+                and definition.name.startswith("fn_")
+                else definition.name
+            )
+            asm_name = f"fn_{new_name}"
+        elif definition.kind == "asm_label":
+            target_kind = "asm_label"
+            old_name = definition.name
+            asm_name = new_name
+        else:
+            target_kind = definition.kind
+            old_name = definition.name
+            asm_name = new_name
+
+        edits: list[RenameEdit] = []
+        seen: set[tuple[str, int, int]] = set()
+
+        def add_edit(item: Occurrence, text: str) -> None:
+            identity = (item.file, item.line, item.column)
+            if identity in seen:
+                return
+            if item.kind == "asm_placeholder":
+                if text == f"${{{item.name}}}":
+                    return
+            elif text == item.name:
+                return
+            seen.add(identity)
+            edits.append(
+                RenameEdit(
+                    file=item.file,
+                    line=item.line,
+                    column=item.column,
+                    length=item.length,
+                    new_text=text,
+                )
+            )
+
+        for item in occurrences:
+            if item.kind == "asm_placeholder":
+                add_edit(
+                    item,
+                    _rename_placeholder(
+                        item.name, target_kind, old_name, new_name
+                    ),
+                )
+            elif target_kind in ("function", "asm_function") and item.name.startswith("fn_"):
+                add_edit(item, asm_name)
+            else:
+                add_edit(item, new_name)
+
+        # `${function.param}` placeholders resolve to the parameter, not the
+        # function, so rename the function prefix separately.
+        if target_kind in ("function", "asm_function"):
+            for item in self.occurrences:
+                if item.kind != "asm_placeholder":
+                    continue
+                replacement = _rename_placeholder(
+                    item.name, target_kind, old_name, new_name
+                )
+                add_edit(item, replacement)
+
+        return edits
 
     def completions_at(
         self, file: str | Path, line: int, column: int

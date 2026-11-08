@@ -293,5 +293,5 @@ exceptions are not hidden; they indicate a compiler bug.
 
 Editor tooling reuses the front end through `badgec/analysis.py` and
 `badgec/symbols.py`; the LSP server in `badgec/lsp.py` exposes diagnostics,
-document symbols, hover, completion, go-to-definition, and references. See
-[vscode.md](vscode.md).
+document symbols, hover, completion, go-to-definition, references, and rename.
+See [vscode.md](vscode.md).

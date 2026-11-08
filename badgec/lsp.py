@@ -6,7 +6,7 @@ Run with::
 
 The server reuses the compiler front end through :mod:`badgec.analysis`.  It
 supports diagnostics, document symbols, hover, completion,
-go-to-definition, and find-all-references, including links between
+go-to-definition, find-all-references, and rename, including links between
 ``extern fn`` declarations and imported assembly entry points.
 """
 
@@ -418,6 +418,29 @@ def create_server() -> LanguageServer:
             _lsp_occurrence_location(occurrence)
             for occurrence in occurrences
         ]
+
+    @server.feature(types.TEXT_DOCUMENT_RENAME)
+    def rename(params: types.RenameParams) -> Optional[types.WorkspaceEdit]:
+        uri = params.text_document.uri
+        try:
+            edits = analysis_for(uri).rename(
+                uri_to_path(uri),
+                params.position.line + 1,
+                params.position.character + 1,
+                params.new_name,
+            )
+        except Exception:
+            LOGGER.exception("rename failed for %s", uri)
+            return None
+        changes: dict[str, list[types.TextEdit]] = {}
+        for edit in edits:
+            changes.setdefault(path_to_uri(edit.file), []).append(
+                types.TextEdit(
+                    range=_range(edit.line, edit.column, edit.length),
+                    new_text=edit.new_text,
+                )
+            )
+        return types.WorkspaceEdit(changes=changes) if changes else None
 
     @server.feature(types.TEXT_DOCUMENT_COMPLETION)
     def completion(params: types.CompletionParams) -> types.CompletionList:

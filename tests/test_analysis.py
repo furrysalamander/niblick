@@ -318,3 +318,47 @@ def test_references_across_badgec_and_inline_asm(tmp_path: Path) -> None:
     assert len(references) == 3
     assert any(item.kind == "declaration" for item in references)
     assert any(item.kind == "asm_placeholder" for item in references)
+
+
+def test_rename_local_updates_inline_asm_placeholder(tmp_path: Path) -> None:
+    text = (
+        "fn main() {\n"
+        "    nibble x;\n"
+        "    x = 1;\n"
+        "    asm {\n"
+        "        MOV R0, [${x}]\n"
+        "    }\n"
+        "}\n"
+    )
+    entry = tmp_path / "rename.badge"
+    entry.write_text(text)
+    analysis = Analysis(entry)
+    line, column = position(text, "x = 1")
+    edits = analysis.rename(entry, line, column, "value")
+    assert len(edits) == 3
+    assert any(edit.new_text == "${value}" for edit in edits)
+    assert all(edit.file == str(entry.resolve()) for edit in edits)
+
+
+def test_rename_function_updates_asm_entry_point(tmp_path: Path) -> None:
+    source_text = (
+        'import "impl.asm";\n'
+        "extern fn nibble add3(nibble x);\n"
+        "fn main() { nibble r; r = add3(4); }\n"
+    )
+    entry = tmp_path / "main.badge"
+    entry.write_text(source_text)
+    asm = tmp_path / "impl.asm"
+    asm.write_text(
+        "fn_add3:\n"
+        "    MOV R0, [${x}]\n"
+        "    RET R0, 0\n"
+    )
+    analysis = Analysis(entry)
+    line, column = position(source_text, "add3(4)")
+    edits = analysis.rename(entry, line, column, "plus3")
+    assert any(edit.new_text == "plus3" for edit in edits)
+    assert any(
+        edit.new_text == "fn_plus3" and edit.file == str(asm.resolve())
+        for edit in edits
+    )

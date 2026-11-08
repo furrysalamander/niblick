@@ -74,3 +74,29 @@ def test_parser_accepts_extern_function_declarations() -> None:
     assert read16.is_extern
     assert read16.return_type.name == "word"
     assert not main.is_extern
+
+
+def test_parser_accepts_inline_asm_block() -> None:
+    program = parse(
+        """
+        fn main() {
+            nibble x;
+            asm {
+                ; raw text with a placeholder
+                MOV R0, [${x}]
+                MOV R1, R0
+            }
+        }
+        """,
+        "test.badge",
+    )
+    statements = program.functions[0].body.statements
+    inline = statements[1]
+    assert isinstance(inline, ast.InlineAsm)
+    assert "MOV R0, [${x}]" in inline.text
+    assert inline.file == "test.badge"
+
+
+def test_parser_rejects_unterminated_inline_asm_block() -> None:
+    with pytest.raises(BadgeSyntaxError, match="unterminated asm block"):
+        parse("fn main() { asm { MOV R1, 1", "bad.badge")

@@ -3,6 +3,7 @@
   "name": "BadgeC",
   "scopeName": "source.badgec",
   "patterns": [
+    { "include": "#asm-blocks" },
     { "include": "#comments" },
     { "include": "#imports" },
     { "include": "#strings" },
@@ -15,6 +16,25 @@
     { "include": "#punctuation" }
   ],
   "repository": {
+    "asm-blocks": {
+      "patterns": [
+        {
+          "begin": "\\b(asm)\\s*\\{",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.asm.badgec" }
+          },
+          "end": "\\}",
+          "contentName": "meta.embedded.block.voja4-asm",
+          "patterns": [
+            {
+              "name": "variable.parameter.placeholder.badgec",
+              "match": "\\$\\{[^}]*\\}"
+            },
+            { "include": "source.voja4-asm" }
+          ]
+        }
+      ]
+    },
     "comments": {
       "patterns": [
         {

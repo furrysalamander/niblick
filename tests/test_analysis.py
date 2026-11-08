@@ -272,3 +272,29 @@ def test_asm_completions_include_instructions_and_labels(tmp_path: Path) -> None
     analysis = Analysis(entry, extra_asm={asm: asm.read_text()})
     labels = {item.name for item in analysis.asm_labels(asm)}
     assert "fn_impl" in labels
+
+
+def test_inline_asm_placeholder_navigation(tmp_path: Path) -> None:
+    text = (
+        "fn main() {\n"
+        "    nibble x;\n"
+        "    x = 4;\n"
+        "    asm {\n"
+        "        MOV R0, [${x}]\n"
+        "        MOV R1, R0\n"
+        "    }\n"
+        "    while (1) { }\n"
+        "}\n"
+    )
+    entry = tmp_path / "inline.badge"
+    entry.write_text(text)
+    analysis = Analysis(entry)
+    line, column = position(text, "${x}")
+    target = analysis.definition(entry, line, column + 2)
+    assert target is not None
+    assert target.name == "x"
+    assert target.kind == "local"
+    assert target.line == 2
+    hover = analysis.hover(entry, line, column + 2)
+    assert hover is not None
+    assert "nibble x" in hover

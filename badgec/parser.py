@@ -336,6 +336,12 @@ class Parser:
     def parse_statement(self) -> ast.Stmt:
         token = self.current()
 
+        if token.kind == "asm_block":
+            self.advance()
+            return ast.InlineAsm(
+                str(token.value), line=token.line, column=token.column
+            )
+
         if self.check("{"):
             return self.parse_block()
 

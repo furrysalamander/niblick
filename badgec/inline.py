@@ -14,7 +14,7 @@ import dataclasses
 
 from . import ast_nodes as ast
 from .asm_link import scan_asm
-from .asm_text import IDENT_RE
+from .asm_text import IDENT_RE, asm_function_references, placeholder_names
 
 
 def _is_pure(expr: ast.Expr) -> bool:
@@ -145,6 +145,9 @@ def _collect_calls_expr(expr: ast.Expr, calls: set[str]) -> None:
 
 
 def _collect_calls_stmt(stmt: ast.Stmt, calls: set[str]) -> None:
+    if isinstance(stmt, ast.InlineAsm):
+        calls.update(asm_function_references(stmt.text))
+        return
     for field in dataclasses.fields(stmt):
         value = getattr(stmt, field.name)
         if isinstance(value, ast.Expr):
@@ -176,6 +179,9 @@ def _collect_vars_expr(expr: ast.Expr, names: set[str]) -> None:
 
 
 def _collect_vars_stmt(stmt: ast.Stmt, names: set[str]) -> None:
+    if isinstance(stmt, ast.InlineAsm):
+        names.update(placeholder_names(stmt.text))
+        return
     for field in dataclasses.fields(stmt):
         value = getattr(stmt, field.name)
         if isinstance(value, ast.Expr):

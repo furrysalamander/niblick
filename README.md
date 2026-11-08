@@ -22,6 +22,7 @@ Working today:
 - Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
 - `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
+- Inline `asm { ... }` blocks inside BadgeC functions, with lexical `${...}` placeholders, local labels, call-graph integration, and optimizer opacity
 - VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, and go-to-definition
 - Flash strings and `RET`-table iteration
 - UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
@@ -40,7 +41,6 @@ Not implemented yet:
 - General pointers and pointer arithmetic
 - Structs, varargs, dynamic allocation
 - Register allocation, local overlay, and a broader peephole/optimization pipeline
-- Inline `asm { ... }` blocks inside BadgeC functions (imported `.asm` modules are supported)
 - UART interrupt-driven or buffered I/O beyond the hardware FIFO
 
 32-bit `*`, `/`, and `%` are implemented but deliberately size-conscious:
@@ -354,6 +354,7 @@ nothing until you use it. See `docs/stdlib.md` and
 - `docs/runtime-abi.md` — BadgeC calling convention and runtime
 - `docs/compiler.md` — compiler internals and optimization roadmap
 - `docs/asm-imports.md` — imported `.asm` modules, `extern fn`, placeholders, and optimizer markers
+- `docs/inline-asm.md` — raw `asm { ... }` blocks inside BadgeC functions
 - `docs/vscode.md` — VS Code language support and language-server development
 - `docs/testing.md` — test layers and hardware development loop
 - `docs/keys.md` — measured front-panel key codes

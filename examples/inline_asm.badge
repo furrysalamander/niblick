@@ -1,0 +1,16 @@
+// Inline assembly: compute b = a + 4 in raw Voja4 instructions.
+
+nibble a;
+nibble b;
+
+fn main() {
+    a = 3;
+
+    asm {
+        MOV R0, [${a}]
+        ADD R0, 4
+        MOV [${b}], R0
+    }
+
+    while (1) { }
+}

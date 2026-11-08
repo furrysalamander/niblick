@@ -75,6 +75,11 @@ declare their entry points with `extern fn ...;` and are scanned for labels,
 `GOSUB`/`GOTO` targets, placeholders, and runtime calls before linking. See
 [asm-imports.md](asm-imports.md).
 
+Inline `asm { ... }` statements are kept as raw text on the AST and lowered at
+the current statement position. They resolve `${...}` against the current
+lexical scope and are wrapped in opaque optimizer markers. See
+[inline-asm.md](inline-asm.md).
+
 Dead-declaration elimination runs after inlining:
 
 - functions unreachable from `main` (or a kept global initializer) are
@@ -188,6 +193,8 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Imported `.asm` modules with `extern fn` declarations, scoped `${...}`
   symbol placeholders, call-graph/runtime-linker scanning, and per-file or
   per-region `; @badgec: no-optimize` markers.
+- Inline `asm { ... }` statements with lexical `${...}` placeholders, local
+  labels, call-graph/runtime-linking integration, and optimizer opacity.
 - Peephole removal of redundant `MOV`s.
 - Basic-block copy propagation: a `MOV Rd,Rs` is dropped when `Rd` already
   holds `Rs`'s value.

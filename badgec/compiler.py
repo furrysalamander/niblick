@@ -26,8 +26,10 @@ from .asm_text import (
     NO_OPTIMIZE_BEGIN,
     NO_OPTIMIZE_END,
     PLACEHOLDER_RE,
+    code_part,
     has_file_marker,
     label_name,
+    label_span,
 )
 from .inline import optimize as optimize_program
 from .runtime_linker import (
@@ -37,7 +39,7 @@ from .runtime_linker import (
     routine_labels,
     runtime_stack_costs,
 )
-from .errors import BadgeCompileError, BadgeTypeError, location
+from .errors import BadgeCompileError, BadgeError, BadgeTypeError, location
 from .types import (
     CHAR,
     DWORD,
@@ -281,6 +283,7 @@ class Compiler:
         self.flash: list[FlashItem] = []
         self.flash_counter = 0
         self.label_counter = 0
+        self.asm_counter = 0
         self.current_function: Optional[FunctionSymbol] = None
         self.loop_stack: list[tuple[str, str]] = []  # (break label, continue label)
         self.calls: list[tuple[str, str, bool, int, str]] = []  # caller, callee, tail, line, file
@@ -384,6 +387,10 @@ class Compiler:
     def new_label(self, hint: str = "L") -> str:
         self.label_counter += 1
         return f"{hint}{self.label_counter}"
+
+    def new_asm_label(self) -> str:
+        self.asm_counter += 1
+        return f"__asm_{self.asm_counter}"
 
     def use_runtime(
         self,
@@ -1173,6 +1180,9 @@ class Compiler:
                     return
             self.compile_expr(stmt.expr, scope)
 
+        elif isinstance(stmt, ast.InlineAsm):
+            self.compile_inline_asm(stmt, scope)
+
         elif isinstance(stmt, ast.If):
             self.compile_if(stmt, scope, tail)
 
@@ -1203,6 +1213,101 @@ class Compiler:
             raise BadgeCompileError(
                 f"{location(self.filename, getattr(stmt, 'line', 0))}: unsupported statement {type(stmt).__name__}"
             )
+
+    def compile_inline_asm(self, stmt: ast.InlineAsm, scope: Scope) -> None:
+        path = stmt.file or self.filename
+        text = stmt.text
+        base_line = stmt.line
+        self._validate_inline_asm(stmt, path, base_line)
+
+        wrapper = f"fn___inline_asm:\n{text}\n"
+        try:
+            scan = scan_asm(wrapper, path)
+        except BadgeError as exc:
+            raise self._shifted_asm_error(exc, base_line - 2) from exc
+
+        caller = (
+            self.current_function.name
+            if self.current_function is not None
+            else "main"
+        )
+        for call in scan.calls:
+            source_line = call.line + base_line - 2
+            callee = call.target_label[3:]
+            if callee not in self.functions:
+                raise BadgeCompileError(
+                    f"{location(path, source_line)}: call to undeclared function "
+                    f"{call.target_label!r}; add an extern fn declaration"
+                )
+            self.calls.append(
+                (caller, callee, call.tail, source_line, path)
+            )
+
+        for call in scan.runtime_calls:
+            source_line = call.line + base_line - 2
+            if call.target_label not in ROUTINE_LABELS:
+                raise BadgeCompileError(
+                    f"{location(path, source_line)}: unknown runtime routine "
+                    f"{call.target_label!r}"
+                )
+            self.use_runtime(
+                call.target_label,
+                source_line,
+                caller=caller,
+                filename=path,
+            )
+
+        self.emit(NO_OPTIMIZE_BEGIN)
+        self.emit(f"; inline assembly (source line {stmt.line})")
+        self.emit(f"{self.new_asm_label()}:")
+        for index, line in enumerate(text.splitlines(), 1):
+            source_line = base_line + index - 1
+            self.emit(
+                self._substitute_placeholders(
+                    line, scope, path, source_line
+                )
+            )
+        self.emit(NO_OPTIMIZE_END)
+
+    def _validate_inline_asm(
+        self, stmt: ast.InlineAsm, path: str, base_line: int
+    ) -> None:
+        for index, line in enumerate(stmt.text.splitlines(), 1):
+            code = code_part(line).strip()
+            if not code:
+                continue
+            source_line = base_line + index - 1
+            label = label_span(line)
+            if label is not None:
+                if not label[0].startswith("."):
+                    raise BadgeCompileError(
+                        f"{location(path, source_line)}: inline asm labels must "
+                        "start with '.'"
+                    )
+                continue
+            op = code.split(None, 1)[0].upper()
+            if op == "RET":
+                raise BadgeCompileError(
+                    f"{location(path, source_line)}: RET is not allowed in "
+                    "inline asm; let the BadgeC function return normally"
+                )
+
+    def _shifted_asm_error(self, exc: BadgeError, delta: int) -> BadgeError:
+        message = str(exc)
+        match = re.match(
+            r"^(?P<file>.+?):(?P<line>\d+)(?::(?P<column>\d+))?:\s*(?P<msg>.*)$",
+            message,
+        )
+        if match is None:
+            return exc
+        line = max(1, int(match.group("line")) + delta)
+        column = match.group("column")
+        prefix = location(
+            match.group("file"),
+            line,
+            int(column) if column is not None else None,
+        )
+        return BadgeCompileError(f"{prefix}: {match.group('msg')}")
 
     def compile_var_decl(self, stmt: ast.VarDecl, scope: Scope) -> None:
         if stmt.name in scope.symbols:

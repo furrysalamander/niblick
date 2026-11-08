@@ -16,7 +16,7 @@ from typing import Optional
 
 from . import ast_nodes as ast
 from .asm_link import scan_asm
-from .asm_text import Placeholder
+from .asm_text import ASM_CALL_RE, Placeholder, code_part, iter_placeholders
 from .compiler import BUILTINS
 from .runtime_linker import ROUTINE_LABELS
 
@@ -79,6 +79,8 @@ class Occurrence:
 
 
 def _max_line(node) -> int:
+    if isinstance(node, ast.InlineAsm):
+        return node.line + max(0, len(node.text.splitlines()) - 1)
     best = getattr(node, "line", 0) or 0
     for field in dataclasses.fields(node):
         value = getattr(node, field.name)
@@ -556,6 +558,57 @@ class ProgramIndex:
         elif isinstance(statement, ast.Return):
             if statement.value is not None:
                 self._visit_expr(statement.value, scopes, function_name)
+        elif isinstance(statement, ast.InlineAsm):
+            self._visit_inline_asm(statement, scopes)
+
+    def _visit_inline_asm(
+        self,
+        statement: ast.InlineAsm,
+        scopes: list[dict[str, Definition]],
+    ) -> None:
+        file = _normalise(statement.file or self.entry)
+        for placeholder in iter_placeholders(statement.text):
+            text = placeholder.text.strip()
+            if text.startswith("&"):
+                text = text[1:].strip()
+            match = re.match(
+                r"^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)",
+                text,
+            )
+            if match is None:
+                continue
+            base = match.group(1)
+            qualified = _QUALIFIED_RE.match(base)
+            if qualified is not None:
+                definition = self.params.get(qualified.group(1), {}).get(
+                    qualified.group(2)
+                )
+            else:
+                definition = self._resolve_var(base, scopes)
+            self._add_occurrence(
+                placeholder.text,
+                file,
+                statement.line + placeholder.line - 1,
+                placeholder.start + 1,
+                "asm_placeholder",
+                definition,
+                length=max(1, placeholder.end - placeholder.start),
+                detail=f"asm placeholder `${{{placeholder.text}}}`",
+            )
+
+        for index, line in enumerate(statement.text.splitlines(), 1):
+            for match in ASM_CALL_RE.finditer(code_part(line)):
+                target = match.group(1)
+                definition = self.functions.get(target[3:])
+                self._add_occurrence(
+                    target,
+                    file,
+                    statement.line + index - 1,
+                    match.start(1) + 1,
+                    "asm_call",
+                    definition,
+                    length=len(target),
+                )
 
     def _visit_expr(
         self,

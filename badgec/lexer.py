@@ -27,6 +27,7 @@ KEYWORDS = {
     "false",
     "import",
     "extern",
+    "asm",
 }
 
 # Longest operators first.
@@ -126,9 +127,47 @@ class Lexer:
             line, column = self.line, self.column
 
             if ch.isalpha() or ch == "_":
+                start_line, start_column = self.line, self.column
                 ident = self.read_identifier()
+                if ident == "asm":
+                    lookahead = self.pos
+                    while (
+                        lookahead < len(self.source)
+                        and self.source[lookahead] in " \t\r\n"
+                    ):
+                        lookahead += 1
+                    if (
+                        lookahead < len(self.source)
+                        and self.source[lookahead] == "{"
+                    ):
+                        while self.pos <= lookahead:
+                            self.advance()
+                        text: list[str] = []
+                        while self.pos < len(self.source):
+                            if self.peek() == "$" and self.peek(1) == "{":
+                                text.append(self.advance())
+                                text.append(self.advance())
+                                while self.pos < len(self.source):
+                                    char = self.advance()
+                                    text.append(char)
+                                    if char == "}":
+                                        break
+                                continue
+                            if self.peek() == "}":
+                                self.advance()
+                                break
+                            text.append(self.advance())
+                        else:
+                            raise self.error("unterminated asm block")
+                        self.add(
+                            "asm_block",
+                            "".join(text),
+                            start_line,
+                            start_column,
+                        )
+                        continue
                 kind = "keyword" if ident in KEYWORDS else "ident"
-                self.add(kind, ident, line, column)
+                self.add(kind, ident, start_line, start_column)
                 continue
 
             if ch.isdigit():

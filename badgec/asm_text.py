@@ -14,6 +14,9 @@ from typing import Iterator
 
 PLACEHOLDER_RE = re.compile(r"\$\{([^}]*)\}")
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+ASM_CALL_RE = re.compile(
+    r"\b(?:GOSUB|GOTO)\s+(fn_[A-Za-z0-9_]+)", re.IGNORECASE
+)
 LABEL_RE = re.compile(r"^\s*([A-Za-z_.][A-Za-z0-9_.]*):\s*$")
 
 NO_OPTIMIZE = "; @badgec: no-optimize"
@@ -60,6 +63,16 @@ def placeholder_names(text: str) -> set[str]:
     for placeholder in iter_placeholders(text):
         names.update(IDENT_RE.findall(placeholder.text))
     return names
+
+
+def asm_function_references(text: str) -> set[str]:
+    """Return BadgeC function names called by ``GOSUB``/``GOTO``."""
+
+    return {
+        match.group(1)[3:]
+        for line in text.splitlines()
+        for match in ASM_CALL_RE.finditer(code_part(line))
+    }
 
 
 def has_file_marker(text: str, marker: str) -> bool:

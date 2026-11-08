@@ -98,6 +98,10 @@
       {
         "type": "badgec",
         "label": "BadgeC Emulator",
+        "languages": [
+          "badgec",
+          "voja4-asm"
+        ],
         "program": "./out/debugAdapter.js",
         "runtime": "node",
         "configurationAttributes": {

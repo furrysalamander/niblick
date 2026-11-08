@@ -28,7 +28,7 @@ snippet in the debug configuration picker.
 ## What works
 
 - stop on entry;
-- line breakpoints;
+- line breakpoints in `.badge` and `.asm` source files;
 - continue and pause;
 - step over, step into, and step out;
 - registers `R0`–`R9`;

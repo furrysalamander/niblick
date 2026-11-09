@@ -62,6 +62,14 @@
         "path": "./snippets/voja4-asm.json"
       }
     ],
+    "breakpoints": [
+      {
+        "language": "badgec"
+      },
+      {
+        "language": "voja4-asm"
+      }
+    ],
     "configuration": {
       "title": "BadgeC",
       "properties": {

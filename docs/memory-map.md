@@ -99,6 +99,33 @@ All are data-memory locations and are accessed with `MOV [NN],R0` /
 | `0xFE` | `Dimmer` | `DIMMER[3:0]` | `1111` | LED PWM duty; `1111` = 100%, `0000` = lowest |
 | `0xFF` | `Random` | `RANDOM[3:0]` | random | 4-bit PRNG output; each read advances the LCG; writing reseeds (`1111` = true random) |
 
+### SFR access from BadgeC
+
+Every page-15 SFR has a typed helper in `lib/`, and `peek`/`poke` can reach
+any data address directly when a raw access is needed.
+
+| SFR | Address | Public BadgeC API |
+|---|---:|---|
+| `Page` | `0xF0` | `display_page`, `display_page_get`, `system_page` |
+| `Clock` | `0xF1` | `time_clock_set`, `time_clock_get` |
+| `Sync` | `0xF2` | `time_sync_set`, `time_sync_get`, `time_sync_seen`, `time_sync_wait` |
+| `WrFlags` | `0xF3` | `system_wr_flags`, `system_wr_flags_set`, `gpio_alt`, `uart_route`, `leds_enable`, `matrix_enable` |
+| `RdFlags` | `0xF4` | `system_rd_flags`, `system_vflag`, `system_user_sync` |
+| `SerCtrl` | `0xF5` | `uart_init`, `uart_error`, `uart_baud`, `system_ser_ctrl`, `system_uart_error`, `system_uart_baud` |
+| `SerLow` / `SerHigh` | `0xF6` / `0xF7` | `uart_putc`, `uart_getc` (use these: the two nibbles have side effects) |
+| `Received` | `0xF8` | `uart_available` |
+| `AutoOff` | `0xF9` | `power_keep_awake`, `power_auto_off`, `power_auto_off_minutes`, `power_sleep`, `power_remaining` |
+| `OutB` / `InB` | `0xFA` / `0xFB` | `gpio_read`, `gpio_write`, `gpio_alt` |
+| `KeyStatus` | `0xFC` | `key_status`, `key_any`, `key_alt`, `key_just`, `key_last` and the `*_of` forms |
+| `KeyReg` | `0xFD` | `key_code`, `key_down`, `key_wait`, `key_wait_any`, `key_wait_release`, `key_name` |
+| `Dimmer` | `0xFE` | `dimmer`, `dimmer_get`, `system_dimmer` |
+| `Random` | `0xFF` | `random`, `seed`, `rand_seed`, `rand_byte`, `rand_word`, `rand_below`, `rand_range`, `rand_true` |
+
+Page 0's fixed registers are different: `OUT`/`IN` at `0x0A`/`0x0B` are
+reached through `out()`, `in()`, `gpio_read`, and `gpio_write`; `JSR`, `PCL`,
+`PCM`, and `PCH` are driven by calls, jumps, and returns rather than by a
+typed API. Inline assembly can access them when needed.
+
 #### `WrFlags` (`0xF3`)
 
 | Bit | Name | 0 | 1 |

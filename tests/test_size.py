@@ -10,27 +10,27 @@ from badgec.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
 BUDGETS = {
-    "hello.badge": 220,
-    "serial_echo.badge": 260,
+    "hello.badge": 180,
+    "serial_echo.badge": 210,
     "flash_walk.badge": 180,
     "gpio_blink.badge": 70,
     "inline_asm.badge": 60,
-    "tetris.badge": 2800,
-    "stdlib_demo.badge": 2400,
+    "tetris.badge": 2650,
+    "stdlib_demo.badge": 2150,
     "word_math.badge": 1400,
     "dword_math.badge": 2400,
     "math32_test.badge": 2900,
     "cube.badge": 2100,
-    "wave.badge": 1200,
+    "wave.badge": 1100,
     "water.badge": 2100,
     "w5500_probe.badge": 600,
     "w5500_udp.badge": 2200,
     "w5500_http.badge": 2700,
     "w5500_dashboard.badge": 4096,
     "mc_void.badge": 4096,
-    "text_scroll.badge": 2200,
-    "audio_demo.badge": 600,
-    "pdm_demo.badge": 300,
+    "text_scroll.badge": 2050,
+    "audio_demo.badge": 500,
+    "pdm_demo.badge": 200,
 }
 
 

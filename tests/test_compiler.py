@@ -564,3 +564,71 @@ def test_constant_address_memory_ops(tmp_path: Path) -> None:
     c_base = compiler.globals["c"].address
     assert emu.ram[c_base] == 0xB
     assert emu.ram[c_base + 1] == 0xA
+
+
+def test_small_void_function_is_inlined(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        nibble value;
+        fn void set_value(nibble v) {
+            poke(0xFE, v);
+        }
+        fn main() {
+            set_value(7);
+            value = peek(0xFE);
+        }
+        """,
+    )
+    asm = (tmp_path / "prog.asm").read_text()
+    assert "fn_set_value" not in asm
+    assert "fn_set_value" not in compiler.functions
+    emu = run(hex_path)
+    assert emu.ram[ram_nibble(compiler, "value")] == 7
+
+
+def test_void_if_function_is_inlined(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        fn void route(nibble enable) {
+            if (enable != 0) {
+                poke(0xF3, peek(0xF3) | 1);
+            } else {
+                poke(0xF3, peek(0xF3) & 14);
+            }
+        }
+        fn main() {
+            route(1);
+        }
+        """,
+    )
+    asm = (tmp_path / "prog.asm").read_text()
+    assert "fn_route" not in asm
+    assert "fn_route" not in compiler.functions
+    emu = run(hex_path)
+    assert (emu.ram[0xF3] & 1) == 1
+
+
+def test_void_inliner_does_not_duplicate_side_effects(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        nibble calls;
+        fn nibble bump() {
+            calls = calls + 1;
+            return 1;
+        }
+        fn void set_value(nibble v) {
+            poke(0xFE, v);
+        }
+        fn main() {
+            calls = 0;
+            set_value(bump());
+        }
+        """,
+    )
+    asm = (tmp_path / "prog.asm").read_text()
+    assert "GOSUB fn_set_value" in asm
+    emu = run(hex_path, steps=50000)
+    assert emu.ram[ram_nibble(compiler, "calls")] == 1

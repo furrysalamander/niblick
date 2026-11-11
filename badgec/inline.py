@@ -15,6 +15,7 @@ import dataclasses
 from . import ast_nodes as ast
 from .asm_link import scan_asm
 from .asm_text import IDENT_RE, asm_function_references, placeholder_names
+from .types import VOID
 
 
 def _is_pure(expr: ast.Expr) -> bool:
@@ -42,14 +43,16 @@ def _substitute(node, mapping: dict[str, ast.Expr]):
 
     for field in dataclasses.fields(node):
         value = getattr(node, field.name)
-        if isinstance(value, ast.Expr):
+        if isinstance(value, (ast.Expr, ast.Stmt, ast.Block)):
             setattr(node, field.name, _substitute(value, mapping))
         elif isinstance(value, list):
             setattr(
                 node,
                 field.name,
                 [
-                    _substitute(item, mapping) if isinstance(item, ast.Expr) else item
+                    _substitute(item, mapping)
+                    if isinstance(item, (ast.Expr, ast.Stmt, ast.Block))
+                    else item
                     for item in value
                 ],
             )
@@ -307,6 +310,124 @@ def _eliminate_dead(program: ast.Program) -> None:
     program.globals = [decl for decl in program.globals if decl.name in kept_globals]
 
 
+
+
+def _count_calls(program: ast.Program) -> dict[str, int]:
+    counts: dict[str, int] = {}
+
+    def count_expr(expr: ast.Expr) -> None:
+        if isinstance(expr, ast.Call):
+            counts[expr.name] = counts.get(expr.name, 0) + 1
+        for field in dataclasses.fields(expr):
+            value = getattr(expr, field.name)
+            if isinstance(value, ast.Expr):
+                count_expr(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr):
+                        count_expr(item)
+
+    def count_stmt(stmt: ast.Stmt) -> None:
+        if isinstance(stmt, ast.InlineAsm):
+            return
+        for field in dataclasses.fields(stmt):
+            value = getattr(stmt, field.name)
+            if isinstance(value, ast.Expr):
+                count_expr(value)
+            elif isinstance(value, ast.Block):
+                for child in value.statements:
+                    count_stmt(child)
+            elif isinstance(value, ast.Stmt):
+                count_stmt(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr):
+                        count_expr(item)
+                    elif isinstance(item, ast.Stmt):
+                        count_stmt(item)
+
+    for fn in program.functions:
+        count_stmt(fn.body)
+    return counts
+
+
+def _safe_void_stmt(stmt: ast.Stmt) -> bool:
+    """True when a statement can be inlined into a caller without control-flow surgery."""
+    if isinstance(stmt, (ast.Return, ast.Break, ast.Continue, ast.VarDecl, ast.While, ast.For, ast.InlineAsm)):
+        return False
+    if isinstance(stmt, ast.If):
+        if not all(_safe_void_stmt(child) for child in stmt.then_block.statements):
+            return False
+        if stmt.else_block is not None:
+            if not all(_safe_void_stmt(child) for child in stmt.else_block.statements):
+                return False
+    return True
+
+
+def _inlineable_void(fn: ast.FunctionDecl, call_count: int) -> bool:
+    if fn.name == "main" or fn.is_extern or fn.return_type is not VOID:
+        return False
+    if len(fn.body.statements) != 1:
+        return False
+    stmt = fn.body.statements[0]
+    if not isinstance(stmt, (ast.ExprStmt, ast.If)):
+        return False
+    if not _safe_void_stmt(stmt):
+        return False
+    # Single call sites are always worth inlining.  Multi-call bodies are
+    # only inlined when they are one simple statement and the duplication is
+    # small; large/branchy wrappers stay shared.
+    if call_count <= 1:
+        return True
+    return isinstance(stmt, ast.ExprStmt) and call_count <= 3
+
+
+def _inline_void_stmt(
+    stmt: ast.Stmt,
+    candidates: dict[str, ast.FunctionDecl],
+    active: set[str],
+) -> list[ast.Stmt]:
+    if isinstance(stmt, ast.ExprStmt) and isinstance(stmt.expr, ast.Call):
+        call = stmt.expr
+        fn = candidates.get(call.name)
+        if (
+            fn is not None
+            and fn.name not in active
+            and len(fn.params) == len(call.args)
+            and all(_is_pure(arg) for arg in call.args)
+        ):
+            mapping: dict[str, ast.Expr] = {}
+            for param, arg in zip(fn.params, call.args):
+                mapping[param.name] = (
+                    ast.ToType(param.type, arg, line=getattr(arg, "line", 0))
+                    if param.type.name in ("char", "word")
+                    else arg
+                )
+            body = copy.deepcopy(fn.body)
+            _substitute(body, mapping)
+            out: list[ast.Stmt] = []
+            for child in body.statements:
+                out.extend(_inline_void_stmt(child, candidates, active | {fn.name}))
+            return out
+
+    if isinstance(stmt, ast.If):
+        _inline_void_block(stmt.then_block, candidates, active)
+        if stmt.else_block is not None:
+            _inline_void_block(stmt.else_block, candidates, active)
+    return [stmt]
+
+
+def _inline_void_block(
+    block: ast.Block,
+    candidates: dict[str, ast.FunctionDecl],
+    active: set[str],
+) -> None:
+    statements: list[ast.Stmt] = []
+    for stmt in block.statements:
+        statements.extend(_inline_void_stmt(stmt, candidates, active))
+    block.statements = statements
+
+
 def optimize(program: ast.Program) -> None:
     """Inline tiny return-only functions and remove dead declarations."""
     candidates: dict[str, ast.FunctionDecl] = {}
@@ -329,6 +450,20 @@ def optimize(program: ast.Program) -> None:
                 decl.init_list = [
                     _inline_expr(item, candidates, set()) for item in decl.init_list
                 ]
+
+    counts = _count_calls(program)
+    void_candidates: dict[str, ast.FunctionDecl] = {
+        fn.name: fn
+        for fn in program.functions
+        if _inlineable_void(fn, counts.get(fn.name, 0))
+    }
+    if void_candidates:
+        for fn in program.functions:
+            _inline_void_block(fn.body, void_candidates, set())
+        # Inlining a void body can expose tiny return-only helpers.
+        if candidates:
+            for fn in program.functions:
+                _inline_block(fn.body, candidates, set())
 
     # This must run even when there was nothing to inline: imported library
     # modules rely on unused functions and tables disappearing.

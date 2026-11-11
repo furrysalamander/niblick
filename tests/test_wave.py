@@ -20,7 +20,7 @@ def test_wave_demo_runs_and_draws(tmp_path: Path) -> None:
     hex_path = tmp_path / "wave.hex"
     assemble_file(asm_path, hex_path)
 
-    assert code_words(hex_path) <= 1200
+    assert code_words(hex_path) <= 1100
     assert compiler.mem.used() <= 176
 
     emu = Emulator()

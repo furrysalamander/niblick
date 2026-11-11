@@ -98,9 +98,9 @@ def test_stack_report_and_warning_for_deep_runtime_call(tmp_path: Path) -> None:
         """
         nibble x;
         fn void leaf() { x = gpio_test(3); }
-        fn void a() { leaf(); }
-        fn void b() { a(); }
-        fn void c() { b(); }
+        fn void a() { leaf(); x = x; }
+        fn void b() { a(); x = x; }
+        fn void c() { b(); x = x; }
         fn main() { c(); }
         """
     )

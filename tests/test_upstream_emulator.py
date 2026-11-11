@@ -10,9 +10,15 @@ from __future__ import annotations
 
 import contextlib
 import io
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pytest
+
+try:
+    version("supercon6-emulator")
+except PackageNotFoundError:
+    pytest.skip("supercon6-emulator is not installed", allow_module_level=True)
 
 pytest.importorskip("badge")
 pytest.importorskip("bvmCPU")

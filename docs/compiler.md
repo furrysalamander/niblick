@@ -7,7 +7,7 @@
   -> badgec/loader.py       resolve imports; collect .asm modules
   -> badgec/lexer.py        tokens
   -> badgec/parser.py       AST (badgec/ast_nodes.py)
-  -> badgec/inline.py       inline tiny functions, remove dead declarations
+  -> badgec/inline.py       inline tiny/statement wrappers, remove dead declarations
   -> badgec/compiler.py     semantic checks, allocation, code generation
   -> badgec/asm_link.py     scan imported assembly for calls and symbols
   -> badgec/asm_opt.py      peepholes, copy propagation, branch relaxation
@@ -54,12 +54,16 @@ addresses are known at compile time.
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays (176 nibbles) |
 | `0xF0..0xFF` | SFR page |
 
-RAM allocation is static. A function's parameters and locals keep the same
-addresses for the whole program. This is safe while the call graph is
-acyclic or tail-recursive, and it avoids software frame pointers. The
-trade-off is that two functions that are never active at the same time
-still get separate storage. A call-graph overlay or inliner is a future
-optimization.
+RAM allocation is static, but function frames are overlaid. The compiler
+builds a conservative frame-interference graph:
+
+- a caller and its transitive callees never share a frame;
+- callees evaluated in the same statement never share a frame;
+- imported assembly call edges are included.
+
+Functions in separate branches share the same slot block, so their parameter
+and local slots are reused. The fixed-register calling convention and the
+lack of a software frame pointer are unchanged.
 
 ## Imports
 
@@ -187,10 +191,12 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   by immediates, saving both their RAM and their startup stores. Const
   expression folding is also used for GPIO masks and constant assignments.
 - Direct `peek`/`poke`/`out`/`in` lowering.
-- Whole-program inlining of tiny `return <expr>` functions, with a
-  side-effect guard for parameters used more than once. Char arguments are
-  wrapped in an internal `ToChar` node so substituted literals keep 8-bit
-  semantics.
+- Constant-address `peek`/`poke`/`peek8`/`poke8` lowering to direct
+  `MOV R0,[NN]` / `MOV [NN],R0` instructions.
+- Whole-program inlining of tiny `return <expr>` functions and small
+  single-statement void wrappers. Parameters used more than once are guarded
+  by a side-effect check. Char arguments are wrapped in an internal `ToChar`
+  node so substituted literals keep 8-bit semantics.
 - Dead-function elimination based on reachability from `main` and global
   initializers.
 - Runtime stripping: only the `__bc_*` routines reachable from used builtins
@@ -200,6 +206,7 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   per-region `; @badgec: no-optimize` markers.
 - Inline `asm { ... }` statements with lexical `${...}` placeholders, local
   labels, call-graph/runtime-linking integration, and optimizer opacity.
+- Call-graph frame overlay for parameter and local slots.
 - Peephole removal of redundant `MOV`s.
 - Basic-block copy propagation: a `MOV Rd,Rs` is dropped when `Rd` already
   holds `Rs`'s value.
@@ -237,19 +244,20 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 
 ## Planned optimizations
 
-1. Size-aware inlining for small functions with no static locals.
-2. Call-graph local overlay to reduce RAM.
+1. More aggressive size-aware inlining, including small multi-statement bodies.
+2. Peephole rules for constant branches and wider delete/replace patterns.
 3. Short-`if` skip fusion for bodies of four words or fewer.
 4. Loop rotation to remove the unconditional back-edge.
 5. Faster 32-bit multiply/divide (the current routines are size-conscious).
 
 ## Current code-size pressure
 
-The Tetris demo is now around **2494 / 4096 words** and **164 / 208 RAM
-nibbles**, down from 4004 words before the condition-lowering and peephole
-work. That leaves roughly 1600 words for new features. A dword-heavy demo
-(`dword_math.badge`) plus the 32-bit multiply/divide runtime is about 2216
-words and 105 RAM nibbles.
+The Tetris demo is now around **2577 / 4096 words** and **117 / 176 usable
+RAM nibbles**. That leaves roughly 1500 words for new features. The
+`hello.badge` example is about **146 words** after constant-address lowering,
+small void inlining, and frame overlay. A dword-heavy demo
+(`dword_math.badge`) plus the 32-bit multiply/divide runtime remains a few
+thousand words.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2800-word
@@ -289,6 +297,15 @@ runtime cost 2 needs 6 stack levels (the hardware stack has 5)
 
 The existing hard limit of four non-tail user levels from `main` is
 unchanged.
+
+## Verification tools
+
+- `z3-solver` proves the address-lowering and peephole identities in
+  `tests/test_peephole_z3.py`.
+- `hypothesis` generates nibble expressions and compares the compiled
+  emulator result with a Python reference in `tests/test_hypothesis_compiler.py`.
+- `ruff` and `mypy` run in CI and in the pre-commit hook.
+- `pytest-cov` reports compiler coverage in CI.
 
 ## Error handling
 

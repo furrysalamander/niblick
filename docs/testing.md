@@ -194,3 +194,24 @@ If the badge does not run the program:
 - run: python3 -m pytest
 - run: make examples
 ```
+
+## Tooling
+
+The development extras include `ruff`, `mypy`, `pytest-cov`, `hypothesis`,
+`z3-solver`, and `pre-commit`.
+
+```bash
+python3 -m pip install -e ".[dev]"
+ruff check .
+mypy badgec/compiler.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
+python3 -m pytest --cov=badgec
+pre-commit install
+```
+
+- `tests/test_peephole_z3.py` uses z3 to prove the constant-address and
+  peephole identities.
+- `tests/test_hypothesis_compiler.py` generates nibble expressions and compares
+  compiled emulator results with a Python reference.
+- `tests/test_overlay.py` checks the frame-interference rules.
+- The CI workflow runs the full matrix, Ruff/mypy, coverage, the extension
+  build, and the wheel smoke test.

@@ -21,16 +21,15 @@ Working today:
 - `if`/`else`, `while`, `for`, `break`, `continue`
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
 - Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
-- `import` for the opt-in modules in `lib/` (UART formatting, strings, math, memory, keys, time, display)
+- `import` for the standard modules in `lib/` and device drivers in `lib/drivers/`
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
 - Inline `asm { ... }` blocks inside BadgeC functions, with lexical `${...}` placeholders, local labels, call-graph integration, and optimizer opacity
 - VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, go-to-definition, references, rename, and an emulator debugger
 - Flash strings and `RET`-table iteration
-- UART runtime: `uart_init`, `uart_putc`, `uart_getc`, `uart_available`, `uart_puts`
-- RAM helpers: `peek`, `poke`, `memset`, `uart_write`, `delay`
-- Direct I/O: `in`, `out`
-- GPIO: `gpio_read`, `gpio_write`, `gpio_set`, `gpio_clear`, `gpio_toggle`, `gpio_test`, `gpio_alt`, `uart_route`
-- System/SFR helpers: `display_page`, `display_poke`, `display_peek`, `random`, `seed`, `dimmer`, `key_status`, `key_code`, `key_any`, `key_alt`, `key_just`, `key_last`, `leds_enable`, `matrix_enable`
+- Intrinsics: `peek`, `poke`, `peek8`, `poke8`, `in`, `out`, flash tables, constant-mask GPIO, UART bytes, `delay`
+- `lib/` modules: UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, signed/Q4.4, audio/PDM, SPI
+- Device drivers under `lib/drivers/`, including the W5500 Ethernet driver
+- Constant-address memory lowering, small-function/void inlining, frame overlay, copy propagation, dead-write elimination, branch relaxation, and tail calls
 - Rejection of non-tail recursion with a compile-time error
 - Code/RAM size reporting, per-function sizes, stack-cost reports, I/O tracing, and a headless emulator test harness
 
@@ -41,7 +40,7 @@ Not implemented yet:
 - Native signed types (raw-bit signed helpers live in `lib/signed.badge`)
 - General pointers and pointer arithmetic
 - Structs, varargs, dynamic allocation
-- Register allocation, local overlay, and a broader peephole/optimization pipeline
+- Full register allocation and a broader peephole/optimization pipeline
 - UART interrupt-driven or buffered I/O beyond the hardware FIFO
 
 32-bit `*`, `/`, and `%` are implemented but deliberately size-conscious:
@@ -160,9 +159,9 @@ stack is only five entries deep and there is no stack-relative addressing.
 python3 -m pytest
 ```
 
-The test suite covers the emulator's instruction semantics and end-to-end
-BadgeC programs: loops, char arrays, functions, tail recursion, flash
-string iteration, UART transmit/receive, and error cases.
+The test suite covers the emulator's instruction semantics, end-to-end
+BadgeC programs, the standard library, frame overlay, z3-checked peephole
+identities, and Hypothesis-generated arithmetic properties.
 
 The optional `fidelity` extra installs the upstream headless emulator so the
 two CPU models can be cross-checked:

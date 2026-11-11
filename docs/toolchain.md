@@ -200,6 +200,7 @@ assembler's 8-byte header + length + words + checksum container, so pass the
 | Timing | Wall-clock tick (`frameDelay` 10 ms, `0.5/speed` gate); not cycle-accurate. `Clock` indexes a speed table rather than modeling instruction costs. |
 | Input file | Header is skipped, length is ignored, and checksum is not verified. Truncated/extra bytes can be silently accepted. |
 | Instruction aliases | `BIT`/`BSET`/`BCLR`/`BTG` with `G=3` operate on `R3`, matching the assembler's `R3`/`RS` alias rather than the hardware I/O port (`IN` for `BIT`, `OUT` for the write forms). |
+| Flags | `SUB`/`SBB` clear `C` when there is no borrow; the hardware manuals specify inverse borrow (`C=1` for no borrow). BadgeC's emulator follows the manuals. |
 | Errors | Stack overflow/underflow raises a Python exception; it does not reproduce the badge's halted-error display. |
 | Output | Prints every decoded instruction and stack event to stdout; very noisy for large programs. |
 

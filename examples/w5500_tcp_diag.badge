@@ -1,0 +1,74 @@
+// Tiny W5500 TCP state diagnostic.
+//
+// Prints socket 0 status after CLOSE, OPEN, and LISTEN.
+
+import "lib/spi.badge";
+import "lib/w5500.badge";
+import "lib/uart.badge";
+
+char v;
+char i;
+
+fn void show(char label) {
+    uart_puts("SR ");
+    uart_putc(label);
+    uart_putc('=');
+    uart_print_hex8(w5500_read(1, 0x00, 0x03));
+    uart_nl();
+}
+
+fn main() {
+    spi_init();
+    w5500_reset();
+    uart_route(1);
+    uart_init(3);
+
+    uart_puts("TCP diag ver=");
+    uart_print_hex8(w5500_version());
+    uart_nl();
+
+    while ((w5500_phy() & 1) == 0) {
+        uart_puts("wait link\n");
+        delay(15);
+        delay(15);
+    }
+    uart_puts("link up\n");
+
+    uart_puts("close\n");
+    w5500_write(1, 0x00, 0x01, 0x10);
+    delay(15);
+    i = 0;
+    while (i < 10) {
+        show('C');
+        delay(15);
+        i = i + 1;
+    }
+
+    uart_puts("open\n");
+    w5500_write(1, 0x00, 0x00, 0x01);
+    w5500_write(1, 0x00, 0x04, 0x00);
+    w5500_write(1, 0x00, 0x05, 0x50);
+    w5500_write(1, 0x00, 0x01, 0x01);
+    delay(15);
+    i = 0;
+    while (i < 10) {
+        show('O');
+        delay(15);
+        i = i + 1;
+    }
+
+    uart_puts("listen\n");
+    w5500_write(1, 0x00, 0x01, 0x02);
+    delay(15);
+    i = 0;
+    while (i < 10) {
+        show('L');
+        delay(15);
+        i = i + 1;
+    }
+
+    while (1) {
+        show('S');
+        delay(15);
+    }
+}

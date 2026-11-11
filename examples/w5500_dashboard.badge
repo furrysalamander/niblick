@@ -1,0 +1,164 @@
+// Compact interactive badge dashboard over HTTP.
+//
+// Badge: 192.168.1.50:80
+// Host:  192.168.1.10
+//
+//   curl --interface enx0050b6bde773 --noproxy '*' http://192.168.1.50/
+//
+// Endpoints:
+//   /                    HTML buttons
+//   /api/pattern?p=N     0=clear, 1=fill, 2=checker, 3=random
+//   /api/dimmer?v=N      set dimmer 0..15
+
+import "lib/spi.badge";
+import "lib/w5500.badge";
+
+const char page[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<title>Badge</title><style>body{font:15px monospace;background:#111;color:#eee}button{margin:3px;padding:6px}</style><h3>Badge</h3><button onclick=\"fetch('/api/pattern?p=1')\">fill</button><button onclick=\"fetch('/api/pattern?p=0')\">clear</button><button onclick=\"fetch('/api/pattern?p=2')\">check</button><button onclick=\"fetch('/api/pattern?p=3')\">rand</button><button onclick=\"fetch('/api/dimmer?v=15')\">+</button><button onclick=\"fetch('/api/dimmer?v=4')\">-</button>";
+const char ok[] = "HTTP/1.1 204 No Content\r\n\r\n";
+
+nibble screen[32];
+char url[24];
+char url_len;
+char status;
+
+fn void set_pattern(nibble p) {
+    char i;             // char, not nibble: a nibble wraps 15 -> 0, so i < 16 is infinite
+    nibble v;
+
+    display_page(4);
+    i = 0;
+    while (i < 16) {
+        if (p == 1) {
+            v = 15;
+        } else if (p == 2) {
+            if ((i & 1) == 0) {
+                v = 5;
+            } else {
+                v = 10;
+            }
+        } else if (p == 3) {
+            v = random();
+        } else {
+            v = 0;
+        }
+        screen[i] = v;
+        screen[16 + i] = v;
+        i = i + 1;
+    }
+}
+
+fn void read_request() {
+    word rsr;
+    word rd;
+    char ahi;
+    char alo;
+    char c;
+    char started;
+
+    rsr = w5500_read16(1, 0x00, 0x26);
+    if (rsr == 0) {
+        return;
+    }
+
+    rd = w5500_read16(1, 0x00, 0x28);
+    ahi = (char)(rd >> 8);
+    alo = (char)rd;
+
+    started = 0;
+    url_len = 0;
+    while (1) {
+        c = w5500_read(3, ahi, alo);
+        alo = alo + 1;
+        if (alo == 0) {
+            ahi = ahi + 1;
+        }
+
+        if (started == 0) {
+            if (c == '/') {
+                started = 1;
+                url[0] = '/';
+                url_len = 1;
+            }
+        } else if (c == ' ' || c == '\r' || c == '\n') {
+            break;
+        } else if (url_len < 23) {
+            url[url_len] = c;
+            url_len = url_len + 1;
+        }
+    }
+    url[url_len] = 0;
+
+    // Discard the rest of the request, including headers.
+    w5500_write16(1, 0x00, 0x28, rd + rsr);
+    w5500_write(1, 0x00, 0x01, 0x40);   // RECV
+}
+
+fn main() {
+    char v;
+
+    spi_init();
+    w5500_reset();
+
+    while ((w5500_phy() & 1) == 0) {
+        delay(15);
+        delay(15);
+    }
+
+    w5500_write(0, 0x00, 0x01, 192);
+    w5500_write(0, 0x00, 0x02, 168);
+    w5500_write(0, 0x00, 0x03, 1);
+    w5500_write(0, 0x00, 0x04, 10);
+    w5500_write(0, 0x00, 0x05, 255);
+    w5500_write(0, 0x00, 0x06, 255);
+    w5500_write(0, 0x00, 0x07, 255);
+    w5500_write(0, 0x00, 0x08, 0);
+    w5500_write(0, 0x00, 0x09, 0x02);
+    w5500_write(0, 0x00, 0x0A, 0x08);
+    w5500_write(0, 0x00, 0x0B, 0xDC);
+    w5500_write(0, 0x00, 0x0C, 0x50);
+    w5500_write(0, 0x00, 0x0D, 0x00);
+    w5500_write(0, 0x00, 0x0E, 0x01);
+    w5500_write(0, 0x00, 0x0F, 192);
+    w5500_write(0, 0x00, 0x10, 168);
+    w5500_write(0, 0x00, 0x11, 1);
+    w5500_write(0, 0x00, 0x12, 50);
+
+    dimmer(15);
+    set_pattern(1);
+    w5500_open_tcp(0x00, 0x50);
+    set_pattern(2);          // checker = reached LISTEN
+
+    while (1) {
+        status = w5500_read(1, 0x00, 0x03);
+        if (status == 0x17) {
+            read_request();
+            if (url_len == 1) {
+                w5500_send_flash(page);
+            } else if (url_len > 5 && url[1] == 'a' && url[2] == 'p' && url[3] == 'i') {
+                if (url[5] == 'p' && url_len > 15) {
+                    set_pattern((nibble)(url[15] - '0'));
+                } else if (url[5] == 'd' && url_len > 14) {
+                    v = url[14] - '0';
+                    if (url_len > 15 && url[15] >= '0' && url[15] <= '9') {
+                        v = (char)(v * 10 + (url[15] - '0'));
+                    }
+                    dimmer((nibble)v);
+                }
+                w5500_send_flash(ok);
+            } else {
+                w5500_send_flash(ok);
+            }
+
+            delay(15);
+            w5500_write(1, 0x00, 0x01, 0x08);   // DISCONNECT
+            delay(15);
+            w5500_open_tcp(0x00, 0x50);
+        } else if (status == 0x13) {
+            // OPEN completed but LISTEN did not take; retry LISTEN.
+            w5500_write(1, 0x00, 0x01, 0x02);
+        } else if (status == 0x1C || status == 0x00) {
+            w5500_open_tcp(0x00, 0x50);
+        }
+        delay(1);
+    }
+}

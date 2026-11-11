@@ -14,6 +14,7 @@ BUDGETS = {
     "serial_echo.badge": 200,
     "flash_walk.badge": 180,
     "gpio_blink.badge": 70,
+    "inline_asm.badge": 60,
     "tetris.badge": 2600,
     "stdlib_demo.badge": 1900,
     "word_math.badge": 1300,
@@ -25,6 +26,7 @@ BUDGETS = {
     "w5500_probe.badge": 600,
     "w5500_udp.badge": 2200,
     "w5500_http.badge": 2700,
+    "w5500_dashboard.badge": 4096,
     "mc_void.badge": 4096,
 }
 

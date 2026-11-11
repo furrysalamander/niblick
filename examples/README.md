@@ -15,12 +15,14 @@
 | `wave.badge` | 4×8 signed-nibble wave field from `lib/signed.badge` |
 | `water.badge` | Falling-water cellular automaton with changing gravity |
 | `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, bits, keys, clock, and display |
+| `inline_asm.badge` | Raw `asm { ... }` block with `${...}` variable placeholders |
 | `word_math.badge` | 16-bit words, casts, and `* / %` |
 | `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |
 | `math32_test.badge` | 32-bit arithmetic self-test; send `0x01` over UART |
 | `w5500_probe.badge` | Read W5500 `VERSIONR`/`PHYCFGR` over SPI and print on UART |
 | `w5500_udp.badge` | Send UDP datagrams from `192.168.1.50` to `192.168.1.10:5001` |
 | `w5500_http.badge` | Minimal HTTP server at `http://192.168.1.50/` |
+| `w5500_dashboard.badge` | Compact interactive LED-matrix/dimmer web controls |
 | `mc_void.badge` | Minimal Minecraft 1.8.9 server; join a void world over Ethernet |
 
 Compile one with:

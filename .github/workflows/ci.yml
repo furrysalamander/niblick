@@ -25,6 +25,39 @@ jobs:
       - name: Test
         run: python -m pytest
 
+
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check .
+      - name: mypy
+        run: mypy badgec/compiler.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,lsp,fidelity]"
+      - name: Test with coverage
+        run: python -m pytest --cov=badgec --cov-report=term-missing
+
   extension:
     name: VS Code extension
     runs-on: ubuntu-latest

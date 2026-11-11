@@ -11,7 +11,6 @@ from badgec.assembler import assemble_file
 from badgec.compiler import Compiler
 from badgec.emulator import Emulator, EmulatorError
 from badgec.errors import BadgeError
-from badgec.lexer import tokenize
 from badgec.parser import parse
 
 

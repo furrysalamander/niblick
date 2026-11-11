@@ -249,9 +249,9 @@ def _eliminate_dead(program: ast.Program) -> None:
                 asm_calls.setdefault(caller, set()).add(callee)
 
         for function_label, placeholder in scan.placeholders:
-            names = set(IDENT_RE.findall(placeholder.text))
-            globals_here = {name for name in names if name in by_global}
-            functions_here = {name for name in names if name in by_function}
+            token_names = set(IDENT_RE.findall(placeholder.text))
+            globals_here = {name for name in token_names if name in by_global}
+            functions_here = {name for name in token_names if name in by_function}
             if function_label is None:
                 module_globals.update(globals_here)
                 module_functions.update(functions_here)
@@ -299,12 +299,12 @@ def _eliminate_dead(program: ast.Program) -> None:
             if decl is None:
                 continue
             for expr in _initializers(decl):
-                calls: set[str] = set()
-                names: set[str] = set()
-                _collect_calls_expr(expr, calls)
-                _collect_vars_expr(expr, names)
-                function_worklist.extend(calls - reachable)
-                global_worklist.extend(names - kept_globals)
+                init_calls: set[str] = set()
+                init_names: set[str] = set()
+                _collect_calls_expr(expr, init_calls)
+                _collect_vars_expr(expr, init_names)
+                function_worklist.extend(init_calls - reachable)
+                global_worklist.extend(init_names - kept_globals)
 
     program.functions = [fn for fn in program.functions if fn.name in reachable]
     program.globals = [decl for decl in program.globals if decl.name in kept_globals]

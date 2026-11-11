@@ -130,8 +130,8 @@ def _max_line(node) -> int:
     if isinstance(node, ast.InlineAsm):
         return node.line + max(0, len(node.text.splitlines()) - 1)
     best = getattr(node, "line", 0) or 0
-    for field in dataclasses.fields(node):
-        value = getattr(node, field.name)
+    for data_field in dataclasses.fields(node):
+        value = getattr(node, data_field.name)
         if isinstance(value, (ast.Expr, ast.Stmt)):
             best = max(best, _max_line(value))
         elif isinstance(value, list):

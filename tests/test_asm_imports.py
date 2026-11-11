@@ -10,7 +10,7 @@ from badgec.assembler import assemble_file, code_words
 from badgec.compiler import Compiler
 from badgec.emulator import Emulator
 from badgec.errors import BadgeCompileError
-from badgec.loader import load_program, load_source
+from badgec.loader import load_program
 
 
 def build(tmp_path: Path, source: str, asm: dict[str, str], name: str = "main"):

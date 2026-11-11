@@ -135,6 +135,12 @@ class VarSymbol:
 
 
 @dataclass
+class FrameBlock:
+    size: int
+    members: set[str] = field(default_factory=set)
+
+
+@dataclass
 class FunctionSymbol:
     name: str
     decl: ast.FunctionDecl
@@ -559,6 +565,7 @@ class Compiler:
             for decl in pending:
                 if decl.name in self.const_globals:
                     continue
+                assert decl.init is not None
                 value = self.fold_const_decl(decl.type, decl.init, None, decl.line)
                 if value is None:
                     continue
@@ -735,8 +742,8 @@ class Compiler:
             for arg in expr.args:
                 self._collect_expr_callees(arg, known, callees)
             return
-        for field in dataclasses.fields(expr):
-            value = getattr(expr, field.name)
+        for data_field in dataclasses.fields(expr):
+            value = getattr(expr, data_field.name)
             if isinstance(value, ast.Expr):
                 self._collect_expr_callees(value, known, callees)
             elif isinstance(value, list):
@@ -751,8 +758,8 @@ class Compiler:
         if isinstance(stmt, ast.InlineAsm):
             callees.update(asm_function_references(stmt.text) & known)
             return
-        for field in dataclasses.fields(stmt):
-            value = getattr(stmt, field.name)
+        for data_field in dataclasses.fields(stmt):
+            value = getattr(stmt, data_field.name)
             if isinstance(value, ast.Expr):
                 self._collect_expr_callees(value, known, callees)
             elif isinstance(value, ast.Block):
@@ -813,7 +820,7 @@ class Compiler:
 
         # Global initializers run in main.
         for _symbol, expr in self.global_inits:
-            callees = set()
+            callees: set[str] = set()
             _collect_calls_expr(expr, callees)
             add_clique("main", callees & known)
 
@@ -851,7 +858,7 @@ class Compiler:
         interference = self._function_interference()
 
         # Greedy weighted coloring, largest frame first.
-        blocks: list[dict[str, object]] = []
+        blocks: list[FrameBlock] = []
         assignment: dict[str, int] = {}
         order = sorted(
             self.functions,
@@ -861,22 +868,19 @@ class Compiler:
             size = footprints[name]
             placed = False
             for index, block in enumerate(blocks):
-                block_size = int(block["size"])
-                members = block["members"]
-                assert isinstance(members, set)
-                if block_size < size:
+                if block.size < size:
                     continue
-                if any(other in interference[name] for other in members):
+                if any(other in interference[name] for other in block.members):
                     continue
-                members.add(name)
+                block.members.add(name)
                 assignment[name] = index
                 placed = True
                 break
             if not placed:
                 assignment[name] = len(blocks)
-                blocks.append({"size": size, "members": {name}})
+                blocks.append(FrameBlock(size=size, members={name}))
 
-        total = sum(int(block["size"]) for block in blocks)
+        total = sum(block.size for block in blocks)
         if total:
             overlay_base = self.mem.alloc(
                 total, "function slots", self.filename, 0
@@ -888,11 +892,11 @@ class Compiler:
         cursor = overlay_base
         for block in blocks:
             offsets.append(cursor)
-            cursor += int(block["size"])
+            cursor += block.size
 
         for name, fn in self.functions.items():
             index = assignment[name]
-            size = int(blocks[index]["size"])
+            size = blocks[index].size
             fn.ram_base = offsets[index]
             fn.block_end = fn.ram_base + size
             fn.overlay_depth = index
@@ -968,20 +972,20 @@ class Compiler:
         """Turn assembly calls into linker and call-graph information."""
 
         for scan in self.asm_scans:
-            for call in scan.runtime_calls:
-                if call.target_label not in ROUTINE_LABELS:
+            for runtime_call in scan.runtime_calls:
+                if runtime_call.target_label not in ROUTINE_LABELS:
                     raise BadgeCompileError(
-                        f"{location(scan.path, call.line)}: unknown runtime routine "
-                        f"{call.target_label!r}"
+                        f"{location(scan.path, runtime_call.line)}: unknown runtime routine "
+                        f"{runtime_call.target_label!r}"
                     )
                 caller = (
-                    call.caller_label[3:]
-                    if call.caller_label.startswith("fn_")
-                    else call.caller_label
+                    runtime_call.caller_label[3:]
+                    if runtime_call.caller_label.startswith("fn_")
+                    else runtime_call.caller_label
                 )
                 self.use_runtime(
-                    call.target_label,
-                    call.line,
+                    runtime_call.target_label,
+                    runtime_call.line,
                     caller=caller,
                     filename=scan.path,
                 )
@@ -1449,15 +1453,15 @@ class Compiler:
                 (caller, callee, call.tail, source_line, path)
             )
 
-        for call in scan.runtime_calls:
-            source_line = call.line + base_line - 2
-            if call.target_label not in ROUTINE_LABELS:
+        for runtime_call in scan.runtime_calls:
+            source_line = runtime_call.line + base_line - 2
+            if runtime_call.target_label not in ROUTINE_LABELS:
                 raise BadgeCompileError(
                     f"{location(path, source_line)}: unknown runtime routine "
-                    f"{call.target_label!r}"
+                    f"{runtime_call.target_label!r}"
                 )
             self.use_runtime(
-                call.target_label,
+                runtime_call.target_label,
                 source_line,
                 caller=caller,
                 filename=path,
@@ -2641,6 +2645,7 @@ class Compiler:
             self.store_symbol(param, arg.line)
 
         self.emit(f"GOSUB {fn.label}")
+        assert self.current_function is not None
         self.calls.append(
             (self.current_function.name, fn.name, False, expr.line, self.filename)
         )
@@ -2672,6 +2677,7 @@ class Compiler:
             self.store_symbol(param, expr.line)
 
         self.emit(f"GOTO {fn.label}")
+        assert self.current_function is not None
         self.calls.append(
             (self.current_function.name, fn.name, True, expr.line, self.filename)
         )
@@ -3953,10 +3959,10 @@ class Compiler:
                 self.function_depths,
                 key=lambda name: (self.function_depths[name], name),
             )
-            path = [deepest]
-            while path[-1] != "main" and path[-1] in parents:
-                path.append(parents[path[-1]][0])
-            self.deepest_path = list(reversed(path))
+            chain = [deepest]
+            while chain[-1] != "main" and chain[-1] in parents:
+                chain.append(parents[chain[-1]][0])
+            self.deepest_path = list(reversed(chain))
 
         # Runtime helpers cost stack entries too.  Costs are derived from
         # the runtime assembly, including flash-table ``MOV JSR`` calls.

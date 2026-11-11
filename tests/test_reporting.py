@@ -9,7 +9,6 @@ from badgec.assembler import assemble_file, code_words
 from badgec.cli import main
 from badgec.compiler import Compiler
 from badgec.loader import load_program
-from badgec.parser import parse
 from badgec.runtime_linker import runtime_stack_costs
 
 ROOT = Path(__file__).resolve().parent.parent

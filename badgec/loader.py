@@ -22,7 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 def _search_roots(extra: list[str | Path] | None) -> list[Path]:
     roots = [REPO_ROOT]
-    for base in (Path(sys.prefix), Path(site.USER_BASE)):
+    bases = [Path(sys.prefix)]
+    if site.USER_BASE:
+        bases.append(Path(site.USER_BASE))
+    for base in bases:
         data_root = base / "share" / "badgec"
         if data_root.is_dir():
             roots.append(data_root)

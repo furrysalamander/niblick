@@ -26,6 +26,7 @@ and can exercise UART transmit/receive without hardware.
 | W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | W5500 driver fast SPI helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
 | Standard library | `tests/test_library.py`, `tests/test_stdlib.py`, `tests/test_signed_lib.py` | UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, audio/PDM |
 | Inlining / overlay | `tests/test_compiler.py`, `tests/test_overlay.py` | Small return/void inlining, side-effect guards, frame interference and slot reuse |
+| Print formatting | `tests/test_print.py` | Literal format parsing, typed placeholders, generated UART helpers, and error cases |
 | Optimizer proofs | `tests/test_peephole_z3.py` | Z3 proofs for constant-address lowering and peephole identities |
 | Property tests | `tests/test_hypothesis_compiler.py` | Generated nibble expressions versus a Python reference |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
@@ -207,7 +208,7 @@ The development extras include `ruff`, `mypy`, `pytest-cov`, `hypothesis`,
 ```bash
 python3 -m pip install -e ".[dev]"
 ruff check .
-mypy badgec/compiler.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
+mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
 python3 -m pytest --cov=badgec
 pre-commit install
 ```

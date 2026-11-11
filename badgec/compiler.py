@@ -43,6 +43,7 @@ from .runtime_linker import (
     runtime_stack_costs,
 )
 from .errors import BadgeCompileError, BadgeError, BadgeTypeError, location
+from .format import expand_print
 from .types import (
     CHAR,
     DWORD,
@@ -65,6 +66,7 @@ TEMP_START = 0x20
 TEMP_END = 0x38
 
 BUILTINS = {
+    "print": VOID,
     "uart_putc": VOID,
     "uart_getc": CHAR,
     "flash_read_char": CHAR,
@@ -291,6 +293,7 @@ class Compiler:
                 f"{self.filename}: imports must be resolved first; "
                 "load the program with badgec.loader.load_program()"
             )
+        expand_print(self.program, self.filename)
         optimize_program(self.program)
         probe = Compiler(copy.deepcopy(self.program), self.filename)
         probe.run_probe()
@@ -357,6 +360,7 @@ class Compiler:
                 f"{self.filename}: imports must be resolved first; "
                 "load the program with badgec.loader.load_program()"
             )
+        expand_print(self.program, self.filename)
         if prune and "main" in {fn.name for fn in self.program.functions}:
             optimize_program(self.program)
         probe = Compiler(copy.deepcopy(self.program), self.filename)
@@ -2771,6 +2775,11 @@ class Compiler:
 
     def compile_builtin(self, expr: ast.Call, scope: Scope) -> Type:
         name = expr.name
+        if name == "print":
+            raise BadgeCompileError(
+                f"{location(self.filename, expr.line)}: print() must be used as a "
+                "statement with a literal format string"
+            )
         entry = RUNTIME_ENTRY.get(name)
 
         constant_mask = None

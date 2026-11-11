@@ -78,6 +78,19 @@ fn void uart_print_hex8(char v) {
     uart_print_nibble(low_nibble(v));
 }
 
+fn void uart_print_bin4(nibble v) {
+    nibble mask;
+    mask = 8;
+    while (mask != 0) {
+        if ((v & mask) != 0) {
+            uart_putc('1');
+        } else {
+            uart_putc('0');
+        }
+        mask = mask >> 1;
+    }
+}
+
 fn void uart_print_bin8(char v) {
     char mask;
     mask = 128;
@@ -89,6 +102,16 @@ fn void uart_print_bin8(char v) {
         }
         mask = mask >> 1;
     }
+}
+
+fn void uart_print_bin16(word v) {
+    uart_print_bin8((char)(v >> 8));
+    uart_print_bin8((char)v);
+}
+
+fn void uart_print_bin32(dword v) {
+    uart_print_bin16((word)(v >> 16));
+    uart_print_bin16((word)v);
 }
 
 fn void uart_print_dec8(char v) {

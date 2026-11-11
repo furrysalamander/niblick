@@ -1,0 +1,264 @@
+"""Compile-time ``print`` formatting tests."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from badgec.assembler import assemble_file
+from badgec.compiler import Compiler
+from badgec.errors import BadgeCompileError, BadgeTypeError
+from badgec.emulator import Emulator
+from badgec.format import PlaceholderPart, TextPart, parse_format
+from badgec.loader import load_source
+
+
+def compile_source(tmp_path: Path, source: str) -> tuple[Compiler, Emulator, str]:
+    filename = tmp_path / "print.badge"
+    program = load_source(source, filename=str(filename))
+    compiler = Compiler(program, str(filename))
+    asm = compiler.compile()
+    asm_path = tmp_path / "print.asm"
+    asm_path.write_text(asm)
+    hex_path = tmp_path / "print.hex"
+    assemble_file(asm_path, hex_path)
+
+    emu = Emulator()
+    emu.load_hex(hex_path)
+    emu.run(500000)
+    return compiler, emu, asm
+
+
+def compile_error(tmp_path: Path, source: str, error_type) -> None:
+    filename = tmp_path / "print.badge"
+    program = load_source(source, filename=str(filename))
+    compiler = Compiler(program, str(filename))
+    with pytest.raises(error_type):
+        compiler.compile()
+
+
+def test_format_parser() -> None:
+    assert parse_format("plain", "<test>", 1) == [TextPart("plain")]
+    assert parse_format("a{}b{:x}c", "<test>", 1) == [
+        TextPart("a"),
+        PlaceholderPart("", 2),
+        TextPart("b"),
+        PlaceholderPart("x", 5),
+        TextPart("c"),
+    ]
+    assert parse_format("{{x}}", "<test>", 1) == [TextPart("{x}")]
+
+
+def test_format_parser_errors() -> None:
+    with pytest.raises(BadgeCompileError):
+        parse_format("unclosed {", "<test>", 1)
+    with pytest.raises(BadgeCompileError):
+        parse_format("stray }", "<test>", 1)
+    with pytest.raises(BadgeCompileError):
+        parse_format("{:q}", "<test>", 1)
+
+
+def test_print_core_formats(tmp_path: Path) -> None:
+    _, emu, _ = compile_source(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+        import "lib/string.badge";
+
+        nibble n;
+        char c;
+        word w;
+        dword d;
+        char buf[8];
+
+        fn main() {
+            uart_route(1);
+            uart_init(3);
+            n = 5;
+            c = 65;
+            w = 1234;
+            d = 123456;
+            str_copy_flash(&buf, "ram");
+            print("n={} c={:c} w={:x} d={:x}\\n", n, c, w, d);
+            print("b={:b} {:b} {:b}\\n", n, w, d);
+            print("ram={:s} flash={}\\n", &buf, "hello");
+            print("lit {{ok}}\\n");
+        }
+        """,
+    )
+    assert bytes(emu.uart_tx) == (
+        b"n=5 c=A w=04D2 d=0001E240\n"
+        b"b=0101 0000010011010010 00000000000000011110001001000000\n"
+        b"ram=ram flash=hello\n"
+        b"lit {ok}\n"
+    )
+
+
+def test_print_decimal_widths(tmp_path: Path) -> None:
+    _, emu, asm = compile_source(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        nibble n;
+        char c;
+        word w;
+        dword d;
+
+        fn main() {
+            uart_route(1);
+            uart_init(3);
+            n = 5;
+            c = 255;
+            w = 65535;
+            d = 4294967295;
+            print("{} {} {} {}\\n", n, c, w, d);
+        }
+        """,
+    )
+    assert bytes(emu.uart_tx) == b"5 255 65535 4294967295\n"
+    assert "fn_uart_print_dec16" in asm
+    assert "fn_uart_print_dec32" in asm
+
+
+def test_print_links_only_used_formatters(tmp_path: Path) -> None:
+    _, emu, asm = compile_source(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        nibble n;
+
+        fn main() {
+            uart_route(1);
+            uart_init(3);
+            n = 5;
+            print("n={}\\n", n);
+        }
+        """,
+    )
+    assert bytes(emu.uart_tx) == b"n=5\n"
+    assert "fn_uart_print_dec16" not in asm
+    assert "fn_uart_print_dec32" not in asm
+
+
+def test_print_literal_only(tmp_path: Path) -> None:
+    _, emu, _ = compile_source(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        fn main() {
+            uart_route(1);
+            uart_init(3);
+            print("hello\\n");
+        }
+        """,
+    )
+    assert bytes(emu.uart_tx) == b"hello\n"
+
+
+def test_print_requires_uart_import(tmp_path: Path) -> None:
+    compile_error(
+        tmp_path,
+        """
+        fn main() {
+            print("hello\\n");
+        }
+        """,
+        BadgeCompileError,
+    )
+
+
+def test_print_rejects_dynamic_format(tmp_path: Path) -> None:
+    compile_error(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        char fmt;
+
+        fn main() {
+            print(fmt);
+        }
+        """,
+        BadgeCompileError,
+    )
+
+
+def test_print_placeholder_count(tmp_path: Path) -> None:
+    compile_error(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        fn main() {
+            print("{}");
+        }
+        """,
+        BadgeTypeError,
+    )
+    compile_error(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        fn main() {
+            print("x", 1);
+        }
+        """,
+        BadgeTypeError,
+    )
+
+
+def test_print_rejects_bad_types(tmp_path: Path) -> None:
+    compile_error(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        fn main() {
+            print("{:x}", "text");
+        }
+        """,
+        BadgeTypeError,
+    )
+    compile_error(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        fn main() {
+            print("{:c}", 300);
+        }
+        """,
+        BadgeTypeError,
+    )
+
+
+def test_print_is_statement_only(tmp_path: Path) -> None:
+    compile_error(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+
+        nibble value;
+
+        fn main() {
+            value = print("x");
+        }
+        """,
+        BadgeCompileError,
+    )
+
+
+def test_print_is_reserved(tmp_path: Path) -> None:
+    compile_error(
+        tmp_path,
+        """
+        fn void print() {
+        }
+        """,
+        BadgeCompileError,
+    )

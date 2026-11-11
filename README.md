@@ -21,6 +21,7 @@ Working today:
 - `if`/`else`, `while`, `for`, `break`, `continue`
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
 - Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
+- `print()` compile-time formatting with typed `{}` / `{:x}` / `{:b}` / `{:c}` / `{:s}` placeholders
 - `import` for the standard modules in `lib/` and device drivers in `lib/drivers/`
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
 - Inline `asm { ... }` blocks inside BadgeC functions, with lexical `${...}` placeholders, local labels, call-graph integration, and optimizer opacity

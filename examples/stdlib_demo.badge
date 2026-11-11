@@ -21,15 +21,8 @@ fn main() {
     uart_route(1);
     uart_init(3);
 
-    uart_puts("BadgeC stdlib demo\n");
-
-    uart_puts("hex=");
-    uart_print_hex8(171);
-    uart_puts(" dec=");
-    uart_print_dec8(234);
-    uart_puts(" bin=");
-    uart_print_bin8(165);
-    uart_nl();
+    print("BadgeC stdlib demo\n");
+    print("hex={:x} dec={} bin={:b}\n", 171, 234, 165);
 
     str_copy_flash(&buf, "hello");
     uart_puts("str=");

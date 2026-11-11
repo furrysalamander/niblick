@@ -41,7 +41,7 @@ jobs:
       - name: Ruff
         run: ruff check .
       - name: mypy
-        run: mypy badgec/compiler.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
+        run: mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
 
   coverage:
     name: Coverage

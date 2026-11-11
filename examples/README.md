@@ -14,7 +14,7 @@
 | `cube.badge` | Spinning 3D wireframe cube on the LED matrix |
 | `wave.badge` | 4×8 signed-nibble wave field from `lib/signed.badge` |
 | `water.badge` | Falling-water cellular automaton with changing gravity |
-| `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, trig, memory, random, keys, clock, power, and display |
+| `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, trig, memory, random, keys, clock, power, and display; demonstrates `print()` formatting |
 | `text_scroll.badge` | 5x8 scrolling text on the LED matrix |
 | `audio_demo.badge` | Square-wave melody on OUT0, including `NOTE_REST` |
 | `pdm_demo.badge` | First-order PDM sample playback on OUT1-3 |

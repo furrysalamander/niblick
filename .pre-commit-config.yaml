@@ -8,5 +8,5 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
-        args: ["badgec/compiler.py", "badgec/inline.py", "badgec/asm_opt.py", "badgec/loader.py", "badgec/emulator.py"]
+        args: ["badgec/compiler.py", "badgec/format.py", "badgec/inline.py", "badgec/asm_opt.py", "badgec/loader.py", "badgec/emulator.py"]
         pass_filenames: false

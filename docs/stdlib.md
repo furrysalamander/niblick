@@ -44,6 +44,7 @@ hand-written runtime path:
 
 | Intrinsic | Reason |
 |---|---|
+| `print` | Compile-time typed formatting; expands to UART helpers |
 | `peek`, `poke`, `peek8`, `poke8` | BadgeC has no pointer dereference |
 | `flash_read_char`, `flash_read_nibble`, `flash_next` | Code-memory access and flash iteration |
 | `in`, `out` | Raw page-0 I/O port operations |
@@ -73,6 +74,46 @@ so RAM-constrained programs should prefer the intrinsic where one exists.
 | `delay(n)` | `void` | Approximate 15x15 busy delay |
 | `high_nibble(c)` / `low_nibble(c)` | `nibble` | Byte halves |
 
+## Print formatting
+
+`print()` is a compiler-expanded formatter. The format string must be a
+literal, and `lib/uart.badge` must be imported because the generated calls use
+its formatters:
+
+```c
+import "lib/uart.badge";
+import "lib/string.badge";
+
+nibble n;
+word w;
+char buf[8];
+
+n = 5;
+w = 1234;
+str_copy_flash(&buf, "hi");
+print("n={} w={:x}\n", n, w);
+print("ram={:s}\n", &buf);
+print("flash={}\n", "hello");
+```
+
+| Placeholder | Meaning |
+|---|---|
+| `{}` / `{:d}` | Decimal integer, or a flash string for `flashptr` |
+| `{:x}` | Hex, fixed width for the argument type |
+| `{:b}` | Binary, fixed width for the argument type |
+| `{:c}` | One character |
+| `{:s}` | String: `flashptr` or a RAM string address |
+| `{{` / `}}` | Literal braces |
+
+Numeric formatting is unsigned; use `lib/signed.badge` to reinterpret raw bits
+before printing a signed decimal value. The formatter is expanded at compile
+time into ordinary calls such as `uart_puts`, `uart_print_dec16`, and
+`uart_print_hex8`. There is no runtime
+format parser, `va_list`, or argument block, and only the formatters actually
+used by the program are linked. Dynamic format strings are rejected. As with
+the rest of `lib/uart.badge`, configure the UART with `uart_route()` and
+`uart_init()` before printing.
+
 ## UART
 
 `lib/uart.badge` provides the driver and formatting helpers.
@@ -92,7 +133,10 @@ so RAM-constrained programs should prefer the intrinsic where one exists.
 | `uart_nl()` | `void` | Send LF |
 | `uart_print_nibble(v)` | `void` | One hex digit |
 | `uart_print_hex8(c)` | `void` | Two hex digits |
+| `uart_print_bin4(n)` | `void` | Four binary digits |
 | `uart_print_bin8(c)` | `void` | Eight binary digits |
+| `uart_print_bin16(w)` | `void` | Sixteen binary digits |
+| `uart_print_bin32(d)` | `void` | Thirty-two binary digits |
 | `uart_print_dec8(c)` | `void` | Decimal `0..255` |
 | `uart_print_hex16(w)` / `uart_print_dec16(w)` | `void` | 16-bit formatting |
 | `uart_print_hex32(d)` / `uart_print_dec32(d)` | `void` | 32-bit formatting |
@@ -404,7 +448,7 @@ Pin constants are `SPI_SCLK` = 4, `SPI_MOSI` = 8, `SPI_MISO` = 1, and
 
 ## Missing / planned
 
-- A `printf`-style formatter (the language has no varargs)
+- Dynamic `print()` format strings and non-UART formatting targets
 - General pointer arithmetic, `char *` parameters, and structs
 - Native signed types and 64-bit integers
 - Q8.8 fixed point

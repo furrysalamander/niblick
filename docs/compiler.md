@@ -110,6 +110,17 @@ Error locations inside imported files report that file's path and line for
 `.`asm` modules; `.badge` AST nodes still carry a line but not a filename, so
 errors in imported BadgeC report the entry file's name.
 
+## Print formatting
+
+`print("text {} {:x}\n", a, b);` is expanded at compile time. The format
+string must be a literal, and `lib/uart.badge` must be imported because the
+expansion emits calls to `uart_puts` and the `uart_print_*` helpers. Each
+placeholder is checked against the argument type, so `{}`/`{:d}` choose the
+decimal formatter, `{:x}` the hex formatter, `{:b}` binary, `{:c}` a character,
+and `{:s}` a string. The expansion runs before dead-declaration
+elimination, so unused formatters are still removed. See
+[stdlib.md](stdlib.md#print-formatting).
+
 ## Calls, tail calls, and recursion
 
 Non-tail calls use `GOSUB`/`RET` and consume one of the five hardware stack
@@ -198,6 +209,7 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Direct `peek`/`poke`/`out`/`in` lowering.
 - Constant-address `peek`/`poke`/`peek8`/`poke8` lowering to direct
   `MOV R0,[NN]` / `MOV [NN],R0` instructions.
+- Compile-time `print()` expansion into typed UART formatting calls.
 - Whole-program inlining of tiny `return <expr>` functions and small
   single-statement void wrappers. Parameters used more than once are guarded
   by a side-effect check. Char arguments are wrapped in an internal `ToChar`

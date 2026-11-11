@@ -384,7 +384,7 @@ W5500 fast SPI path. `docs/stdlib.md` explains why those stay builtins.
 - `docs/vscode.md` — VS Code language support and language-server development
 - `docs/debugging.md` — emulator debugger, breakpoints, variables, and debug maps
 - `docs/testing.md` — test layers and hardware development loop
-- `docs/keys.md` — measured front-panel key codes
+- `docs/keys.md` — front-panel controls and measured key codes
 - `docs/toolchain.md` — assembler/emulator usage
 - `docs/upstream-errata.md` — contradictions found in the upstream manuals
 - `RELEASING.md` — pre-publish checklist

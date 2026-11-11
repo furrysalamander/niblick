@@ -8,6 +8,34 @@ Import `lib/key.badge` to use the helpers below. `lib/key.badge` only names
 the five codes that have been confirmed on hardware; the raw `key_status()`
 and `key_code()` intrinsics work for any code.
 
+## Front-panel controls
+
+The badge has three 4-bit entry groups (`OPCODE`, `OPERAND X`, `OPERAND Y`),
+each with `8`, `4`, `2`, and `1` buttons and indicators. `DATA IN` switches
+between direct bit entry (`BIN`) and `SEL` mode, where the same buttons step
+the value up and down.
+
+`MODE` selects the current operating mode. The four command buttons change
+labels with that mode:
+
+| Mode | Command buttons |
+|---|---|
+| DIR | `CARRY`, `SAVE`, `LOAD`, `CLOCK` |
+| SS | `HISTORY`, `-ADDR`, `+ADDR`, `STEP` |
+| RUN | `FAST`, `PAUSE`, `BREAK`, `RUN` |
+| PGM | `ADDRSET`, `-ADDR`, `+ADDR`, `DEP+` |
+
+`ALT` modifies the next button press. In DIR mode it selects the dimmer,
+baud rate, and flash address for the three entry groups; in SS/RUN/PGM it
+selects sync, clock, and page. `ON-OFF` is a separate button on the bottom
+edge. The upstream
+[User Manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/1.User_Manual_v4.pdf)
+has the complete mode-by-mode command table.
+
+BadgeC does not model the front-panel controller's mode state. It only
+exposes `KeyReg` and `KeyStatus`; `ALT` is reported through
+`KeyStatus.AltPress`, and `ON-OFF` does not report a key code.
+
 ## Confirmed mapping
 
 | Physical button | `KeyReg` |
@@ -18,10 +46,11 @@ and `key_code()` intrinsics work for any code.
 | OPCODE `1` | 4 |
 | DEP+ / CLOCK / STEP | 0 |
 
-Only these five have been confirmed so far. The remaining front-panel keys
-have not been mapped. `key_op1()`, `key_op2()`, `key_op4()`, `key_op8()`, and
-`key_dep()` return the confirmed codes; use `key_name(code)` for a flash
-string label.
+Only these five have been confirmed so far. The scanner exposes codes `0..13`;
+codes `5..13` are not mapped yet, and several command buttons can share a code
+(the measured `DEP+` / `CLOCK` / `STEP` group is code `0`). `key_op1()`,
+`key_op2()`, `key_op4()`, `key_op8()`, and `key_dep()` return the confirmed
+codes; use `key_name(code)` for a flash string label.
 
 `KeyStatus` at `0xFC` supplies:
 

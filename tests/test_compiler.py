@@ -532,3 +532,35 @@ def test_inliner_does_not_duplicate_side_effects(tmp_path: Path) -> None:
     emu = run(hex_path, steps=50000)
     assert emu.ram[ram_nibble(compiler, "calls")] == 1
     assert emu.ram[ram_nibble(compiler, "result")] == 2
+
+
+def test_constant_address_memory_ops(tmp_path: Path) -> None:
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        nibble a;
+        nibble b;
+        char c;
+        fn main() {
+            poke(0xFE, 7);
+            a = peek(0xFE);
+            poke8(0xE0, 0xAB);
+            c = peek8(0xE0);
+            b = peek(0x0A);
+        }
+        """,
+    )
+    asm = (tmp_path / "prog.asm").read_text()
+    assert "MOV [0xFE], R0" in asm
+    assert "MOV R0, [0xFE]" in asm
+    assert "MOV [0xE0], R0" in asm
+    assert "MOV [0xE1], R0" in asm
+
+    emu = run(hex_path)
+    assert emu.ram[0xFE] == 7
+    assert emu.ram[compiler.globals["a"].address] == 7
+    assert emu.ram[0xE0] == 0xB
+    assert emu.ram[0xE1] == 0xA
+    c_base = compiler.globals["c"].address
+    assert emu.ram[c_base] == 0xB
+    assert emu.ram[c_base + 1] == 0xA

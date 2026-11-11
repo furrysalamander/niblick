@@ -2457,6 +2457,15 @@ class Compiler:
             return value
         return None
 
+    def _constant_address(self, expr: ast.Expr, scope: Scope) -> Optional[int]:
+        folded = self.eval_const(expr, scope)
+        if folded is None:
+            return None
+        value, _typ = folded
+        if 0 <= value <= 0xFF:
+            return value
+        return None
+
     def compile_builtin(self, expr: ast.Call, scope: Scope) -> Type:
         name = expr.name
         entry = RUNTIME_ENTRY.get(name)
@@ -2600,6 +2609,11 @@ class Compiler:
 
         if name == "peek":
             self.require_args(expr, 1)
+            constant_addr = self._constant_address(expr.args[0], scope)
+            if constant_addr is not None:
+                self.emit(f"MOV R0, [0x{constant_addr:02X}]")
+                self.emit("MOV R1, R0")
+                return NIBBLE
             typ = self.compile_expr(expr.args[0], scope)
             self.coerce(typ, CHAR, expr.line)
             self.emit("MOV R4, R2")
@@ -2610,6 +2624,13 @@ class Compiler:
 
         if name == "poke":
             self.require_args(expr, 2)
+            constant_addr = self._constant_address(expr.args[0], scope)
+            if constant_addr is not None:
+                typ = self.compile_expr(expr.args[1], scope)
+                self.coerce(typ, NIBBLE, expr.line)
+                self.emit("MOV R0, R1")
+                self.emit(f"MOV [0x{constant_addr:02X}], R0")
+                return VOID
             mark = self.temp.mark()
             temp_addr = self.temp.alloc(1, "poke value", self.filename, expr.line)
             typ = self.compile_expr(expr.args[1], scope)
@@ -2627,6 +2648,14 @@ class Compiler:
 
         if name == "peek8":
             self.require_args(expr, 1)
+            constant_addr = self._constant_address(expr.args[0], scope)
+            if constant_addr is not None:
+                high_addr = (constant_addr + 1) & 0xFF
+                self.emit(f"MOV R0, [0x{constant_addr:02X}]")
+                self.emit("MOV R1, R0")
+                self.emit(f"MOV R0, [0x{high_addr:02X}]")
+                self.emit("MOV R2, R0")
+                return CHAR
             typ = self.compile_expr(expr.args[0], scope)
             self.coerce(typ, CHAR, expr.line)
             self.emit("MOV R4, R2")
@@ -2642,6 +2671,16 @@ class Compiler:
 
         if name == "poke8":
             self.require_args(expr, 2)
+            constant_addr = self._constant_address(expr.args[0], scope)
+            if constant_addr is not None:
+                high_addr = (constant_addr + 1) & 0xFF
+                typ = self.compile_expr(expr.args[1], scope)
+                self.coerce(typ, CHAR, expr.line)
+                self.emit("MOV R0, R1")
+                self.emit(f"MOV [0x{constant_addr:02X}], R0")
+                self.emit("MOV R0, R2")
+                self.emit(f"MOV [0x{high_addr:02X}], R0")
+                return VOID
             mark = self.temp.mark()
             temp_addr = self.temp.alloc(2, "poke8 value", self.filename, expr.line)
             typ = self.compile_expr(expr.args[1], scope)

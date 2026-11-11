@@ -15,6 +15,7 @@ dist/
 *.asm
 !badgec/runtime/runtime.asm
 !lib/asm/**/*.asm
+!examples/mc_void.asm
 *.hex
 
 # Generated at runtime

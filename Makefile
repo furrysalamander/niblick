@@ -18,4 +18,5 @@ examples:
 clean:
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
 	rm -rf .pytest_cache build dist *.egg-info
-	rm -f examples/*.asm examples/*.hex
+	find examples -maxdepth 1 -name '*.asm' ! -name 'mc_void.asm' -delete
+	rm -f examples/*.hex

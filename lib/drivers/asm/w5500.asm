@@ -12,32 +12,32 @@ fn_w5500_tx_pointer:
     BCLR R3, 1
     MOV R1, 0
     MOV R2, 0
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R1, 4
     MOV R2, 2
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R1, 8
     MOV R2, 0
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R1, 0
     MOV R2, 0
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R8, R1
     MOV R9, R2
     BSET R3, 1
     BCLR R3, 1
     MOV R1, 0
     MOV R2, 0
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R1, 5
     MOV R2, 2
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R1, 8
     MOV R2, 0
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     MOV R1, 0
     MOV R2, 0
-    GOSUB __bc_spi_xfer_fast
+    GOSUB __bc_w5500_spi_xfer_fast
     BSET R3, 1
     MOV R3, R8
     MOV R4, R9
@@ -199,6 +199,16 @@ fn_w5500_rx_consume:
     MOV [${w5500_write.value+1}], R0
     GOSUB fn_w5500_write
 
-    MOV R1, 1
-    GOSUB __bc_delay
+    GOSUB fn_w5500_delay
+    RET R0, 0
+
+fn_w5500_delay:
+    MOV R2, 15
+.delay_outer:
+    MOV R3, 15
+.delay_inner:
+    DSZ R3
+    JR .delay_inner
+    DSZ R2
+    JR .delay_outer
     RET R0, 0

@@ -2,6 +2,65 @@
 // These add no RAM of their own; unused functions are removed by the
 // compiler's dead-declaration pass.
 
+fn void uart_init(nibble baud) {
+    poke(0xF5, baud);
+}
+
+fn nibble uart_available() {
+    return peek(0xF8);
+}
+
+// Send a flash string (literal, const char[], or flashptr).
+fn void uart_puts(flashptr s) {
+    char c;
+    c = flash_next(&s);
+    while (c != 255) {
+        uart_putc(c);
+        c = flash_next(&s);
+    }
+}
+
+// Send len bytes from a RAM char array (pass &buf).
+fn void uart_write(char addr, nibble len) {
+    while (len != 0) {
+        uart_putc(peek8(addr));
+        addr = addr + 2;
+        len = len - 1;
+    }
+}
+
+fn void putchar(char c) {
+    uart_putc(c);
+}
+
+fn void puts(flashptr s) {
+    uart_puts(s);
+}
+
+// Reading SerCtrl clears the sticky error bit.
+fn nibble uart_error() {
+    return (peek(0xF5) & 8) != 0;
+}
+
+fn nibble uart_baud() {
+    return peek(0xF5) & 7;
+}
+
+fn void uart_drain() {
+    while (uart_available() != 0) {
+        uart_getc();
+    }
+}
+
+// Route the UART to the main I/O connector (enable) or SAO header (disable).
+fn void uart_route(nibble enable) {
+    if (enable != 0) {
+        poke(0xF3, peek(0xF3) | 1);
+    } else {
+        poke(0xF3, peek(0xF3) & 14);
+    }
+}
+
 fn void uart_nl() {
     uart_putc(10);
 }

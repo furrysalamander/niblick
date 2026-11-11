@@ -1,3 +1,12 @@
+import "lib/mem.badge";
+import "lib/time.badge";
+import "lib/key.badge";
+import "lib/random.badge";
+import "lib/gpio.badge";
+import "lib/display.badge";
+import "lib/uart.badge";
+import "lib/power.badge";
+import "lib/system.badge";
 // Comprehensive BadgeC hardware self-test.
 //
 // The program starts in a command loop and prints READY.  Send the single
@@ -160,15 +169,15 @@ fn run_tests() {
     char cbuf[4];
     char cbuf2[4];
 
-    memset(nbuf, 7, 4);
+    mem_fill(&nbuf, 7, 4);
     check(nbuf[0], 7);
     check(nbuf[3], 7);
-    memset(cbuf, 65, 4);
+    mem_fill8(&cbuf, 65, 4);
     check(cbuf[0], 65);
     check(cbuf[3], 65);
-    memcpy(nbuf2, nbuf, 4);
+    mem_copy(&nbuf2, &nbuf, 4);
     check(nbuf2[2], 7);
-    memcpy(cbuf2, cbuf, 4);
+    mem_copy8(&cbuf2, &cbuf, 4);
     check(cbuf2[2], 65);
 
     cc = 3;
@@ -203,7 +212,7 @@ fn run_tests() {
     txbuf[0] = 'R'; txbuf[1] = 'A'; txbuf[2] = 'M'; txbuf[3] = '_';
     txbuf[4] = 'T'; txbuf[5] = 'X'; txbuf[6] = '_'; txbuf[7] = 'O';
     txbuf[8] = 'K'; txbuf[9] = '\n';
-    uart_write(txbuf, 10);
+    uart_write(&txbuf, 10);
 
     // --- GPIO / OUT / IN ---
     gpio_write(5);
@@ -256,6 +265,14 @@ fn run_tests() {
     matrix_enable(0);
     check(peek(0xF3) & 4, 4);
     matrix_enable(1);
+
+    // --- system / power / UART status ---
+    power_keep_awake();
+    check(power_remaining(), 15);
+    check(system_page(), peek(0xF0));
+    check(system_dimmer(), peek(0xFE));
+    check(system_uart_baud(), 3);
+    check(system_uart_error(), 0);
 
     // --- key reads (info only; do not fail if a key is held) ---
     uart_puts("INFO key_status=");

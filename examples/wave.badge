@@ -1,3 +1,5 @@
+import "lib/time.badge";
+import "lib/display.badge";
 // 4x8 signed wave field for the Supercon.6 LED matrix.
 //
 // The matrix is 8 columns x 16 rows.  The simulation uses a 4x8 grid and

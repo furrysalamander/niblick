@@ -1,0 +1,69 @@
+// Square-wave tone and melody helpers.
+//
+// The badge has no dedicated audio output.  These helpers bit-bang a pin on
+// the main I/O connector; connect it to a low-pass filter and an amplifier.
+// AUDIO_MASK selects the pin: 1 = OUT0, 2 = OUT1, 4 = OUT2, 8 = OUT3.
+//
+// Timing is calibrated for Clock=100 kHz (CLOCK_100K).  The note table is a
+// starting point; measure the actual pitch on hardware and adjust the table
+// if needed.  The frequencies below are from the upstream Tom Keddie audio
+// demos: C4 261, D4 293, E4 330, G4 392, A4 440, B4 494, C5 523 Hz, etc.
+
+import "lib/time.badge";
+
+const nibble AUDIO_MASK = 1;
+const nibble NOTE_REST = 15;
+
+// Half-period loop counts for C4..D#5 at Clock=100 kHz.
+const word audio_note_half_periods[] = {
+    12, 11, 11, 10, 9, 9, 8, 8,
+    8, 7, 7, 6, 6, 6, 5, 5
+};
+
+fn void audio_init() {
+    time_clock_set(CLOCK_100K);
+}
+
+fn void audio_silence() {
+    gpio_clear(AUDIO_MASK);
+}
+
+// Raw tone.  half_period is the inner-loop count; cycles is the number of
+// half periods (two cycles = one full wave).
+fn void audio_tone_raw(word half_period, word cycles) {
+    word n;
+    while (cycles != 0) {
+        gpio_toggle(AUDIO_MASK);
+        n = half_period;
+        while (n != 0) {
+            n = n - 1;
+        }
+        cycles = cycles - 1;
+    }
+}
+
+// Play one note from the table.  Note 15 is a rest.
+fn void audio_note(nibble note, word cycles) {
+    if (note == NOTE_REST) {
+        audio_silence();
+        return;
+    }
+    audio_tone_raw(audio_note_half_periods[note & 15], cycles);
+}
+
+// Play a flash melody of note/duration byte pairs, terminated by 0xFF.
+fn void audio_play(flashptr melody) {
+    char note;
+    char duration;
+    note = flash_next(&melody);
+    while (note != 255) {
+        duration = flash_next(&melody);
+        if (note == NOTE_REST) {
+            delay((nibble)duration);
+        } else {
+            audio_note((nibble)note, (word)duration);
+        }
+        note = flash_next(&melody);
+    }
+    audio_silence();
+}

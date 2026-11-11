@@ -76,3 +76,256 @@ fn void str_copy_flash(char dst, flashptr src) {
     }
     poke8(dst, 255);
 }
+
+// ---------------------------------------------------------------------------
+// Number conversion
+// ---------------------------------------------------------------------------
+
+fn nibble str_from_dec8(char addr, char value) {
+    nibble hundreds;
+    nibble tens;
+    nibble len;
+    hundreds = 0;
+    while (value >= 100) {
+        value = value - 100;
+        hundreds = hundreds + 1;
+    }
+    tens = 0;
+    while (value >= 10) {
+        value = value - 10;
+        tens = tens + 1;
+    }
+    len = 0;
+    if (hundreds != 0) {
+        poke8(addr, '0' + hundreds);
+        addr = addr + 2;
+        len = len + 1;
+    }
+    if (hundreds != 0 || tens != 0) {
+        poke8(addr, '0' + tens);
+        addr = addr + 2;
+        len = len + 1;
+    }
+    poke8(addr, '0' + low_nibble(value));
+    addr = addr + 2;
+    len = len + 1;
+    poke8(addr, 255);
+    return len;
+}
+
+fn char str_to_dec8(char addr) {
+    char value;
+    char c;
+    value = 0;
+    c = peek8(addr);
+    while (c >= '0' && c <= '9') {
+        value = (char)(value * 10 + (c - '0'));
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+    return value;
+}
+
+fn nibble str_from_hex8(char addr, char value) {
+    nibble hi;
+    nibble lo;
+    hi = high_nibble(value);
+    lo = low_nibble(value);
+    if (hi < 10) {
+        poke8(addr, '0' + hi);
+    } else {
+        poke8(addr, 'A' + hi - 10);
+    }
+    if (lo < 10) {
+        poke8(addr + 2, '0' + lo);
+    } else {
+        poke8(addr + 2, 'A' + lo - 10);
+    }
+    poke8(addr + 4, 255);
+    return 2;
+}
+
+fn char str_hex_digit(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    return 0;
+}
+
+fn char str_to_hex8(char addr) {
+    char hi;
+    char lo;
+    hi = str_hex_digit(peek8(addr));
+    lo = str_hex_digit(peek8(addr + 2));
+    return (hi << 4) | lo;
+}
+
+// ---------------------------------------------------------------------------
+// Searching, comparison, case, reverse
+// ---------------------------------------------------------------------------
+
+fn nibble str_match_at(char addr, flashptr needle) {
+    char c;
+    char n;
+    while (1) {
+        n = flash_next(&needle);
+        if (n == 255) {
+            return 1;
+        }
+        c = peek8(addr);
+        if (c != n) {
+            return 0;
+        }
+        addr = addr + 2;
+    }
+}
+
+fn char str_find(char addr, flashptr needle) {
+    char c;
+    c = peek8(addr);
+    while (c != 255) {
+        if (str_match_at(addr, needle) != 0) {
+            return addr;
+        }
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+    return 0;
+}
+
+fn nibble str_contains(char addr, flashptr needle) {
+    if (str_find(addr, needle) != 0) {
+        return 1;
+    }
+    return 0;
+}
+
+fn nibble str_starts_with(char addr, flashptr prefix) {
+    return str_match_at(addr, prefix);
+}
+
+fn nibble str_eq_flash(char addr, flashptr s) {
+    char c;
+    char f;
+    while (1) {
+        c = peek8(addr);
+        f = flash_next(&s);
+        if (c != f) {
+            return 0;
+        }
+        if (c == 255) {
+            return 1;
+        }
+        addr = addr + 2;
+    }
+}
+
+fn void str_cat_flash(char dst, flashptr src) {
+    char c;
+    while (peek8(dst) != 255) {
+        dst = dst + 2;
+    }
+    c = flash_next(&src);
+    while (c != 255) {
+        poke8(dst, c);
+        dst = dst + 2;
+        c = flash_next(&src);
+    }
+    poke8(dst, 255);
+}
+
+const nibble STR_LT = 15;
+const nibble STR_EQ = 0;
+const nibble STR_GT = 1;
+
+fn nibble str_compare(char a, char b) {
+    char ca;
+    char cb;
+    while (1) {
+        ca = peek8(a);
+        cb = peek8(b);
+        if (ca != cb) {
+            if (ca < cb) {
+                return STR_LT;
+            }
+            return STR_GT;
+        }
+        if (ca == 255) {
+            return STR_EQ;
+        }
+        a = a + 2;
+        b = b + 2;
+    }
+}
+
+fn void str_upper(char addr) {
+    char c;
+    c = peek8(addr);
+    while (c != 255) {
+        if (c >= 'a' && c <= 'z') {
+            poke8(addr, c - 32);
+        }
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+}
+
+fn void str_lower(char addr) {
+    char c;
+    c = peek8(addr);
+    while (c != 255) {
+        if (c >= 'A' && c <= 'Z') {
+            poke8(addr, c + 32);
+        }
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+}
+
+fn void str_reverse(char addr) {
+    char lo;
+    char hi;
+    char tmp;
+    lo = addr;
+    hi = addr;
+    while (peek8(hi) != 255) {
+        hi = hi + 2;
+    }
+    if (hi == lo) {
+        return;
+    }
+    hi = hi - 2;
+    while (lo < hi) {
+        tmp = peek8(lo);
+        poke8(lo, peek8(hi));
+        poke8(hi, tmp);
+        lo = lo + 2;
+        hi = hi - 2;
+    }
+}
+
+// Trim leading/trailing spaces in place; returns the new string start.
+fn char str_trim(char addr) {
+    char start;
+    char end;
+    char c;
+    start = addr;
+    while (peek8(start) == ' ') {
+        start = start + 2;
+    }
+    end = start;
+    while (peek8(end) != 255) {
+        end = end + 2;
+    }
+    while (end > start && peek8(end - 2) == ' ') {
+        end = end - 2;
+    }
+    poke8(end, 255);
+    return start;
+}

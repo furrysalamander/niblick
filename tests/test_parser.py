@@ -27,6 +27,14 @@ def test_lexer_handles_comments_strings_and_literals() -> None:
     assert 65 in values
 
 
+def test_const_array_allows_trailing_comma() -> None:
+    program = parse(
+        "const char values[] = { 1, 2, 3, };\nfn main() { }\n",
+        "test.badge",
+    )
+    assert len(program.globals[0].init_list or []) == 3
+
+
 def test_parser_handles_for_update_assignment() -> None:
     program = parse(
         """

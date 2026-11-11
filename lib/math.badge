@@ -75,3 +75,106 @@ fn char math_pow2(nibble n) {
     }
     return v;
 }
+
+// ---------------------------------------------------------------------------
+// 8- and 16-bit helpers
+// ---------------------------------------------------------------------------
+
+fn char math_min8(char a, char b) {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
+
+fn char math_max8(char a, char b) {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+fn char math_clamp8(char v, char low, char high) {
+    if (v < low) {
+        return low;
+    }
+    if (v > high) {
+        return high;
+    }
+    return v;
+}
+
+fn char math_abs_diff8(char a, char b) {
+    if (a > b) {
+        return a - b;
+    }
+    return b - a;
+}
+
+// Unsigned linear map.  Values outside in_min..in_max are clamped.
+fn char math_map8(char v, char in_min, char in_max, char out_min, char out_max) {
+    if (in_max == in_min) {
+        return out_min;
+    }
+    if (v < in_min) {
+        v = in_min;
+    }
+    if (v > in_max) {
+        v = in_max;
+    }
+    return (char)(((word)(v - in_min) * (word)(out_max - out_min)) / (in_max - in_min) + out_min);
+}
+
+// Largest r with r*r <= n; the result fits in a char.
+fn char math_sqrt16(word n) {
+    word r;
+    r = 0;
+    while ((r + 1) <= 255 && (r + 1) * (r + 1) <= n) {
+        r = r + 1;
+    }
+    return (char)r;
+}
+
+fn char math_gcd8(char a, char b) {
+    char t;
+    while (b != 0) {
+        t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+fn word math_lcm8(char a, char b) {
+    char g;
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+    g = math_gcd8(a, b);
+    return ((word)(a / g)) * (word)b;
+}
+
+// Raw two's-complement sign: 15 = -1, 0 = zero, 1 = +1.
+fn nibble math_sign8(char v) {
+    if ((v & 128) != 0) {
+        return 15;
+    }
+    if (v == 0) {
+        return 0;
+    }
+    return 1;
+}
+
+fn char math_wrap8(char v, char mod) {
+    if (mod == 0) {
+        return 0;
+    }
+    return v % mod;
+}
+
+fn char math_div_round8(char a, char b) {
+    if (b == 0) {
+        return 0;
+    }
+    return (char)(((word)a + (word)(b / 2)) / (word)b);
+}

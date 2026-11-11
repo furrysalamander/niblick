@@ -1,3 +1,6 @@
+import "lib/time.badge";
+import "lib/random.badge";
+import "lib/display.badge";
 // Compact interactive badge dashboard over HTTP.
 //
 // Badge: 192.168.1.50:80
@@ -11,7 +14,7 @@
 //   /api/dimmer?v=N      set dimmer 0..15
 
 import "lib/spi.badge";
-import "lib/w5500.badge";
+import "lib/drivers/w5500.badge";
 
 const char page[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<title>Badge</title><style>body{font:15px monospace;background:#111;color:#eee}button{margin:3px;padding:6px}</style><h3>Badge</h3><button onclick=\"fetch('/api/pattern?p=1')\">fill</button><button onclick=\"fetch('/api/pattern?p=0')\">clear</button><button onclick=\"fetch('/api/pattern?p=2')\">check</button><button onclick=\"fetch('/api/pattern?p=3')\">rand</button><button onclick=\"fetch('/api/dimmer?v=15')\">+</button><button onclick=\"fetch('/api/dimmer?v=4')\">-</button>";
 const char ok[] = "HTTP/1.1 204 No Content\r\n\r\n";

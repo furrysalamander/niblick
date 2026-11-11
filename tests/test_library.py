@@ -10,7 +10,7 @@ from badgec.emulator import Emulator
 from badgec.loader import load_source
 
 
-def compile_source(tmp_path: Path, source: str, name: str = "libtest", rx: list[int] | None = None):
+def compile_source(tmp_path: Path, source: str, name: str = "libtest", rx: list[int] | None = None, trace: bool = False):
     filename = tmp_path / f"{name}.badge"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
@@ -24,6 +24,8 @@ def compile_source(tmp_path: Path, source: str, name: str = "libtest", rx: list[
     emu.load_hex(hex_path)
     if rx is not None:
         emu.uart_rx = list(rx)
+    if trace:
+        emu.trace_io()
     emu.run(500000)
     return compiler, emu
 
@@ -274,3 +276,304 @@ def test_uart_read_line(tmp_path: Path) -> None:
     )
     assert value(compiler, emu, "count") == 3
     assert bytes(emu.uart_tx) == b"3:abc"
+
+
+def test_system_power_and_time_helpers(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/display.badge";
+        import "lib/power.badge";
+        import "lib/system.badge";
+        import "lib/time.badge";
+        import "lib/uart.badge";
+        nibble power;
+        nibble sync;
+        nibble baud;
+        nibble error;
+        nibble flags;
+        nibble dim;
+        fn main() {
+            uart_init(3);
+            dimmer(7);
+            power_keep_awake();
+            power = power_remaining();
+            time_clock_set(CLOCK_100K);
+            time_sync_set(SYNC_10HZ);
+            sync = time_sync_get();
+            system_wr_flags_set(10);
+            flags = system_wr_flags();
+            baud = system_uart_baud();
+            error = system_uart_error();
+            dim = system_dimmer();
+            time_delay_ms(2);
+        }
+        """,
+    )
+    assert value(compiler, emu, "power") == 15
+    assert value(compiler, emu, "sync") == 10
+    assert value(compiler, emu, "flags") == 10
+    assert value(compiler, emu, "baud") == 3
+    assert value(compiler, emu, "error") == 0
+    assert value(compiler, emu, "dim") == 7
+
+
+def test_math_extensions(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/math.badge";
+        char mapped;
+        char root;
+        char gcd;
+        char lcm;
+        nibble sign;
+        char wrapped;
+        char rounded;
+        fn main() {
+            mapped = math_map8(50, 0, 100, 0, 255);
+            root = math_sqrt16(65025);
+            gcd = math_gcd8(48, 18);
+            lcm = (char)math_lcm8(12, 18);
+            sign = math_sign8(0x80);
+            wrapped = math_wrap8(17, 10);
+            rounded = math_div_round8(7, 2);
+        }
+        """,
+    )
+    assert value(compiler, emu, "mapped") == 127
+    assert value(compiler, emu, "root") == 255
+    assert value(compiler, emu, "gcd") == 6
+    assert value(compiler, emu, "lcm") == 36
+    assert value(compiler, emu, "sign") == 15
+    assert value(compiler, emu, "wrapped") == 7
+    assert value(compiler, emu, "rounded") == 4
+
+
+def test_trig_table(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/trig.badge";
+        char s0;
+        char s8;
+        char s16;
+        char s24;
+        char c0;
+        fn main() {
+            s0 = sin_q4_4(0);
+            s8 = sin_q4_4(8);
+            s16 = sin_q4_4(16);
+            s24 = sin_q4_4(24);
+            c0 = cos_q4_4(0);
+        }
+        """,
+    )
+    assert value(compiler, emu, "s0") == 0x00
+    assert value(compiler, emu, "s8") == 0x10
+    assert value(compiler, emu, "s16") == 0x00
+    assert value(compiler, emu, "s24") == 0xF0
+    assert value(compiler, emu, "c0") == 0x10
+
+
+def test_font_and_text_glyph(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/font.badge";
+        nibble screen[32];
+        nibble top;
+        nibble gap;
+        nibble dot;
+        nibble tail;
+        fn main() {
+            clear_screen(&screen);
+            text_draw_char(&screen, 0, 0, '!');
+            top = pixel_get(&screen, 2, 0);
+            gap = pixel_get(&screen, 2, 5);
+            dot = pixel_get(&screen, 2, 6);
+            tail = pixel_get(&screen, 2, 7);
+        }
+        """,
+    )
+    assert value(compiler, emu, "top") == 1
+    assert value(compiler, emu, "gap") == 0
+    assert value(compiler, emu, "dot") == 1
+    assert value(compiler, emu, "tail") == 0
+
+
+def test_display_shift_and_column(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/display.badge";
+        nibble screen[32];
+        nibble left;
+        nibble right;
+        fn main() {
+            clear_screen(&screen);
+            display_set_column(&screen, 7, 0xA5);
+            left = pixel_get(&screen, 7, 0);
+            right = pixel_get(&screen, 7, 1);
+            display_shift_left(&screen);
+        }
+        """,
+    )
+    assert value(compiler, emu, "left") == 1
+    assert value(compiler, emu, "right") == 0
+    base = compiler.globals["screen"].address
+    assert base is not None
+    # After the shift, the previous x=7 column is at x=6.
+    assert (emu.ram[base + 1] >> 1) & 1 == 1
+
+
+def test_audio_tone_and_melody(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/audio.badge";
+        nibble out0;
+        fn main() {
+            audio_init();
+            audio_tone_raw(0, 6);
+            audio_silence();
+            out0 = peek(0x0A) & 1;
+        }
+        """,
+        trace=True,
+    )
+    assert emu.ram[0xF1] == 1  # CLOCK_100K
+    assert value(compiler, emu, "out0") == 0
+    events = [
+        e
+        for e in (emu.io_trace or [])
+        if e.kind == "bit" and e.address == 0x0A and e.bit == 0
+    ]
+    assert len(events) >= 6
+
+
+def test_audio_note_table(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/audio.badge";
+        nibble first;
+        nibble last;
+        fn main() {
+            first = (nibble)audio_note_half_periods[0];
+            last = (nibble)audio_note_half_periods[15];
+        }
+        """,
+    )
+    assert value(compiler, emu, "first") == 12
+    assert value(compiler, emu, "last") == 5
+
+
+def test_pdm_encoder(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/pdm.badge";
+        nibble first;
+        nibble second;
+        nibble error;
+        fn main() {
+            pdm_init();
+            pdm_encode(8);
+            first = peek(0x0A);
+            pdm_encode(8);
+            second = peek(0x0A);
+            error = pdm_error;
+        }
+        """,
+    )
+    assert emu.ram[0xF1] == 0  # CLOCK_250K
+    assert value(compiler, emu, "first") == 1
+    assert value(compiler, emu, "second") == 15
+    assert value(compiler, emu, "error") == 0
+
+
+def test_mem_byte_endian_and_search(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/mem.badge";
+        char buf[8];
+        char le_lo;
+        char le_hi;
+        char be_lo;
+        char be_hi;
+        char found;
+        nibble count;
+        char sum;
+        fn main() {
+            mem_fill8(&buf, 0, 8);
+            mem_poke16_le(&buf, 0x1234);
+            le_lo = (char)mem_peek16_le(&buf);
+            le_hi = (char)(mem_peek16_le(&buf) >> 8);
+            be_lo = (char)mem_peek16_be(&buf);
+            be_hi = (char)(mem_peek16_be(&buf) >> 8);
+            mem_poke16_be(&buf, 0xABCD);
+            found = mem_search8(&buf, 2, 0xAB);
+            count = mem_popcount8(0xF0);
+            mem_fill8(&buf, 0x01, 4);
+            sum = mem_sum8(&buf, 4);
+        }
+        """,
+    )
+    assert value(compiler, emu, "le_lo") == 0x34
+    assert value(compiler, emu, "le_hi") == 0x12
+    assert value(compiler, emu, "be_lo") == 0x12
+    assert value(compiler, emu, "be_hi") == 0x34
+    assert value(compiler, emu, "found") != 0
+    assert value(compiler, emu, "count") == 4
+    assert value(compiler, emu, "sum") == 4
+
+
+def test_string_convert_search_and_trim(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/string.badge";
+        char buf[16];
+        char other[16];
+        char trimmed;
+        char value;
+        nibble len;
+        nibble eq;
+        nibble contains;
+        nibble cmp;
+        fn main() {
+            len = str_from_dec8(&buf, 123);
+            value = str_to_dec8(&buf);
+            str_reverse(&buf);
+            str_copy_flash(&other, "hello world");
+            contains = str_contains(&other, "world");
+            cmp = str_compare(&buf, &buf);
+            eq = str_eq_flash(&other, "hello world");
+            str_upper(&other);
+            str_copy_flash(&other, "  hi  ");
+            trimmed = str_trim(&other);
+            eq = str_eq_flash(trimmed, "hi");
+        }
+        """,
+    )
+    assert value(compiler, emu, "len") == 3
+    assert value(compiler, emu, "value") == 123
+    assert value(compiler, emu, "contains") == 1
+    assert value(compiler, emu, "cmp") == 0
+    assert value(compiler, emu, "eq") == 1
+
+
+def test_power_sleep_halts_emulator(tmp_path: Path) -> None:
+    _, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/power.badge";
+        fn main() {
+            power_sleep();
+        }
+        """,
+    )
+    assert emu.sleeping is True
+    assert emu.halted is True

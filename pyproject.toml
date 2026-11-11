@@ -46,6 +46,9 @@ packages = ["badgec", "badgec.runtime"]
 [tool.setuptools.package-data]
 badgec = ["runtime/*.asm"]
 
+[tool.setuptools.data-files]
+"share/badgec/lib" = ["lib/*.badge", "lib/drivers/*.badge", "lib/drivers/asm/*.asm"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

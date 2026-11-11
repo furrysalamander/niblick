@@ -1,3 +1,4 @@
+import "lib/uart.badge";
 const char banner[] = "BadgeC serial echo ready\n";
 
 char c;

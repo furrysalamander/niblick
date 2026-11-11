@@ -1,4 +1,4 @@
-"""Tests for the hand-written fast SPI runtime helpers."""
+"""Tests for the W5500 driver's hand-written fast SPI helpers."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def run_and_sample_bits(
 def test_spi_tx_fast_bit_order(tmp_path: Path) -> None:
     _, hex_path = build(
         tmp_path,
-        "fn main() { spi_tx_fast(0xA5); while (1) { } }",
+        "fn main() { w5500_spi_tx_fast(0xA5); while (1) { } }",
         "spi_tx_fast",
     )
     cpu = Emulator()
@@ -52,7 +52,7 @@ def test_spi_tx_fast_bit_order(tmp_path: Path) -> None:
 def test_spi_xfer_fast_reads_miso(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
-        "char result; fn main() { result = spi_xfer_fast(0); while (1) { } }",
+        "char result; fn main() { result = w5500_spi_xfer_fast(0); while (1) { } }",
         "spi_xfer_fast",
     )
     address = compiler.globals["result"].address

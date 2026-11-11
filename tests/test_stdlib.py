@@ -7,13 +7,13 @@ from pathlib import Path
 from badgec.assembler import assemble_file
 from badgec.compiler import Compiler
 from badgec.emulator import Emulator
-from badgec.parser import parse
+from badgec.loader import load_program
 
 
 def build(tmp_path: Path, source: str) -> tuple[Compiler, Path]:
     source_path = tmp_path / "prog.badge"
     source_path.write_text(source)
-    compiler = Compiler(parse(source, str(source_path)), str(source_path))
+    compiler = Compiler(load_program(source_path), str(source_path))
     asm_path = tmp_path / "prog.asm"
     asm_path.write_text(compiler.compile())
     hex_path = tmp_path / "prog.hex"
@@ -40,6 +40,7 @@ def test_gpio_output_set_clear_toggle_and_test(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/gpio.badge";
         nibble readback;
         nibble bit;
         fn main() {
@@ -63,6 +64,7 @@ def test_display_page_and_poke_peek(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/display.badge";
         nibble value;
         fn main() {
             display_page(8);
@@ -81,10 +83,12 @@ def test_memset_and_uart_write(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/uart.badge";
+        import "lib/mem.badge";
         char buf[4];
         fn main() {
-            memset(buf, 65, 4);
-            uart_write(buf, 4);
+            mem_fill8(&buf, 65, 4);
+            uart_write(&buf, 4);
         }
         """,
     )
@@ -98,13 +102,17 @@ def test_nibble_memset_and_system_sfr_helpers(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/display.badge";
+        import "lib/random.badge";
+        import "lib/key.badge";
+        import "lib/mem.badge";
         nibble buf[4];
         nibble rnd;
         nibble ks;
         nibble kc;
         nibble any;
         fn main() {
-            memset(buf, 9, 4);
+            mem_fill(&buf, 9, 4);
             seed(3);
             rnd = random();
             dimmer(7);
@@ -128,6 +136,7 @@ def test_gpio_honors_iopos_alternate_registers(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/gpio.badge";
         nibble readback;
         fn main() {
             readback = gpio_read();
@@ -150,15 +159,16 @@ def test_memcpy_for_nibble_and_char_arrays(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/mem.badge";
         nibble a[4];
         nibble b[4];
         char c[4];
         char d[4];
         fn main() {
-            memset(a, 3, 4);
-            memcpy(b, a, 4);
-            memset(c, 65, 4);
-            memcpy(d, c, 4);
+            mem_fill(&a, 3, 4);
+            mem_copy(&b, &a, 4);
+            mem_fill8(&c, 65, 4);
+            mem_copy8(&d, &c, 4);
         }
         """,
     )
@@ -177,6 +187,9 @@ def test_wrflags_helpers_preserve_other_bits(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/uart.badge";
+        import "lib/gpio.badge";
+        import "lib/display.badge";
         fn main() {
             uart_route(1);
             gpio_alt(1);
@@ -190,6 +203,9 @@ def test_wrflags_helpers_preserve_other_bits(tmp_path: Path) -> None:
     assert emu.ram[0xF3] == 0b0011  # uart_route + gpio_alt
     # Now clear them again.
     source = """
+        import "lib/uart.badge";
+        import "lib/gpio.badge";
+        import "lib/display.badge";
         fn main() {
             uart_route(0);
             gpio_alt(0);

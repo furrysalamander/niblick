@@ -59,7 +59,7 @@ def test_debug_map_covers_inline_asm_lines(tmp_path: Path) -> None:
 def test_debug_map_does_not_map_runtime_after_source_end(tmp_path: Path) -> None:
     _, _, debug = build(
         tmp_path,
-        "fn main() { uart_init(3); while (1) { } }\n",
+        "fn main() { uart_putc(65); while (1) { } }\n",
     )
     # The runtime follows a source-end marker; only the entry source should
     # appear in the source map.

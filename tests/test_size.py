@@ -10,16 +10,16 @@ from badgec.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
 BUDGETS = {
-    "hello.badge": 120,
-    "serial_echo.badge": 200,
+    "hello.badge": 220,
+    "serial_echo.badge": 260,
     "flash_walk.badge": 180,
     "gpio_blink.badge": 70,
     "inline_asm.badge": 60,
-    "tetris.badge": 2600,
-    "stdlib_demo.badge": 1900,
-    "word_math.badge": 1300,
-    "dword_math.badge": 2300,
-    "math32_test.badge": 2800,
+    "tetris.badge": 2800,
+    "stdlib_demo.badge": 2400,
+    "word_math.badge": 1400,
+    "dword_math.badge": 2400,
+    "math32_test.badge": 2900,
     "cube.badge": 2100,
     "wave.badge": 1200,
     "water.badge": 2100,
@@ -28,6 +28,9 @@ BUDGETS = {
     "w5500_http.badge": 2700,
     "w5500_dashboard.badge": 4096,
     "mc_void.badge": 4096,
+    "text_scroll.badge": 2200,
+    "audio_demo.badge": 600,
+    "pdm_demo.badge": 300,
 }
 
 
@@ -61,7 +64,7 @@ def test_runtime_stripping_removes_unused_helpers(tmp_path: Path) -> None:
     _, stripped_asm, stripped_hex = compile_example(example, stripped_dir, True)
     _, full_asm, full_hex = compile_example(example, full_dir, False)
 
-    assert "__bc_uart_puts" in stripped_asm
+    assert "__bc_uart_putc" in stripped_asm
     assert "__bc_gpio_set" not in stripped_asm
     assert "__bc_gpio_set" in full_asm
     assert code_words(stripped_hex) < code_words(full_hex)

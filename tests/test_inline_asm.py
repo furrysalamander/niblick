@@ -83,6 +83,7 @@ def test_inline_asm_calls_runtime(tmp_path: Path) -> None:
     _, _, hex_path = build(
         tmp_path,
         """
+        import "lib/uart.badge";
         fn main() {
             uart_init(3);
             asm {

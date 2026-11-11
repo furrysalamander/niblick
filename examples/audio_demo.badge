@@ -1,0 +1,17 @@
+// Square-wave melody on OUT0.  Connect OUT0 to an LPF and amplifier.
+import "lib/audio.badge";
+import "lib/time.badge";
+
+const char melody[] = {
+    0, 8, 1, 8, 2, 8, 3, 8,
+    4, 16, 15, 8,
+    0xFF
+};
+
+fn main() {
+    audio_init();
+    while (1) {
+        audio_play(melody);
+        delay(15);
+    }
+}

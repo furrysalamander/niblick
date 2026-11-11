@@ -70,3 +70,183 @@ fn nibble mem_popcount(nibble v) {
     }
     return count;
 }
+
+// ---------------------------------------------------------------------------
+// Byte-oriented helpers (two nibbles per byte)
+// ---------------------------------------------------------------------------
+
+fn void mem_fill8(char addr, char value, char len) {
+    while (len != 0) {
+        poke8(addr, value);
+        addr = addr + 2;
+        len = len - 1;
+    }
+}
+
+fn void mem_zero8(char addr, char len) {
+    mem_fill8(addr, 0, len);
+}
+
+fn void mem_copy8(char dst, char src, char len) {
+    while (len != 0) {
+        poke8(dst, peek8(src));
+        dst = dst + 2;
+        src = src + 2;
+        len = len - 1;
+    }
+}
+
+fn nibble mem_cmp8(char a, char b, char len) {
+    while (len != 0) {
+        if (peek8(a) != peek8(b)) {
+            return 1;
+        }
+        a = a + 2;
+        b = b + 2;
+        len = len - 1;
+    }
+    return 0;
+}
+
+fn void mem_swap8(char a, char b) {
+    char tmp;
+    tmp = peek8(a);
+    poke8(a, peek8(b));
+    poke8(b, tmp);
+}
+
+// ---------------------------------------------------------------------------
+// 16- and 32-bit access (little- and big-endian)
+// ---------------------------------------------------------------------------
+
+fn word mem_peek16_le(char addr) {
+    return ((word)peek8(addr + 2) << 8) | (word)peek8(addr);
+}
+
+fn word mem_peek16_be(char addr) {
+    return ((word)peek8(addr) << 8) | (word)peek8(addr + 2);
+}
+
+fn void mem_poke16_le(char addr, word value) {
+    poke8(addr, (char)value);
+    poke8(addr + 2, (char)(value >> 8));
+}
+
+fn void mem_poke16_be(char addr, word value) {
+    poke8(addr, (char)(value >> 8));
+    poke8(addr + 2, (char)value);
+}
+
+fn dword mem_peek32_le(char addr) {
+    return ((dword)mem_peek16_le(addr + 4) << 16) | (dword)mem_peek16_le(addr);
+}
+
+fn dword mem_peek32_be(char addr) {
+    return ((dword)mem_peek16_be(addr) << 16) | (dword)mem_peek16_be(addr + 4);
+}
+
+fn void mem_poke32_le(char addr, dword value) {
+    mem_poke16_le(addr, (word)value);
+    mem_poke16_le(addr + 4, (word)(value >> 16));
+}
+
+fn void mem_poke32_be(char addr, dword value) {
+    mem_poke16_be(addr, (word)(value >> 16));
+    mem_poke16_be(addr + 4, (word)value);
+}
+
+// ---------------------------------------------------------------------------
+// Search, reverse, checksums
+// ---------------------------------------------------------------------------
+
+fn char mem_search8(char addr, char len, char value) {
+    while (len != 0) {
+        if (peek8(addr) == value) {
+            return addr;
+        }
+        addr = addr + 2;
+        len = len - 1;
+    }
+    return 0;
+}
+
+fn void mem_reverse8(char addr, char len) {
+    char lo;
+    char hi;
+    char tmp;
+    if (len < 2) {
+        return;
+    }
+    lo = addr;
+    hi = addr + (len - 1) * 2;
+    while (lo < hi) {
+        tmp = peek8(lo);
+        poke8(lo, peek8(hi));
+        poke8(hi, tmp);
+        lo = lo + 2;
+        hi = hi - 2;
+    }
+}
+
+fn nibble mem_popcount8(char value) {
+    nibble count;
+    count = 0;
+    while (value != 0) {
+        count = count + (nibble)(value & 1);
+        value = value >> 1;
+    }
+    return count;
+}
+
+fn char mem_sum8(char addr, char len) {
+    char sum;
+    sum = 0;
+    while (len != 0) {
+        sum = sum + peek8(addr);
+        addr = addr + 2;
+        len = len - 1;
+    }
+    return sum;
+}
+
+// CRC-8/ATM (polynomial 0x07).
+fn char mem_crc8(char addr, char len, char seed) {
+    char crc;
+    char bit;
+    crc = seed;
+    while (len != 0) {
+        crc = crc ^ peek8(addr);
+        bit = 8;
+        while (bit != 0) {
+            if ((crc & 128) != 0) {
+                crc = (crc << 1) ^ 7;
+            } else {
+                crc = crc << 1;
+            }
+            bit = bit - 1;
+        }
+        addr = addr + 2;
+        len = len - 1;
+    }
+    return crc;
+}
+
+fn void mem_move8(char dst, char src, char len) {
+    char i;
+    if (dst == src || len == 0) {
+        return;
+    }
+    if (dst < src) {
+        mem_copy8(dst, src, len);
+        return;
+    }
+    i = len - 1;
+    dst = dst + i * 2;
+    src = src + i * 2;
+    while (len != 0) {
+        poke8(dst, peek8(src));
+        dst = dst - 2;
+        src = src - 2;
+        len = len - 1;
+    }
+}

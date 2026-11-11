@@ -9,6 +9,8 @@ single ``ast.Program`` for the compiler.
 from __future__ import annotations
 
 import os
+import site
+import sys
 from pathlib import Path
 
 from . import ast_nodes as ast
@@ -20,6 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 def _search_roots(extra: list[str | Path] | None) -> list[Path]:
     roots = [REPO_ROOT]
+    for base in (Path(sys.prefix), Path(site.USER_BASE)):
+        data_root = base / "share" / "badgec"
+        if data_root.is_dir():
+            roots.append(data_root)
     if extra:
         roots.extend(Path(item).expanduser() for item in extra)
     env = os.environ.get("BADGEC_PATH")

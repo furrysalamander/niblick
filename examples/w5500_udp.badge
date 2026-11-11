@@ -1,3 +1,4 @@
+import "lib/time.badge";
 // Send a UDP datagram from the badge to the host every second.
 //
 // Badge: 192.168.1.50
@@ -8,7 +9,7 @@
 //   OUT0=RST, OUT1=CS, OUT2=SCLK, OUT3=MOSI, IN0=MISO
 
 import "lib/spi.badge";
-import "lib/w5500.badge";
+import "lib/drivers/w5500.badge";
 import "lib/uart.badge";
 
 const char message[] = "hello from badge\n";

@@ -1,3 +1,4 @@
+import "lib/time.badge";
 // Minimal HTTP server on a W5500.
 //
 // Badge: 192.168.1.50:80
@@ -6,7 +7,7 @@
 // Try: curl http://192.168.1.50/
 
 import "lib/spi.badge";
-import "lib/w5500.badge";
+import "lib/drivers/w5500.badge";
 import "lib/uart.badge";
 
 const char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 17\r\nConnection: close\r\n\r\nhello from badge\n";

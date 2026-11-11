@@ -10,14 +10,13 @@ from badgec.assembler import assemble_file, code_words
 from badgec.compiler import Compiler
 from badgec.emulator import Emulator
 from badgec.errors import BadgeCompileError, BadgeTypeError
-from badgec.parser import parse
+from badgec.loader import load_program
 
 
 def build(tmp_path: Path, source: str, name: str = "prog") -> tuple[Compiler, Path]:
     source_path = tmp_path / f"{name}.badge"
     source_path.write_text(source)
-    program = parse(source, str(source_path))
-    compiler = Compiler(program, str(source_path))
+    compiler = Compiler(load_program(source_path), str(source_path))
     asm = compiler.compile()
     asm_path = tmp_path / f"{name}.asm"
     asm_path.write_text(asm)
@@ -259,8 +258,7 @@ def test_non_tail_recursion_is_rejected(tmp_path: Path) -> None:
     """
     source_path = tmp_path / "bad.badge"
     source_path.write_text(source)
-    program = parse(source, str(source_path))
-    compiler = Compiler(program, str(source_path))
+    compiler = Compiler(load_program(source_path), str(source_path))
     with pytest.raises(BadgeCompileError, match="non-tail recursion"):
         compiler.compile()
 
@@ -297,6 +295,7 @@ def test_uart_puts_and_echo(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
+        import "lib/uart.badge";
         char c;
         fn main() {
             uart_init(3);
@@ -350,8 +349,7 @@ def test_type_errors_are_reported(tmp_path: Path) -> None:
     """
     source_path = tmp_path / "badtype.badge"
     source_path.write_text(source)
-    program = parse(source, str(source_path))
-    compiler = Compiler(program, str(source_path))
+    compiler = Compiler(load_program(source_path), str(source_path))
     with pytest.raises(BadgeTypeError, match="cannot convert char to nibble"):
         compiler.compile()
 

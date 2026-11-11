@@ -1,3 +1,4 @@
+import "lib/time.badge";
 // W5500 SPI bring-up probe.
 //
 // Wiring assumed:
@@ -11,7 +12,7 @@
 // status) and prints them continuously on the main UART at 9600 8N1.
 
 import "lib/spi.badge";
-import "lib/w5500.badge";
+import "lib/drivers/w5500.badge";
 import "lib/uart.badge";
 
 fn main() {

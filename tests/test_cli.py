@@ -12,6 +12,7 @@ def test_cli_compiles_and_runs_from_any_working_directory(tmp_path: Path) -> Non
     source = tmp_path / "hello.badge"
     source.write_text(
         """
+        import "lib/uart.badge";
         const char msg[] = "Hi";
         fn main() {
             uart_init(3);
@@ -41,6 +42,7 @@ def test_cli_map_json_trace_and_dumps(tmp_path: Path, capsys) -> None:
     source = tmp_path / "hello.badge"
     source.write_text(
         """
+        import "lib/uart.badge";
         const char msg[] = "Hi";
         nibble x;
         fn main() {
@@ -70,7 +72,7 @@ def test_cli_map_json_trace_and_dumps(tmp_path: Path, capsys) -> None:
     assert map_path.exists()
     data = map_path.read_text()
     assert '"functions"' in data
-    assert '"uart_puts"' not in data  # builtins are not user functions
+    assert '"uart_puts"' in data  # uart_puts is a library function now
     captured = capsys.readouterr()
     assert "pc=0" in captured.out
     assert "UART TX" in captured.out

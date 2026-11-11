@@ -1,3 +1,4 @@
+import "lib/time.badge";
 // Minimal Minecraft 1.8.9 (protocol 47) server on a Voja4 badge.
 //
 // The badge listens on 192.168.1.50:25565, answers the server-list ping,
@@ -11,8 +12,8 @@
 // request).  That is automatic: vanilla clients connect to offline servers.
 
 import "lib/spi.badge";
-import "lib/w5500.badge";
-import "lib/asm/mc_void.asm";
+import "lib/drivers/w5500.badge";
+import "mc_void.asm";
 
 extern fn void mc_adjust_pos(char face);
 
@@ -97,13 +98,13 @@ char pong[8];
 fn void mc_tx_begin() {
     tx_wr = w5500_tx_pointer();
     gpio_clear(SPI_CS);
-    spi_xfer_fast((char)(tx_wr >> 8));
-    spi_xfer_fast((char)tx_wr);
-    spi_xfer_fast(0x14);                // BSB 2, write
+    w5500_spi_xfer_fast((char)(tx_wr >> 8));
+    w5500_spi_xfer_fast((char)tx_wr);
+    w5500_spi_xfer_fast(0x14);                // BSB 2, write
 }
 
 fn void mc_tx_put(char value) {
-    spi_tx_fast(value);
+    w5500_spi_tx_fast(value);
     tx_wr = tx_wr + 1;
 }
 
@@ -295,19 +296,19 @@ fn void mc_send_chunk() {
     // (0x10, 0x00), making a 16x16 platform.
     pkt_total_len = 512;
     while (pkt_total_len > 0) {
-        spi_tx_fast(0x10);
-        spi_tx_fast(0x00);
+        w5500_spi_tx_fast(0x10);
+        w5500_spi_tx_fast(0x00);
         tx_wr = tx_wr + 2;
         pkt_total_len = pkt_total_len - 2;
     }
     pkt_total_len = 12032;
     while (pkt_total_len > 0) {
         if (pkt_total_len > 4352) {
-            spi_tx_fast(0x00);
+            w5500_spi_tx_fast(0x00);
         } else if (pkt_total_len > 256) {
-            spi_tx_fast(0xFF);
+            w5500_spi_tx_fast(0xFF);
         } else {
-            spi_tx_fast(0x7F);
+            w5500_spi_tx_fast(0x7F);
         }
         tx_wr = tx_wr + 1;
         pkt_total_len = pkt_total_len - 1;

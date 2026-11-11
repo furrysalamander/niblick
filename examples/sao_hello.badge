@@ -1,3 +1,5 @@
+import "lib/time.badge";
+import "lib/uart.badge";
 const char msg[] = "Hello from SAO!\n";
 
 fn main() {

@@ -12,11 +12,6 @@
 ; UART
 ; ---------------------------------------------------------------------------
 
-__bc_uart_init:
-    MOV R0, R1
-    MOV [0xF5], R0              ; SerCtrl: baud rate
-    RET R0, 0
-
 __bc_uart_putc:
     MOV R0, R2
     MOV [0xF7], R0              ; SerHigh first
@@ -36,18 +31,6 @@ __bc_uart_getc_wait:
     MOV R1, R0
     RET R0, 0
 
-__bc_uart_available:
-    MOV R0, [0xF8]              ; Received (0..15, saturating)
-    MOV R1, R0
-    RET R0, 0
-
-; ---------------------------------------------------------------------------
-; Flash RET-table access
-; ---------------------------------------------------------------------------
-
-; Read one nibble from a flash table.
-;   in:  R6/R7/R8 = 12-bit address (low/middle/high)
-;   out: R1 = nibble
 __bc_flash_read_nibble_ptr:
     MOV PCH, R8
     MOV PCM, R7
@@ -100,33 +83,9 @@ __bc_flash_read_nibble:
 
 ; Write a flash string to the UART.  Stops at 0xFF.
 ;   in: R1/R2/R3 = flash pointer
-__bc_uart_puts:
-    MOV R6, R1
-    MOV R7, R2
-    MOV R8, R3
-__bc_uart_puts_loop:
-    GOSUB __bc_flash_read_char_ptr
-    MOV R0, R1
-    CP R0, 0xF
-    SKIP NZ, 4
-    MOV R0, R2
-    CP R0, 0xF
-    SKIP NZ, 1
-    RET R0, 0
-    GOSUB __bc_uart_putc
-    GOTO __bc_uart_puts_loop
-
-; ---------------------------------------------------------------------------
-; Fast bit-banged SPI (bank 0)
-; ---------------------------------------------------------------------------
-; These routines assume WrFlags.IOPos=0 and the wiring used by lib/spi.badge:
-;   OUT1 = CS, OUT2 = SCLK, OUT3 = MOSI, IN0 = MISO.
-; The caller owns CS.  Both routines send MSB first, mode 0.
-
-; Send the char in R1:R2, ignoring MISO.
-__bc_spi_tx_fast:
+__bc_w5500_spi_tx_fast:
     MOV R4, 8
-__bc_spi_tx_fast_loop:
+__bc_w5500_spi_tx_fast_loop:
     BIT R2, 3
     SKIP Z, 1
     BSET R3, 3
@@ -138,15 +97,15 @@ __bc_spi_tx_fast_loop:
     ADC R2, R2
     BCLR R3, 2
     DSZ R4
-    GOTO __bc_spi_tx_fast_loop
+    JR __bc_w5500_spi_tx_fast_loop
     RET R0, 0
 
 ; Exchange the char in R1:R2, returning MISO in R1:R2.
-__bc_spi_xfer_fast:
+__bc_w5500_spi_xfer_fast:
     MOV R4, 8
     MOV R6, 0
     MOV R7, 0
-__bc_spi_xfer_fast_loop:
+__bc_w5500_spi_xfer_fast_loop:
     BIT R2, 3
     SKIP Z, 1
     BSET R3, 3
@@ -163,7 +122,7 @@ __bc_spi_xfer_fast_loop:
     ADC R2, R2
     BCLR R3, 2
     DSZ R4
-    GOTO __bc_spi_xfer_fast_loop
+    JR __bc_w5500_spi_xfer_fast_loop
     MOV R1, R6
     MOV R2, R7
     RET R0, 0
@@ -173,44 +132,6 @@ __bc_spi_xfer_fast_loop:
 ; ---------------------------------------------------------------------------
 
 ; Read the 4-bit connector input, honoring WrFlags.IOPos.
-__bc_gpio_read:
-    MOV R0, [0xF3]
-    AND R0, 2
-    CP R0, 0
-    SKIP NZ, 3
-    MOV R0, [0x0B]              ; IOPos=0: IN
-    MOV R1, R0
-    RET R0, 0
-    MOV R0, [0xFB]              ; IOPos=1: InB
-    MOV R1, R0
-    RET R0, 0
-
-; Write the 4-bit connector output, honoring WrFlags.IOPos.
-; Read the 4-bit output latch, honoring WrFlags.IOPos.
-__bc_gpio_read_out:
-    MOV R0, [0xF3]
-    AND R0, 2
-    CP R0, 0
-    SKIP NZ, 3
-    MOV R0, [0x0A]              ; IOPos=0: OUT
-    MOV R1, R0
-    RET R0, 0
-    MOV R0, [0xFA]              ; IOPos=1: OutB
-    MOV R1, R0
-    RET R0, 0
-
-__bc_gpio_write:
-    MOV R0, [0xF3]
-    AND R0, 2
-    CP R0, 0
-    SKIP NZ, 3
-    MOV R0, R1
-    MOV [0x0A], R0              ; IOPos=0: OUT
-    RET R0, 0
-    MOV R0, R1
-    MOV [0xFA], R0              ; IOPos=1: OutB
-    RET R0, 0
-
 __bc_gpio_set:
     MOV R9, R1
     GOSUB __bc_gpio_read_out
@@ -249,209 +170,6 @@ __bc_gpio_test:
 ; Buttons, random, dimmer
 ; ---------------------------------------------------------------------------
 
-__bc_random:
-    MOV R0, [0xFF]              ; each read advances the PRNG
-    MOV R1, R0
-    RET R0, 0
-
-__bc_seed:
-    MOV R0, R1
-    MOV [0xFF], R0
-    RET R0, 0
-
-__bc_dimmer:
-    MOV R0, R1
-    MOV [0xFE], R0
-    RET R0, 0
-
-__bc_key_status:
-    MOV R0, [0xFC]              ; reading clears JustPress
-    MOV R1, R0
-    RET R0, 0
-
-__bc_key_code:
-    MOV R0, [0xFD]
-    MOV R1, R0
-    RET R0, 0
-
-__bc_key_any:
-    MOV R0, [0xFC]
-    AND R0, 4
-    MOV R1, 0
-    CP R0, 0
-    SKIP Z, 1
-    INC R1
-    RET R0, 0
-
-__bc_key_alt:
-    MOV R0, [0xFC]
-    AND R0, 8
-    MOV R1, 0
-    CP R0, 0
-    SKIP Z, 1
-    INC R1
-    RET R0, 0
-
-__bc_key_just:
-    MOV R0, [0xFC]
-    AND R0, 1
-    MOV R1, 0
-    CP R0, 0
-    SKIP Z, 1
-    INC R1
-    RET R0, 0
-
-__bc_key_last:
-    MOV R0, [0xFC]
-    AND R0, 2
-    MOV R1, 0
-    CP R0, 0
-    SKIP Z, 1
-    INC R1
-    RET R0, 0
-
-; ---------------------------------------------------------------------------
-; RAM char[] transmit and fill helpers
-; ---------------------------------------------------------------------------
-
-; Write `R1` (1..15) bytes from a RAM char array at R4:R5.
-__bc_uart_write:
-    MOV R9, R1
-    MOV R0, R9
-    CP R0, 0
-    SKIP NZ, 1
-    RET R0, 0
-__bc_uart_write_loop:
-    MOV R0, [R4:R5]
-    MOV R2, R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    MOV R0, [R4:R5]
-    MOV R1, R2
-    MOV R2, R0
-    GOSUB __bc_uart_putc
-    INC R5
-    SKIP NC, 1
-    INC R4
-    DSZ R9
-    JR __bc_uart_write_loop
-    RET R0, 0
-
-; Fill R1 nibbles at R4:R5 with R3.
-__bc_memset_nibbles:
-    MOV R9, R1
-    MOV R0, R9
-    CP R0, 0
-    SKIP NZ, 1
-    RET R0, 0
-__bc_memset_nibbles_loop:
-    MOV R0, R3
-    MOV [R4:R5], R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    DSZ R9
-    JR __bc_memset_nibbles_loop
-    RET R0, 0
-
-; Fill R1 char elements at R4:R5 with low=R2, high=R3.
-__bc_memset_chars:
-    MOV R9, R1
-    MOV R0, R9
-    CP R0, 0
-    SKIP NZ, 1
-    RET R0, 0
-__bc_memset_chars_loop:
-    MOV R0, R2
-    MOV [R4:R5], R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    MOV R0, R3
-    MOV [R4:R5], R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    DSZ R9
-    JR __bc_memset_chars_loop
-    RET R0, 0
-
-; Approximate busy delay. R1 units; each unit is a 15x15 inner loop.
-__bc_delay:
-    MOV R2, R1
-    MOV R0, R2
-    CP R0, 0
-    SKIP NZ, 1
-    RET R0, 0
-__bc_delay_outer:
-    MOV R3, 15
-__bc_delay_inner:
-    DEC R3
-    MOV R0, R3
-    CP R0, 0
-    SKIP Z, 2
-    GOTO __bc_delay_inner
-    DSZ R2
-    JR __bc_delay_outer
-    RET R0, 0
-
-; Copy R1 nibbles from R6:R7 to R4:R5.
-__bc_memcpy_nibbles:
-    MOV R9, R1
-    MOV R0, R9
-    CP R0, 0
-    SKIP NZ, 1
-    RET R0, 0
-__bc_memcpy_nibbles_loop:
-    MOV R0, [R6:R7]
-    MOV [R4:R5], R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    INC R7
-    SKIP NC, 1
-    INC R6
-    DSZ R9
-    JR __bc_memcpy_nibbles_loop
-    RET R0, 0
-
-; Copy R1 char elements from R6:R7 to R4:R5.
-__bc_memcpy_chars:
-    MOV R9, R1
-    MOV R0, R9
-    CP R0, 0
-    SKIP NZ, 1
-    RET R0, 0
-__bc_memcpy_chars_loop:
-    MOV R0, [R6:R7]
-    MOV [R4:R5], R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    INC R7
-    SKIP NC, 1
-    INC R6
-    MOV R0, [R6:R7]
-    MOV [R4:R5], R0
-    INC R5
-    SKIP NC, 1
-    INC R4
-    INC R7
-    SKIP NC, 1
-    INC R6
-    DSZ R9
-    JR __bc_memcpy_chars_loop
-    RET R0, 0
-
-; ---------------------------------------------------------------------------
-; Multiply / divide
-;
-; Scratch: 0x38..0x3F is reserved for these routines.  The compiler's
-; expression temp area ends at 0x37.
-; ---------------------------------------------------------------------------
-
-; nibble x nibble -> char.  in: R1=a, R2=b.  out: R1:R2.
 __bc_mul4:
     MOV R3, 0
     MOV R4, 0
@@ -1458,6 +1176,45 @@ __bc_flash_read_dword:
 ; WrFlags helper bits
 ; ---------------------------------------------------------------------------
 
+__bc_gpio_read_out:
+    MOV R0, [0xF3]
+    AND R0, 2
+    CP R0, 0
+    SKIP NZ, 3
+    MOV R0, [0x0A]              ; IOPos=0: OUT
+    MOV R1, R0
+    RET R0, 0
+    MOV R0, [0xFA]              ; IOPos=1: OutB
+    MOV R1, R0
+    RET R0, 0
+
+__bc_gpio_write:
+    MOV R0, [0xF3]
+    AND R0, 2
+    CP R0, 0
+    SKIP NZ, 3
+    MOV R0, R1
+    MOV [0x0A], R0              ; IOPos=0: OUT
+    RET R0, 0
+    MOV R0, R1
+    MOV [0xFA], R0              ; IOPos=1: OutB
+    RET R0, 0
+
+__bc_gpio_read:
+    MOV R0, [0xF3]
+    AND R0, 2
+    CP R0, 0
+    SKIP NZ, 3
+    MOV R0, [0x0B]              ; IOPos=0: IN
+    MOV R1, R0
+    RET R0, 0
+    MOV R0, [0xFB]              ; IOPos=1: InB
+    MOV R1, R0
+    RET R0, 0
+
+; Write the 4-bit connector output, honoring WrFlags.IOPos.
+; Read the 4-bit output latch, honoring WrFlags.IOPos.
+
 __bc_gpio_alt:
     MOV R0, R1
     CP R0, 0
@@ -1471,41 +1228,22 @@ __bc_gpio_alt:
     MOV [0xF3], R0
     RET R0, 0
 
-__bc_uart_route:
-    MOV R0, R1
+__bc_delay:
+    MOV R2, R1
+    MOV R0, R2
     CP R0, 0
-    SKIP Z, 4
-    MOV R0, [0xF3]
-    OR R0, 1
-    MOV [0xF3], R0
+    SKIP NZ, 1
     RET R0, 0
-    MOV R0, [0xF3]
-    AND R0, 0xE
-    MOV [0xF3], R0
+__bc_delay_outer:
+    MOV R3, 15
+__bc_delay_inner:
+    DEC R3
+    MOV R0, R3
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_delay_inner
+    DSZ R2
+    JR __bc_delay_outer
     RET R0, 0
 
-__bc_leds_enable:
-    MOV R0, R1
-    CP R0, 0
-    SKIP Z, 4
-    MOV R0, [0xF3]
-    AND R0, 0x7              ; enable: clear LedsOff
-    MOV [0xF3], R0
-    RET R0, 0
-    MOV R0, [0xF3]
-    OR R0, 8                 ; disable: set LedsOff
-    MOV [0xF3], R0
-    RET R0, 0
-
-__bc_matrix_enable:
-    MOV R0, R1
-    CP R0, 0
-    SKIP Z, 4
-    MOV R0, [0xF3]
-    AND R0, 0xB              ; enable: clear MatrixOff
-    MOV [0xF3], R0
-    RET R0, 0
-    MOV R0, [0xF3]
-    OR R0, 4                 ; disable: set MatrixOff
-    MOV [0xF3], R0
-    RET R0, 0
+; Copy R1 nibbles from R6:R7 to R4:R5.

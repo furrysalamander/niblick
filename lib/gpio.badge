@@ -1,0 +1,20 @@
+// Bank-aware GPIO helpers.
+//
+// `gpio_set`, `gpio_clear`, `gpio_toggle`, and `gpio_test` are compiler
+// intrinsics because constant masks lower to single bit instructions.  These
+// helpers cover the read/write and WrFlags routing cases.
+
+fn nibble gpio_read() {
+    if ((peek(0xF3) & 2) != 0) {
+        return peek(0xFB);
+    }
+    return peek(0x0B);
+}
+
+fn void gpio_write(nibble value) {
+    if ((peek(0xF3) & 2) != 0) {
+        poke(0xFA, value);
+    } else {
+        poke(0x0A, value);
+    }
+}

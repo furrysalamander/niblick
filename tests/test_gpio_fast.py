@@ -9,7 +9,7 @@ import pytest
 from badgec.assembler import assemble_file, code_words
 from badgec.compiler import Compiler
 from badgec.emulator import Emulator
-from badgec.parser import parse
+from badgec.loader import load_program
 
 MASKS = (0, 1, 2, 3, 4, 5, 8, 15)
 
@@ -17,7 +17,7 @@ MASKS = (0, 1, 2, 3, 4, 5, 8, 15)
 def build(tmp_path: Path, source: str, name: str):
     path = tmp_path / f"{name}.badge"
     path.write_text(source)
-    compiler = Compiler(parse(source, str(path)), str(path))
+    compiler = Compiler(load_program(path), str(path))
     asm_path = tmp_path / f"{name}.asm"
     asm_path.write_text(compiler.compile())
     hex_path = tmp_path / f"{name}.hex"
@@ -37,6 +37,7 @@ def run(hex_path: Path, iopos: int = 0, input_value: int = 0):
 
 def program(mask_expr: str, init_expr: str) -> str:
     return f"""
+    import "lib/gpio.badge";
     nibble result;
     nibble mask;
     fn main() {{

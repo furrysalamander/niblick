@@ -1,3 +1,5 @@
+import "lib/time.badge";
+import "lib/gpio.badge";
 // Toggle the four GPIO output pins in a simple pattern.
 // `delay` is an approximate busy loop; its real duration depends on Clock.
 

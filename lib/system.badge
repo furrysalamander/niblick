@@ -1,0 +1,53 @@
+// Raw system status and control SFRs.
+//
+// Reading RdFlags clears UserSync.  Reading SerCtrl clears the sticky UART
+// error bit.  Use the *_of-style helpers when you need several fields from
+// one read.
+
+const nibble WR_LEDS_OFF = 8;
+const nibble WR_MATRIX_OFF = 4;
+const nibble WR_IO_POS = 2;
+const nibble WR_RX_TX_POS = 1;
+
+const nibble RD_VFLAG = 2;
+const nibble RD_USER_SYNC = 1;
+
+fn nibble system_wr_flags() {
+    return peek(0xF3);
+}
+
+fn void system_wr_flags_set(nibble flags) {
+    poke(0xF3, flags);
+}
+
+fn nibble system_rd_flags() {
+    return peek(0xF4);
+}
+
+fn nibble system_vflag() {
+    return (peek(0xF4) & RD_VFLAG) != 0;
+}
+
+fn nibble system_user_sync() {
+    return peek(0xF4) & RD_USER_SYNC;
+}
+
+fn nibble system_ser_ctrl() {
+    return peek(0xF5);
+}
+
+fn nibble system_uart_error() {
+    return (peek(0xF5) & 8) != 0;
+}
+
+fn nibble system_uart_baud() {
+    return peek(0xF5) & 7;
+}
+
+fn nibble system_page() {
+    return peek(0xF0);
+}
+
+fn nibble system_dimmer() {
+    return peek(0xFE);
+}

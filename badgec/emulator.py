@@ -113,6 +113,7 @@ class Emulator:
         self.Z = 0
         self.V = 0
         self.halted = False
+        self.sleeping = False
 
         # Minimal UART model used by BadgeC integration tests.
         self.uart_tx: list[int] = []
@@ -151,6 +152,7 @@ class Emulator:
         self.Z = 0
         self.V = 0
         self.halted = False
+        self.sleeping = False
         self.uart_tx = []
         self.uart_rx = []
         self.uart_tx_high = 0
@@ -612,6 +614,11 @@ class Emulator:
         if address == 0xFF:  # seed
             self.random_state = 0xACE1 if value == 15 else value
             self.ram[0xFF] = value
+            return
+        if address == 0xF9 and value == 0:  # AutoOff = 0 enters SLEEP
+            self.ram[0xF9] = 0
+            self.sleeping = True
+            self.halted = True
             return
         if address in (0x0A, 0xFA):
             before = self.ram[address]

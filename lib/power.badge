@@ -1,0 +1,29 @@
+// AutoOff power management.
+//
+// AutoOff is a 4-bit down-counter decremented every 10 minutes.  Writing a
+// value reloads the 10-minute prescaler; writing 0 enters SLEEP immediately.
+
+const nibble POWER_MAX = 15;
+const nibble POWER_10_MIN = 1;
+const nibble POWER_150_MIN = 15;
+
+fn void power_keep_awake() {
+    poke(0xF9, POWER_MAX);
+}
+
+fn void power_auto_off(nibble units) {
+    poke(0xF9, units);
+}
+
+// minutes is rounded down to 10-minute units.  0 sleeps immediately.
+fn void power_auto_off_minutes(nibble minutes) {
+    poke(0xF9, minutes / 10);
+}
+
+fn void power_sleep() {
+    poke(0xF9, 0);
+}
+
+fn nibble power_remaining() {
+    return peek(0xF9);
+}

@@ -2,6 +2,61 @@
 // sets the UserSync flag rate and `RdFlags` reports it.  Reading RdFlags
 // clears UserSync.
 
+// Approximate busy delay.  One unit is a 15x15 inner loop.  The duration
+// changes with the Clock SFR; use Sync for timing-critical work.
+fn void time_delay(nibble units) {
+    nibble i;
+    nibble j;
+    while (units != 0) {
+        i = 15;
+        while (i != 0) {
+            j = 15;
+            while (j != 0) {
+                j = j - 1;
+            }
+            i = i - 1;
+        }
+        units = units - 1;
+    }
+}
+
+
+// Clock divider indices.
+const nibble CLOCK_250K = 0;
+const nibble CLOCK_100K = 1;
+const nibble CLOCK_30K = 2;
+const nibble CLOCK_10K = 3;
+const nibble CLOCK_3K = 4;
+const nibble CLOCK_1K = 5;
+const nibble CLOCK_500 = 6;
+const nibble CLOCK_200 = 7;
+const nibble CLOCK_100 = 8;
+const nibble CLOCK_50 = 9;
+const nibble CLOCK_20 = 10;
+const nibble CLOCK_10 = 11;
+const nibble CLOCK_5 = 12;
+const nibble CLOCK_2 = 13;
+const nibble CLOCK_1 = 14;
+const nibble CLOCK_0_5 = 15;
+
+// UserSync divider indices.
+const nibble SYNC_1000HZ = 0;
+const nibble SYNC_600HZ = 1;
+const nibble SYNC_400HZ = 2;
+const nibble SYNC_250HZ = 3;
+const nibble SYNC_150HZ = 4;
+const nibble SYNC_100HZ = 5;
+const nibble SYNC_60HZ = 6;
+const nibble SYNC_40HZ = 7;
+const nibble SYNC_25HZ = 8;
+const nibble SYNC_15HZ = 9;
+const nibble SYNC_10HZ = 10;
+const nibble SYNC_6HZ = 11;
+const nibble SYNC_4HZ = 12;
+const nibble SYNC_2_5HZ = 13;
+const nibble SYNC_1_5HZ = 14;
+const nibble SYNC_1HZ = 15;
+
 fn void time_clock_set(nibble divider) {
     poke(0xF1, divider);
 }
@@ -12,6 +67,10 @@ fn nibble time_clock_get() {
 
 fn void time_sync_set(nibble divider) {
     poke(0xF2, divider);
+}
+
+fn nibble time_sync_get() {
+    return peek(0xF2);
 }
 
 // Reading this clears the current UserSync flag.
@@ -29,4 +88,29 @@ fn void time_delay_frames(nibble count) {
         time_sync_wait();
         count = count - 1;
     }
+}
+
+// Wait for ms millisecond ticks using Sync=0.  The first tick can be up to
+// one millisecond early because writing Sync does not reset the divider.
+fn void time_delay_ms(word ms) {
+    nibble old;
+    old = peek(0xF2);
+    poke(0xF2, SYNC_1000HZ);
+    while (ms != 0) {
+        time_sync_wait();
+        ms = ms - 1;
+    }
+    poke(0xF2, old);
+}
+
+// Wait for a number of ticks at the given Sync divider.
+fn void time_delay_ticks(nibble ticks, nibble divider) {
+    nibble old;
+    old = peek(0xF2);
+    poke(0xF2, divider);
+    while (ticks != 0) {
+        time_sync_wait();
+        ticks = ticks - 1;
+    }
+    poke(0xF2, old);
 }

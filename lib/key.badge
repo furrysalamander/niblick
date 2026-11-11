@@ -1,5 +1,64 @@
 // Front-panel key helpers.  The measured KeyReg values are documented in
 // docs/keys.md; these wrappers keep call sites readable.
+//
+// Reading KeyStatus clears the JustPress bit.  The convenience helpers below
+// read it for you; the *_of helpers take an already-read status nibble when
+// you need to test several bits from one read.
+
+const nibble KEY_ALT = 8;
+const nibble KEY_ANY = 4;
+const nibble KEY_LAST = 2;
+const nibble KEY_JUST = 1;
+
+fn nibble key_status() {
+    return peek(0xFC);
+}
+
+fn nibble key_code() {
+    return peek(0xFD);
+}
+
+fn nibble key_any_of(nibble status) {
+    return (status & KEY_ANY) != 0;
+}
+
+fn nibble key_alt_of(nibble status) {
+    return (status & KEY_ALT) != 0;
+}
+
+fn nibble key_just_of(nibble status) {
+    return (status & KEY_JUST) != 0;
+}
+
+fn nibble key_last_of(nibble status) {
+    return (status & KEY_LAST) != 0;
+}
+
+fn nibble key_any() {
+    return key_any_of(key_status());
+}
+
+fn nibble key_alt() {
+    return key_alt_of(key_status());
+}
+
+fn nibble key_just() {
+    return key_just_of(key_status());
+}
+
+fn nibble key_last() {
+    return key_last_of(key_status());
+}
+
+// 1 when the named key is currently held.
+fn nibble key_down(nibble code) {
+    nibble status;
+    status = key_status();
+    if (key_code() == code) {
+        return key_last_of(status);
+    }
+    return 0;
+}
 
 fn nibble key_op8() {
     return 1;
@@ -23,26 +82,43 @@ fn nibble key_dep() {
 
 // Wait for the next key press and return its code.
 fn nibble key_wait() {
-    while (!key_just()) {
+    nibble status;
+    while (1) {
+        status = key_status();
+        if (key_just_of(status) != 0) {
+            return key_code();
+        }
     }
-    return key_code();
 }
 
 // Wait for a press, then wait for that key to be released.
 fn nibble key_wait_release() {
+    nibble status;
     nibble code;
-    while (!key_just()) {
+    while (1) {
+        status = key_status();
+        if (key_just_of(status) != 0) {
+            break;
+        }
     }
     code = key_code();
-    while (key_last()) {
+    while (1) {
+        status = key_status();
+        if (key_last_of(status) == 0) {
+            break;
+        }
     }
     return code;
 }
 
 fn nibble key_wait_any() {
-    while (!key_any()) {
+    nibble status;
+    while (1) {
+        status = key_status();
+        if (key_any_of(status) != 0) {
+            return key_code();
+        }
     }
-    return key_code();
 }
 
 fn flashptr key_name(nibble code) {

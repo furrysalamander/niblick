@@ -1,3 +1,5 @@
+import "lib/time.badge";
+import "lib/display.badge";
 // Spinning wireframe cube for the Supercon.6 LED matrix.
 //
 // The matrix is 16 rows x 8 columns.  It shows two 16x4 pages side by side:

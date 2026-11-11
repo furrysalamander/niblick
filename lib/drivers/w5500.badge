@@ -7,10 +7,11 @@
 // This module only implements reset and register read/write.  Socket setup
 // and UDP/TCP helpers can be layered on top.
 
-import "spi.badge";
-import "asm/w5500.asm";
+import "lib/spi.badge";
+import "lib/drivers/asm/w5500.asm";
 
 extern fn word w5500_tx_pointer();
+extern fn void w5500_delay();
 extern fn char w5500_rx_peek(word offset);
 extern fn void w5500_rx_consume(word count);
 
@@ -34,20 +35,20 @@ fn char w5500_read(nibble bsb, char addr_hi, char addr_lo) {
     char value;
 
     gpio_clear(SPI_CS);
-    spi_xfer_fast(addr_hi);
-    spi_xfer_fast(addr_lo);
-    spi_xfer_fast((char)bsb << 3);       // read; OM = 00
-    value = spi_xfer_fast(0);
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast((char)bsb << 3);       // read; OM = 00
+    value = w5500_spi_xfer_fast(0);
     gpio_set(SPI_CS);
     return value;
 }
 
 fn void w5500_write(nibble bsb, char addr_hi, char addr_lo, char value) {
     gpio_clear(SPI_CS);
-    spi_xfer_fast(addr_hi);
-    spi_xfer_fast(addr_lo);
-    spi_xfer_fast(((char)bsb << 3) | 4);   // write; OM = 00
-    spi_xfer_fast(value);
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast(((char)bsb << 3) | 4);   // write; OM = 00
+    w5500_spi_xfer_fast(value);
     gpio_set(SPI_CS);
 }
 
@@ -58,10 +59,10 @@ fn void w5500_set_tx_size(char socket, char size) {
 
     bsb = (char)(3 * socket + 1);
     gpio_clear(SPI_CS);
-    spi_xfer_fast(0x00);
-    spi_xfer_fast(0x1F);
-    spi_xfer_fast((char)((bsb << 3) | 4));
-    spi_xfer_fast(size);
+    w5500_spi_xfer_fast(0x00);
+    w5500_spi_xfer_fast(0x1F);
+    w5500_spi_xfer_fast((char)((bsb << 3) | 4));
+    w5500_spi_xfer_fast(size);
     gpio_set(SPI_CS);
 }
 
@@ -193,17 +194,17 @@ fn void w5500_tx_set_pointer(word pointer) {
 // Start a write burst into the socket 0 TX buffer at the given address.
 fn void w5500_tx_stream_begin(char addr_hi, char addr_lo) {
     gpio_clear(SPI_CS);
-    spi_xfer_fast(addr_hi);
-    spi_xfer_fast(addr_lo);
-    spi_xfer_fast(0x14);                // BSB 2, write
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast(0x14);                // BSB 2, write
 }
 
 // Start a read burst from the socket 0 RX buffer at the given address.
 fn void w5500_rx_stream_begin(char addr_hi, char addr_lo) {
     gpio_clear(SPI_CS);
-    spi_xfer_fast(addr_hi);
-    spi_xfer_fast(addr_lo);
-    spi_xfer_fast(0x18);                // BSB 3, read
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast(0x18);                // BSB 3, read
 }
 
 fn void w5500_stream_end() {

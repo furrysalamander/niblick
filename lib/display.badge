@@ -5,7 +5,55 @@
 
 import "mem.badge";
 
-const nibble disp_masks[] = { 1, 2, 4, 8 };
+const nibble disp_masks[] = { 8, 4, 2, 1 };
+
+fn void display_page(nibble page) {
+    poke(0xF0, page);
+}
+
+fn nibble display_page_get() {
+    return peek(0xF0);
+}
+
+fn void display_poke(nibble page, nibble index, nibble value) {
+    poke(((char)page << 4) | index, value);
+}
+
+fn nibble display_peek(nibble page, nibble index) {
+    return peek(((char)page << 4) | index);
+}
+
+// Set the LED PWM duty (0..15; 15 = brightest).
+fn void dimmer(nibble value) {
+    poke(0xFE, value);
+}
+
+fn nibble dimmer_get() {
+    return peek(0xFE);
+}
+
+// Enable/disable the ALU panel LEDs (WrFlags.LedsOff, bit 3).
+fn void leds_enable(nibble enable) {
+    if (enable != 0) {
+        poke(0xF3, peek(0xF3) & 7);
+    } else {
+        poke(0xF3, peek(0xF3) | 8);
+    }
+}
+
+// Enable/disable the LED matrix (WrFlags.MatrixOff, bit 2).
+fn void matrix_enable(nibble enable) {
+    if (enable != 0) {
+        poke(0xF3, peek(0xF3) & 11);
+    } else {
+        poke(0xF3, peek(0xF3) | 4);
+    }
+}
+
+// Show the two display pages that contain a 32-nibble framebuffer.
+fn void display_show(char base) {
+    display_page(high_nibble(base));
+}
 
 fn void display_fill(nibble page, nibble value) {
     nibble i;
@@ -109,4 +157,41 @@ fn void fill_rect(char base, nibble x0, char y0, nibble x1, char y1, nibble on) 
 
 fn void clear_screen(char base) {
     mem_fill(base, 0, 32);
+}
+
+// Shift a 32-nibble framebuffer one pixel to the left.  Bit 3 is the
+// leftmost pixel in each nibble.
+fn void display_shift_left(char base) {
+    char row;
+    nibble hi;
+    nibble lo;
+    row = 0;
+    while (row < 16) {
+        hi = peek(base + (row << 1));
+        lo = peek(base + (row << 1) + 1);
+        poke(base + (row << 1), ((hi << 1) & 15) | (lo >> 3));
+        poke(base + (row << 1) + 1, (lo << 1) & 15);
+        row = row + 1;
+    }
+}
+
+// Set the top eight rows of one pixel column from an 8-bit column value.
+fn void display_set_column(char base, nibble x, char bits) {
+    char row;
+    char addr;
+    nibble mask;
+    nibble value;
+    mask = 1 << (3 - (x & 3));
+    row = 0;
+    while (row < 8) {
+        addr = base + (row << 1) + (x >> 2);
+        value = peek(addr);
+        if ((bits & (128 >> row)) != 0) {
+            value = value | mask;
+        } else {
+            value = value & (mask ^ 15);
+        }
+        poke(addr, value);
+        row = row + 1;
+    }
 }

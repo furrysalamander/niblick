@@ -1,3 +1,8 @@
+import "lib/time.badge";
+import "lib/key.badge";
+import "lib/random.badge";
+import "lib/display.badge";
+import "lib/uart.badge";
 // BadgeC Tetris for the Supercon.6 LED matrix.
 //
 // The first RAM global must be the 32-nibble screen so it lands at 0x40,

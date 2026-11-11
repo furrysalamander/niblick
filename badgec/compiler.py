@@ -62,14 +62,8 @@ TEMP_START = 0x20
 TEMP_END = 0x38
 
 BUILTINS = {
-    "uart_init": VOID,
     "uart_putc": VOID,
-    "putchar": VOID,
     "uart_getc": CHAR,
-    "uart_available": NIBBLE,
-    "uart_puts": VOID,
-    "puts": VOID,
-    "uart_write": VOID,
     "flash_read_char": CHAR,
     "flash_read_nibble": NIBBLE,
     "flash_next": CHAR,
@@ -77,75 +71,36 @@ BUILTINS = {
     "in": NIBBLE,
     "peek": NIBBLE,
     "poke": VOID,
-    "gpio_read": NIBBLE,
-    "gpio_write": VOID,
     "gpio_set": VOID,
     "gpio_clear": VOID,
     "gpio_toggle": VOID,
     "gpio_test": NIBBLE,
     "gpio_alt": VOID,
-    "uart_route": VOID,
-    "leds_enable": VOID,
-    "matrix_enable": VOID,
-    "display_page": VOID,
-    "display_poke": VOID,
-    "display_peek": NIBBLE,
-    "random": NIBBLE,
-    "seed": VOID,
-    "dimmer": VOID,
     "peek8": CHAR,
     "poke8": VOID,
     "high_nibble": NIBBLE,
     "low_nibble": NIBBLE,
-    "key_status": NIBBLE,
-    "key_code": NIBBLE,
-    "key_any": NIBBLE,
-    "key_alt": NIBBLE,
-    "key_just": NIBBLE,
-    "key_last": NIBBLE,
+    "w5500_spi_tx_fast": VOID,
+    "w5500_spi_xfer_fast": CHAR,
     "delay": VOID,
-    "memset": VOID,
-    "memcpy": VOID,
-    "spi_tx_fast": VOID,
-    "spi_xfer_fast": CHAR,
 }
 
 
 # Builtins that are implemented by a runtime label.
 RUNTIME_ENTRY = {
-    "uart_init": "__bc_uart_init",
     "uart_putc": "__bc_uart_putc",
-    "putchar": "__bc_uart_putc",
     "uart_getc": "__bc_uart_getc",
-    "uart_available": "__bc_uart_available",
-    "uart_puts": "__bc_uart_puts",
-    "puts": "__bc_uart_puts",
-    "uart_write": "__bc_uart_write",
     "flash_read_char": "__bc_flash_read_char",
     "flash_read_nibble": "__bc_flash_read_nibble",
     "flash_next": "__bc_flash_read_char_ptr",
-    "gpio_read": "__bc_gpio_read",
-    "gpio_write": "__bc_gpio_write",
     "gpio_set": "__bc_gpio_set",
     "gpio_clear": "__bc_gpio_clear",
     "gpio_toggle": "__bc_gpio_toggle",
     "gpio_test": "__bc_gpio_test",
     "gpio_alt": "__bc_gpio_alt",
-    "uart_route": "__bc_uart_route",
-    "leds_enable": "__bc_leds_enable",
-    "matrix_enable": "__bc_matrix_enable",
-    "random": "__bc_random",
-    "seed": "__bc_seed",
-    "dimmer": "__bc_dimmer",
-    "key_status": "__bc_key_status",
-    "key_code": "__bc_key_code",
-    "key_any": "__bc_key_any",
-    "key_alt": "__bc_key_alt",
-    "key_just": "__bc_key_just",
-    "key_last": "__bc_key_last",
     "delay": "__bc_delay",
-    "spi_tx_fast": "__bc_spi_tx_fast",
-    "spi_xfer_fast": "__bc_spi_xfer_fast",
+    "w5500_spi_tx_fast": "__bc_w5500_spi_tx_fast",
+    "w5500_spi_xfer_fast": "__bc_w5500_spi_xfer_fast",
 }
 
 _COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
@@ -2515,14 +2470,7 @@ class Compiler:
         if entry is not None and not fast_gpio:
             self.use_runtime(entry, expr.line)
 
-        if name == "uart_init":
-            self.require_args(expr, 1)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.emit("GOSUB __bc_uart_init")
-            return VOID
-
-        if name in ("uart_putc", "putchar"):
+        if name == "uart_putc":
             self.require_args(expr, 1)
             typ = self.compile_expr(expr.args[0], scope)
             self.coerce(typ, CHAR, expr.line)
@@ -2533,30 +2481,6 @@ class Compiler:
             self.require_args(expr, 0)
             self.emit("GOSUB __bc_uart_getc")
             return CHAR
-
-        if name == "uart_available":
-            self.require_args(expr, 0)
-            self.emit("GOSUB __bc_uart_available")
-            return NIBBLE
-
-        if name in ("uart_puts", "puts"):
-            self.require_args(expr, 1)
-            arg = expr.args[0]
-            if isinstance(arg, ast.StringLiteral):
-                label = self.new_flash_string(arg.value)
-                self.emit_flashptr(label)
-            elif isinstance(arg, ast.Var):
-                symbol = self.lookup(arg.name, scope, arg.line)
-                if symbol.flash_label is not None and symbol.type is CHAR:
-                    self.emit_flashptr(symbol.flash_label)
-                else:
-                    typ = self.compile_expr(arg, scope)
-                    self.coerce(typ, FLASHPTR, arg.line)
-            else:
-                typ = self.compile_expr(arg, scope)
-                self.coerce(typ, FLASHPTR, arg.line)
-            self.emit("GOSUB __bc_uart_puts")
-            return VOID
 
         if name == "flash_read_char":
             self.require_args(expr, 1)
@@ -2601,55 +2525,11 @@ class Compiler:
             self.emit(f"MOV [{addr + 2}], R0")
             return CHAR
 
-        if name == "uart_write":
-            self.require_args(expr, 2)
-            buf_arg = expr.args[0]
-            if not isinstance(buf_arg, ast.Var):
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: uart_write expects a RAM char array"
-                )
-            symbol = self.lookup(buf_arg.name, scope, expr.line)
-            if (
-                symbol.address is None
-                or symbol.type is not CHAR
-                or symbol.array_len is None
-                or symbol.flash_label is not None
-            ):
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: uart_write expects a RAM char array"
-                )
-            typ = self.compile_expr(expr.args[1], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            addr = symbol.address
-            self.emit(f"MOV R4, {(addr >> 4) & 0xF}")
-            self.emit(f"MOV R5, {addr & 0xF}")
-            self.emit("GOSUB __bc_uart_write")
-            return VOID
-
-        if name == "spi_tx_fast":
-            self.require_args(expr, 1)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, CHAR, expr.line)
-            self.emit("GOSUB __bc_spi_tx_fast")
-            return VOID
-
-        if name == "spi_xfer_fast":
-            self.require_args(expr, 1)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, CHAR, expr.line)
-            self.emit("GOSUB __bc_spi_xfer_fast")
-            return CHAR
-
-        if name == "gpio_read":
-            self.require_args(expr, 0)
-            self.emit("GOSUB __bc_gpio_read")
-            return NIBBLE
-
-        if name == "gpio_write":
+        if name == "gpio_alt":
             self.require_args(expr, 1)
             typ = self.compile_expr(expr.args[0], scope)
             self.coerce(typ, NIBBLE, expr.line)
-            self.emit("GOSUB __bc_gpio_write")
+            self.emit("GOSUB __bc_gpio_alt")
             return VOID
 
         if name in ("gpio_set", "gpio_clear", "gpio_toggle", "gpio_test"):
@@ -2683,190 +2563,25 @@ class Compiler:
             self.emit(f"GOSUB __bc_{name}")
             return NIBBLE if name == "gpio_test" else VOID
 
-        if name in ("gpio_alt", "uart_route", "leds_enable", "matrix_enable"):
+        if name == "w5500_spi_tx_fast":
             self.require_args(expr, 1)
             typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.emit(f"GOSUB __bc_{name}")
+            self.coerce(typ, CHAR, expr.line)
+            self.emit("GOSUB __bc_w5500_spi_tx_fast")
             return VOID
 
-        if name == "display_page":
+        if name == "w5500_spi_xfer_fast":
             self.require_args(expr, 1)
             typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.emit("MOV R0, R1")
-            self.emit("MOV [0xF0], R0")
-            return VOID
-
-        if name == "display_poke":
-            self.require_args(expr, 3)
-            mark = self.temp.mark()
-            page_addr = self.temp.alloc(1, "display page", self.filename, expr.line)
-            index_addr = self.temp.alloc(1, "display index", self.filename, expr.line)
-            value_addr = self.temp.alloc(1, "display value", self.filename, expr.line)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, page_addr)
-            typ = self.compile_expr(expr.args[1], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, index_addr)
-            typ = self.compile_expr(expr.args[2], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, value_addr)
-            self.load_temp(NIBBLE, page_addr)
-            self.emit("MOV R4, R1")
-            self.load_temp(NIBBLE, index_addr)
-            self.emit("MOV R5, R1")
-            self.load_temp(NIBBLE, value_addr)
-            self.emit("MOV R0, R1")
-            self.emit("MOV [R4:R5], R0")
-            self.temp.reset(mark)
-            return VOID
-
-        if name == "display_peek":
-            self.require_args(expr, 2)
-            mark = self.temp.mark()
-            page_addr = self.temp.alloc(1, "display page", self.filename, expr.line)
-            index_addr = self.temp.alloc(1, "display index", self.filename, expr.line)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, page_addr)
-            typ = self.compile_expr(expr.args[1], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, index_addr)
-            self.load_temp(NIBBLE, index_addr)
-            self.emit("MOV R5, R1")
-            self.load_temp(NIBBLE, page_addr)
-            self.emit("MOV R4, R1")
-            self.emit("MOV R0, [R4:R5]")
-            self.emit("MOV R1, R0")
-            self.temp.reset(mark)
-            return NIBBLE
-
-        if name == "random":
-            self.require_args(expr, 0)
-            self.emit("GOSUB __bc_random")
-            return NIBBLE
-
-        if name == "seed":
-            self.require_args(expr, 1)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.emit("GOSUB __bc_seed")
-            return VOID
-
-        if name == "dimmer":
-            self.require_args(expr, 1)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.emit("GOSUB __bc_dimmer")
-            return VOID
-
-        if name == "key_status":
-            self.require_args(expr, 0)
-            self.emit("GOSUB __bc_key_status")
-            return NIBBLE
-
-        if name == "key_code":
-            self.require_args(expr, 0)
-            self.emit("GOSUB __bc_key_code")
-            return NIBBLE
-
-        if name in ("key_any", "key_alt", "key_just", "key_last"):
-            self.require_args(expr, 0)
-            self.emit(f"GOSUB __bc_{name}")
-            return NIBBLE
+            self.coerce(typ, CHAR, expr.line)
+            self.emit("GOSUB __bc_w5500_spi_xfer_fast")
+            return CHAR
 
         if name == "delay":
             self.require_args(expr, 1)
             typ = self.compile_expr(expr.args[0], scope)
             self.coerce(typ, NIBBLE, expr.line)
             self.emit("GOSUB __bc_delay")
-            return VOID
-
-        if name == "memcpy":
-            self.require_args(expr, 3)
-            dst_arg, src_arg = expr.args[0], expr.args[1]
-            if not isinstance(dst_arg, ast.Var) or not isinstance(src_arg, ast.Var):
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: memcpy expects named RAM arrays"
-                )
-            dst = self.lookup(dst_arg.name, scope, expr.line)
-            src = self.lookup(src_arg.name, scope, expr.line)
-            for symbol in (dst, src):
-                if symbol.address is None or symbol.array_len is None or symbol.flash_label is not None:
-                    raise BadgeTypeError(
-                        f"{location(self.filename, expr.line)}: memcpy expects named RAM arrays"
-                    )
-            if dst.type is not src.type or dst.type not in (NIBBLE, CHAR):
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: memcpy source and destination must have the same element type"
-                )
-            mark = self.temp.mark()
-            length_addr = self.temp.alloc(1, "memcpy length", self.filename, expr.line)
-            typ = self.compile_expr(expr.args[2], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, length_addr)
-
-            self.emit(f"MOV R4, {(dst.address >> 4) & 0xF}")
-            self.emit(f"MOV R5, {dst.address & 0xF}")
-            self.emit(f"MOV R6, {(src.address >> 4) & 0xF}")
-            self.emit(f"MOV R7, {src.address & 0xF}")
-            self.load_temp(NIBBLE, length_addr)
-            if dst.type is NIBBLE:
-                self.use_runtime("__bc_memcpy_nibbles", expr.line)
-                self.emit("GOSUB __bc_memcpy_nibbles")
-            else:
-                self.use_runtime("__bc_memcpy_chars", expr.line)
-                self.emit("GOSUB __bc_memcpy_chars")
-            self.temp.reset(mark)
-            return VOID
-
-        if name == "memset":
-            self.require_args(expr, 3)
-            buf_arg = expr.args[0]
-            if not isinstance(buf_arg, ast.Var):
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: memset expects a named RAM array"
-                )
-            symbol = self.lookup(buf_arg.name, scope, expr.line)
-            if symbol.address is None or symbol.array_len is None or symbol.flash_label is not None:
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: memset expects a named RAM array"
-                )
-            if symbol.type not in (NIBBLE, CHAR):
-                raise BadgeTypeError(
-                    f"{location(self.filename, expr.line)}: memset cannot fill {symbol.type} arrays"
-                )
-            mark = self.temp.mark()
-            value_addr = self.temp.alloc(
-                symbol.type.ram_size, "memset value", self.filename, expr.line
-            )
-            length_addr = self.temp.alloc(1, "memset length", self.filename, expr.line)
-            typ = self.compile_expr(expr.args[1], scope)
-            self.coerce(typ, symbol.type, expr.line)
-            self.store_temp(symbol.type, value_addr)
-            typ = self.compile_expr(expr.args[2], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.store_temp(NIBBLE, length_addr)
-
-            addr = symbol.address
-            self.emit(f"MOV R4, {(addr >> 4) & 0xF}")
-            self.emit(f"MOV R5, {addr & 0xF}")
-            if symbol.type is NIBBLE:
-                self.use_runtime("__bc_memset_nibbles", expr.line)
-                self.load_temp(NIBBLE, value_addr)
-                self.emit("MOV R3, R1")
-                self.load_temp(NIBBLE, length_addr)
-                self.emit("GOSUB __bc_memset_nibbles")
-            else:
-                self.use_runtime("__bc_memset_chars", expr.line)
-                self.load_temp(CHAR, value_addr)
-                self.emit("MOV R3, R2")
-                self.emit("MOV R2, R1")
-                self.load_temp(NIBBLE, length_addr)
-                self.emit("GOSUB __bc_memset_chars")
-            self.temp.reset(mark)
             return VOID
 
         if name == "out":

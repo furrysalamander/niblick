@@ -100,6 +100,7 @@ def test_asm_runtime_call_is_linked_and_emits_uart(tmp_path: Path) -> None:
         tmp_path,
         """
         import "emit.asm";
+        import "lib/uart.badge";
         extern fn void emit(char value);
         fn main() {
             uart_init(3);
@@ -188,6 +189,7 @@ def test_const_array_placeholder_uses_flash_label(tmp_path: Path) -> None:
         tmp_path,
         """
         import "print.asm";
+        import "lib/uart.badge";
         const char msg[] = "Hi";
         extern fn void print_msg();
         fn main() {
@@ -202,13 +204,14 @@ def test_const_array_placeholder_uses_flash_label(tmp_path: Path) -> None:
                 MOV R1, LOW ${msg}
                 MOV R2, MID ${msg}
                 MOV R3, HIGH ${msg}
-                GOSUB __bc_uart_puts
+                GOSUB __bc_flash_read_char
+                GOSUB __bc_uart_putc
                 RET R0, 0
             """
         },
     )
     emu = run(hex_path)
-    assert b"Hi" in bytes(emu.uart_tx)
+    assert b"H" in bytes(emu.uart_tx)
 
 
 def test_qualified_placeholder_addresses_another_function_param(tmp_path: Path) -> None:
@@ -389,7 +392,7 @@ def test_w5500_tx_pointer_moved_to_library(tmp_path: Path) -> None:
     entry = tmp_path / "caller.badge"
     entry.write_text(
         """
-        import "lib/w5500.badge";
+        import "lib/drivers/w5500.badge";
         word pointer;
         fn main() {
             pointer = w5500_tx_pointer();
@@ -401,7 +404,7 @@ def test_w5500_tx_pointer_moved_to_library(tmp_path: Path) -> None:
     asm = compiler.compile()
     assert "fn_w5500_tx_pointer:" in asm
     assert "__bc_w5500_tx_pointer:" not in asm
-    assert "GOSUB __bc_spi_xfer_fast" in asm
+    assert "GOSUB __bc_w5500_spi_xfer_fast" in asm
 
     asm_path = tmp_path / "caller.asm"
     asm_path.write_text(asm)

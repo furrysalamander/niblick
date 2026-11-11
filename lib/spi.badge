@@ -8,9 +8,9 @@
 //   IN0  = MISO
 //
 // The module uses GPIO bank 0 (WrFlags.IOPos = 0).  Unused functions are
-// removed by the compiler's dead-declaration pass.  The runtime
-// spi_tx_fast/spi_xfer_fast helpers used by lib/w5500.badge also assume
-// bank 0, so call spi_init() before using the W5500 driver.
+// removed by the compiler's dead-declaration pass.  The fast SPI helpers used
+// by lib/drivers/w5500.badge also assume bank 0, so call spi_init() before
+// using the W5500 driver.
 
 const nibble SPI_SCLK = 4;
 const nibble SPI_MOSI = 8;

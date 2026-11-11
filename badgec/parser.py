@@ -262,6 +262,8 @@ class Parser:
                     init_list.append(self.parse_expression())
                     if not self.match(","):
                         break
+                    if self.check("}"):
+                        break
             self.expect("}")
         else:
             init = self.parse_expression()

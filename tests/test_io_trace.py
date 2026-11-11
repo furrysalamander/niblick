@@ -8,13 +8,13 @@ from badgec.assembler import assemble_file
 from badgec.cli import main
 from badgec.compiler import Compiler
 from badgec.emulator import Emulator
-from badgec.parser import parse
+from badgec.loader import load_program
 
 
 def build(tmp_path: Path, source: str, name: str = "io") -> Path:
     path = tmp_path / f"{name}.badge"
     path.write_text(source)
-    compiler = Compiler(parse(source, str(path)), str(path))
+    compiler = Compiler(load_program(path), str(path))
     asm_path = tmp_path / f"{name}.asm"
     asm_path.write_text(compiler.compile())
     hex_path = tmp_path / f"{name}.hex"
@@ -26,6 +26,7 @@ def test_trace_records_port_writes_and_bit_operations(tmp_path: Path) -> None:
     hex_path = build(
         tmp_path,
         """
+        import "lib/gpio.badge";
         nibble r;
         fn main() {
             gpio_write(5);
@@ -61,6 +62,7 @@ def test_trace_honors_iopos_and_fake_input(tmp_path: Path) -> None:
     hex_path = build(
         tmp_path,
         """
+        import "lib/gpio.badge";
         nibble r;
         fn main() {
             gpio_set(1);
@@ -130,6 +132,7 @@ def test_cli_trace_io_output(tmp_path: Path, capsys) -> None:
     source = tmp_path / "trace.badge"
     source.write_text(
         """
+        import "lib/gpio.badge";
         fn main() {
             gpio_write(5);
             gpio_set(1);

@@ -1,0 +1,16 @@
+// First-order PDM sample playback on OUT1-3.
+// Connect one output pin to a low-pass filter and an amplifier.
+import "lib/pdm.badge";
+
+const char samples[] = {
+    8, 9, 10, 11, 12, 13, 14, 15,
+    0, 1, 2, 3, 4, 5, 6, 7,
+    0xFF
+};
+
+fn main() {
+    pdm_init();
+    while (1) {
+        pdm_play(samples);
+    }
+}

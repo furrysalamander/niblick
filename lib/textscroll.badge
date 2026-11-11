@@ -1,0 +1,62 @@
+// Horizontal text scroller using the 5x8 font.
+//
+// The caller supplies a 32-nibble, page-aligned framebuffer.  One column is
+// shifted per UserSync tick; pick a divider from lib/time (for example
+// SYNC_10HZ).
+
+import "lib/display.badge";
+import "lib/font.badge";
+import "lib/time.badge";
+
+// Scroll a flash string once.  Restores the previous Sync divider.
+fn void text_scroll_once(char base, flashptr s, nibble divider) {
+    nibble old_sync;
+    char c;
+    nibble col;
+
+    old_sync = time_sync_get();
+    time_sync_set(divider);
+    display_show(base);
+
+    c = flash_next(&s);
+    while (c != 255) {
+        col = 0;
+        while (col < 5) {
+            display_shift_left(base);
+            display_set_column(base, 7, font5x8_column(c, col));
+            time_sync_wait();
+            col = col + 1;
+        }
+        display_shift_left(base);
+        time_sync_wait();
+        c = flash_next(&s);
+    }
+    time_sync_set(old_sync);
+}
+
+// Scroll a flash string forever, restarting at the beginning.
+fn void text_scroll_loop(char base, flashptr s, nibble divider) {
+    flashptr start;
+    char c;
+    nibble col;
+
+    start = s;
+    time_sync_set(divider);
+    display_show(base);
+    while (1) {
+        c = flash_next(&s);
+        if (c == 255) {
+            s = start;
+            c = flash_next(&s);
+        }
+        col = 0;
+        while (col < 5) {
+            display_shift_left(base);
+            display_set_column(base, 7, font5x8_column(c, col));
+            time_sync_wait();
+            col = col + 1;
+        }
+        display_shift_left(base);
+        time_sync_wait();
+    }
+}

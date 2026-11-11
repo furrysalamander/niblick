@@ -1,3 +1,5 @@
+import "lib/time.badge";
+import "lib/display.badge";
 // Water in a closed 8x16 box, with periodically changing gravity.
 //
 // This is a falling-sand style cellular automaton: each cell is either empty

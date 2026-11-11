@@ -45,3 +45,8 @@ packaging branch of the fork.
    it if the fork moves.)
 8. Create the GitHub repository, push `main`, and review the rendered README
    and dependency URLs before making it public.
+9. **Confirm font licensing.** `lib/font.badge` includes 5x8 glyph data adapted
+   from the upstream Hamlet demo by Voja Antonic. The upstream example has no
+   explicit license. Confirm permission for public redistribution or replace
+   the glyph table with a new/public-domain 5x8 font. The scroller algorithm
+   itself is a new BadgeC implementation.

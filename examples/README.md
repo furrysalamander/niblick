@@ -6,7 +6,7 @@
 | `serial_echo.badge` | UART receive, `uart_getc`, `uart_putc` |
 | `flash_walk.badge` | `flash_next` over a `const char[]` and `const nibble[]` indexing |
 | `gpio_blink.badge` | GPIO output + approximate busy delay |
-| `hw_test.badge` | 67-check hardware self-test; waits for a `0x01` UART command |
+| `hw_test.badge` | Hardware self-test; waits for a `0x01` UART command |
 | `keymap.badge` | Prints `KeyReg`/`KeyStatus` for each front-panel button |
 | `hello_loop.badge` | Repeating UART hello, useful for link checks |
 | `sao_hello.badge` | UART hello routed to the SAO header |
@@ -15,6 +15,9 @@
 | `wave.badge` | 4×8 signed-nibble wave field from `lib/signed.badge` |
 | `water.badge` | Falling-water cellular automaton with changing gravity |
 | `stdlib_demo.badge` | Imports `lib/` modules for UART, strings, math, bits, keys, clock, and display |
+| `text_scroll.badge` | 5x8 scrolling text on the LED matrix |
+| `audio_demo.badge` | Square-wave melody on OUT0 |
+| `pdm_demo.badge` | First-order PDM sample playback on OUT1-3 |
 | `inline_asm.badge` | Raw `asm { ... }` block with `${...}` variable placeholders |
 | `word_math.badge` | 16-bit words, casts, and `* / %` |
 | `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |

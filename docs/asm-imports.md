@@ -5,14 +5,14 @@ recommended way to keep reusable driver routines out of the compiler's core
 runtime while still calling them from normal BadgeC code.
 
 ```c
-// lib/w5500.badge
-import "asm/w5500.asm";
+// lib/drivers/w5500.badge
+import "lib/drivers/asm/w5500.asm";
 
 extern fn word w5500_tx_pointer();
 ```
 
 ```asm
-; lib/asm/w5500.asm
+; lib/drivers/asm/w5500.asm
 fn_w5500_tx_pointer:
     ...
     RET R0, 0
@@ -149,8 +149,8 @@ for size reporting and branch relaxation outside the region.
 
 ## Worked example: `w5500_tx_pointer`
 
-`lib/asm/w5500.asm` contains the W5500 socket-0 TX pointer routine. It is no
-longer part of `badgec/runtime/runtime.asm`; `lib/w5500.badge` declares it and
+`lib/drivers/asm/w5500.asm` contains the W5500 socket-0 TX pointer routine. It is no
+longer part of `badgec/runtime/runtime.asm`; `lib/drivers/w5500.badge` declares it and
 imports the assembly file. The routine calls the generic
-`__bc_spi_xfer_fast` runtime helper, so the compiler's scanner adds that
+`__bc_w5500_spi_xfer_fast` runtime helper, so the compiler's scanner adds that
 runtime routine to the linked set automatically.

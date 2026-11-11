@@ -78,11 +78,16 @@ the same expression-result registers:
 
 | Routine | Input | Output |
 |---|---|---|
-| `__bc_uart_init` | `R1` = baud index | none |
 | `__bc_uart_putc` | `R1` = low, `R2` = high | none |
 | `__bc_uart_getc` | none | `R1` = low, `R2` = high |
-| `__bc_uart_available` | none | `R1` = count (0..15) |
-| `__bc_uart_puts` | `R1/R2/R3` = flash pointer | none; stops at `0xFF` |
+| `__bc_gpio_set/clear/toggle` | `R1` = mask | none |
+| `__bc_gpio_test` | `R1` = mask | `R1` = 0/1 |
+| `__bc_gpio_read` | none | `R1` = input nibble |
+| `__bc_gpio_write` | `R1` = output nibble | none |
+| `__bc_gpio_alt` | `R1` = enable | none |
+| `__bc_delay` | `R1` = units | none |
+| `__bc_w5500_spi_tx_fast` | `R1:R2` = char | none |
+| `__bc_w5500_spi_xfer_fast` | `R1:R2` = char | `R1:R2` = char |
 | `__bc_flash_read_char` | `R1/R2/R3` = flash pointer | `R1/R2` = char |
 | `__bc_flash_read_nibble` | `R1/R2/R3` = flash pointer | `R1` = nibble |
 | `__bc_flash_read_word` | `R1/R2/R3` = flash pointer | `R1..R4` = word |

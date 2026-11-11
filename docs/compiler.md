@@ -69,7 +69,7 @@ to the repository root and any `BADGEC_PATH` entries. Each file is parsed
 once, cycles are rejected, and the declarations are merged into a single
 `ast.Program`.
 
-`import "lib/asm/w5500.asm";` imports assembly instead. The file is read and
+`import "lib/drivers/asm/w5500.asm";` imports assembly instead. The file is read and
 kept as text on the program; it is not parsed as BadgeC. Assembly modules
 declare their entry points with `extern fn ...;` and are scanned for labels,
 `GOSUB`/`GOTO` targets, placeholders, and runtime calls before linking. See
@@ -252,7 +252,7 @@ work. That leaves roughly 1600 words for new features. A dword-heavy demo
 words and 105 RAM nibbles.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
-4096-word limit, and `tests/test_size.py` keeps Tetris under a 2600-word
+4096-word limit, and `tests/test_size.py` keeps Tetris under a 2800-word
 budget.
 
 ## Size and stack reports
@@ -262,10 +262,10 @@ sizes, flash-data size, startup overhead, and the total:
 
 ```text
   functions:
-    epd_spi_byte -> void [fn_epd_spi_byte] 29 words p:char@0x40
+    spi_byte -> void [fn_spi_byte] 29 words p:char@0x40
     main -> void [fn_main] 142 words
   runtime:
-    __bc_uart_puts: 15 words
+    __bc_uart_putc: 6 words
   startup/other: 2 words
   total: 2494 words
 ```
@@ -283,8 +283,8 @@ they stay in sync with `docs/runtime-abi.md`. A call that would need more
 than the five hardware stack entries produces a compile warning:
 
 ```text
-warning: driver.badge:42: leaf calls __bc_uart_puts at user depth 4;
-runtime cost 3 needs 7 stack levels (the hardware stack has 5)
+warning: driver.badge:42: leaf calls __bc_gpio_test at user depth 4;
+runtime cost 2 needs 6 stack levels (the hardware stack has 5)
 ```
 
 The existing hard limit of four non-tail user levels from `main` is

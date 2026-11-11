@@ -339,11 +339,12 @@ for the packet sequence and firmware limits.
 
 ## Library modules
 
-`lib/` contains opt-in BadgeC modules for UART formatting, strings, math,
-two's-complement signed helpers and Q4.4 fixed point, nibble memory and bit
-operations, key helpers, clock/sync helpers, bit-banged SPI, and a minimal
-W5500 Ethernet driver. `lib/asm/` contains hand-written assembly modules
-exposed to BadgeC with `extern fn` declarations.
+`lib/` contains opt-in BadgeC modules for UART, GPIO, display/framebuffer,
+keys, clock/sync, AutoOff power, random numbers, byte/nibble memory, strings,
+math, two's-complement signed helpers, Q4.4 fixed point, a Q4.4 sine table,
+a 5x8 font and scrolling text, square-wave audio, PDM sample playback, and
+bit-banged SPI. Device drivers live under `lib/drivers/`; the W5500 Ethernet
+driver is separate from the standard library.
 
 ```c
 import "lib/uart.badge";
@@ -362,15 +363,20 @@ fn main() {
 
 Imports resolve relative to the importing file and then the repository root.
 Unused module functions and pure globals are removed, so an import costs
-nothing until you use it. See `docs/stdlib.md` and
+nothing until you use it. See `docs/stdlib.md`, `docs/drivers/w5500.md`, and
 `examples/stdlib_demo.badge`.
+
+The compiler keeps a small intrinsic set for pointer-free memory access, flash
+tables, raw I/O, constant-mask GPIO, hot UART bytes, the delay loop, and the
+W5500 fast SPI path. `docs/stdlib.md` explains why those stay builtins.
 
 ## Documentation
 
 - `docs/isa.md` — instruction set and code-generation notes
 - `docs/memory-map.md` — data/code memory and SFRs
 - `docs/serial.md` — UART details and load/save workflow
-- `docs/stdlib.md` — builtins and runtime routines
+- `docs/stdlib.md` — standard library, intrinsics, and module reference
+- `docs/drivers/w5500.md` — W5500 Ethernet driver
 - `docs/runtime-abi.md` — BadgeC calling convention and runtime
 - `docs/compiler.md` — compiler internals and optimization roadmap
 - `docs/asm-imports.md` — imported `.asm` modules, `extern fn`, placeholders, and optimizer markers

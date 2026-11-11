@@ -23,7 +23,8 @@ and can exercise UART transmit/receive without hardware.
 | Editor analysis | `tests/test_analysis.py`, `tests/test_lsp.py` | Source positions, loader overrides, diagnostics, symbols, hover, completion, definitions, references, rename, LSP handlers |
 | Diagnostics | `tests/test_diagnostics.py` | Structured errors, JSON output, assembler-to-source mapping |
 | Debugger | `tests/test_debugmap.py`, `tests/test_debug.py` | PC-to-source maps, breakpoints, stepping, variables, stack frames |
-| W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | Fast SPI runtime helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
+| W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | W5500 driver fast SPI helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
+| Standard library | `tests/test_library.py`, `tests/test_stdlib.py`, `tests/test_signed_lib.py` | UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, audio/PDM |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
 | Examples | `tests/test_examples.py` | Every checked-in example still compiles and fits |
 
@@ -46,7 +47,8 @@ The emulator now also models:
 
 - button state (`press_key`, `release_key`, `press_alt`) and `KeyStatus`/`KeyReg`
 - the `Random` SFR with a deterministic 16-bit LCG
-- `Sync`/`RdFlags.UserSync`
+- `Sync`/`RdFlags.UserSync` (approximated from instruction count)
+- `AutoOff = 0` sleep/halt
 - the visible display pages (`display_pages()`)
 - UART FIFO, `Received`, and the `SerCtrl` error bit
 - instruction/cycle counts and an estimated elapsed time from the `Clock` SFR
@@ -163,7 +165,7 @@ python3 scripts/hw_test.py /dev/ttyUSB0
 
 `examples/tetris.badge` exercises the display, keys, random pieces, PWM
 flashes, and a large amount of compiled code. `tests/test_size.py` keeps it
-under a 2600-word budget, and `tests/test_examples.py` enforces the 4096-word
+under a 2800-word budget, and `tests/test_examples.py` enforces the 4096-word
 hard limit.
 
 ## Hardware loop

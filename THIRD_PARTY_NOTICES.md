@@ -25,6 +25,20 @@ advance the symbol address by two words.
 This package is used only by the optional `fidelity` test extra. It is not a
 runtime dependency of BadgeC.
 
+## 5x8 font glyph data
+
+- Source: `examples/Hackaday-hamlet/hamlet.asm` in the upstream
+  [2022-Supercon6-Badge-Tools](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
+  repository
+- Author: Voja Antonic
+- License: no explicit license was found in the upstream example
+- Used by: `lib/font.badge`
+
+The scroller algorithm is a new BadgeC implementation. The glyph table is
+adapted from the upstream demo. Before a public release, confirm that
+redistribution is acceptable or replace the table with a new or public-domain
+5x8 font.
+
 ## Documentation
 
 The upstream Supercon.6 manuals and tutorial are copyrighted reference material

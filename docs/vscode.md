@@ -92,13 +92,13 @@ that was opened before the extension was installed cannot stay stuck in
 ```json
 "files.associations": {
   "*.badge": "badgec",
-  "lib/asm/*.asm": "voja4-asm"
+  "**/*.asm": "voja4-asm"
 }
 ```
 
 The extension deliberately does **not** claim every `.asm` file, because that
 would override other assemblers. This repository's `.vscode/settings.json`
-associates `lib/asm/*.asm` with `voja4-asm`.
+associates all workspace `.asm` files with `voja4-asm`.
 
 For another project, add:
 

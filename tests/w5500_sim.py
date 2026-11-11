@@ -170,6 +170,7 @@ class W5500Model:
                 conn = None
             if conn is not None:
                 conn.setblocking(False)
+                conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 self.conn = conn
                 self.status = 0x17
                 self.tx_rd = 0

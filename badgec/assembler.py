@@ -1,21 +1,36 @@
-"""Thin wrapper around the vendored Supercon.6 assembler."""
+"""Thin wrapper around the ``supercon6-assembler`` package."""
 
 from __future__ import annotations
 
+import contextlib
+import io
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 from .errors import BadgeCompileError
 
-ROOT = Path(__file__).resolve().parent.parent
-ASSEMBLER = ROOT / "vendor" / "2022-Supercon6-Badge-Tools" / "assembler" / "assemble.py"
+try:
+    import assemble as _assemble
+except ImportError:  # pragma: no cover - exercised only when the dependency is missing
+    _assemble = None
 
 _SOURCE_MARKER_RE = re.compile(
     r";\s*@badgec-src\s+(?P<file>.+):(?P<line>\d+)\s*$"
 )
 _ASSEMBLER_LINE_RE = re.compile(r"Line\s+(\d+):")
+
+_ASSEMBLER_HINT = (
+    "install the supercon6-assembler package, for example: "
+    "pip install 'supercon6-assembler @ "
+    "git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git"
+    "#subdirectory=assembler'"
+)
+
+
+def _assembler_module():
+    if _assemble is None:
+        raise BadgeCompileError(f"the assembler is not installed; {_ASSEMBLER_HINT}")
+    return _assemble
 
 
 def _assembler_error(
@@ -66,31 +81,36 @@ def _assembler_error(
 def assemble_file(asm_path: str | Path, hex_path: str | Path | None = None) -> Path:
     """Assemble *asm_path* and return the generated .hex path.
 
-    The upstream assembler derives the output name by replacing the source
-    extension with .hex.  If *hex_path* is given, the file is moved there.
+    The assembler derives the output name by replacing the source extension
+    with .hex.  If *hex_path* is given, the file is moved there.
     """
     asm_path = Path(asm_path).resolve()
     if not asm_path.exists():
         raise BadgeCompileError(f"assembly file not found: {asm_path}")
-    if not ASSEMBLER.exists():
-        raise BadgeCompileError(
-            f"vendored assembler not found at {ASSEMBLER}; "
-            "expected vendor/2022-Supercon6-Badge-Tools/"
-        )
 
+    assembler = _assembler_module()
     expected = asm_path.with_suffix(".hex")
     if expected.exists():
         expected.unlink()
 
-    proc = subprocess.run(
-        [sys.executable, str(ASSEMBLER), "-q", str(asm_path)],
-        cwd=str(asm_path.parent),
-        capture_output=True,
-        text=True,
-    )
-    output = (proc.stdout or "") + (proc.stderr or "")
-    if proc.returncode != 0 or not expected.exists():
-        raise _assembler_error(asm_path, output)
+    # The upstream assembler prints both normal output and errors to stdout.
+    # Keep it quiet, then use the captured text for diagnostics.
+    assembler.options.show_output = False
+    assembler.options.show_verbose = False
+    assembler.options.show_wordspace = False
+    assembler.options.show_linenums = False
+    assembler.options.show_comments = False
+    assembler.options.show_assembly = False
+
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        result = assembler.parse_asm(
+            asm_path.read_text(), hexfile_out=str(expected)
+        )
+
+    text = output.getvalue()
+    if result is not True or not expected.exists():
+        raise _assembler_error(asm_path, text)
 
     if hex_path is not None:
         hex_path = Path(hex_path)

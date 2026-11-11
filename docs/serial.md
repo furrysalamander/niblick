@@ -5,9 +5,14 @@ memory-mapped nibbles plus a control/status register. The same UART is used for
 application I/O and for program save/load. The firmware bootloader is a separate
 path with different rules.
 
-Sources: `docs/upstream/manuals/3.Special_Function_Registers_v4a.pdf` (SFR F5-F8),
-`1.User_Manual_v4.pdf` (DIR mode, pp. 22-24), `assembler/README.md`, and
-`firmware/README.md`.
+Sources: the upstream
+[SFR manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/3.Special_Function_Registers_v4a.pdf)
+(SFR F5-F8), the
+[User Manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/1.User_Manual_v4.pdf)
+(DIR mode, pp. 22-24), the upstream
+[assembler README](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/assembler/README.md),
+and the upstream
+[firmware README](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/firmware/README.md).
 
 ## Register summary
 
@@ -223,6 +228,6 @@ Firmware updates use the bootloader, not the DIR-mode program loader:
    on solid.
 4. Press **MODE** to see the version/checksum; MODE again to exit.
 
-The vendor firmware image `firmware/Badge_v99r3.bin` is a raw firmware binary, not
+The upstream firmware image `firmware/Badge_v99r3.bin` is a raw firmware binary, not
 a program `.hex`; do not send a program `.hex` to the firmware bootloader. Only the
 main I/O connector's RX pin is active in bootload mode; TX has no effect.

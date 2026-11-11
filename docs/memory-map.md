@@ -2,8 +2,12 @@
 
 The Voja4 has two separate address spaces: a 256-nibble data space and a
 4096-word code space. Neither is byte-addressed from the CPU's point of view.
-Sources: `docs/upstream/manuals/1.User_Manual_v4.pdf` (programmer's model, pp. 18-20),
-`3.Special_Function_Registers_v4a.pdf`, and `2.Instruction_Set_v4.pdf`.
+Sources: the upstream
+[User Manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/1.User_Manual_v4.pdf)
+(programmer's model, pp. 18-20),
+[SFR manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/3.Special_Function_Registers_v4a.pdf),
+and
+[Instruction Set](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/2.Instruction_Set_v4.pdf).
 
 ## Data memory (`0x00`-`0xFF`)
 

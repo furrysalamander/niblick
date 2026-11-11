@@ -23,8 +23,8 @@ R14=PCM, R15=PCH).  ``ram[0x10:]`` is general data memory, with the
 subroutine stack beginning at ``0x10 + sp * 3``.  A loaded program is
 stored in ``program`` (4096 words, corresponding to flash).
 
-The implementation follows the revision-4 manuals in
-``vendor/2022-Supercon6-Badge-Tools/manuals/``.
+The implementation follows the revision-4 manuals published with the
+Hack-a-Day Supercon.6 badge tools.
 """
 
 from __future__ import annotations

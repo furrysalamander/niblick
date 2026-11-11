@@ -12,7 +12,7 @@
   -> badgec/asm_link.py     scan imported assembly for calls and symbols
   -> badgec/asm_opt.py      peepholes, copy propagation, branch relaxation
   -> .asm
-  -> vendor assembler       .hex
+  -> supercon6-assembler      .hex
   -> badgec/emulator.py     headless execution / tests
 ```
 

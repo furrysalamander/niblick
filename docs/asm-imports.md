@@ -110,8 +110,8 @@ section belong to that section and disappear if the function is removed.
 - Raw `MOV JSR`, `MOV PCL`, `MOV PCM`, and `MOV PCH` are rejected; use
   `GOSUB`/`GOTO` so the compiler can see calls.
 - `ORG`, `BYTE`, and `ASCII` are rejected in imported assembly. Use `NIBBLE`
-  for data tables; BadgeC emits flash data as `NIBBLE` directives because the
-  vendored assembler miscounts `BYTE`/`ASCII` when resolving later labels.
+  for data tables; BadgeC emits flash data as `NIBBLE` directives. The packaged
+  `supercon6-assembler` includes the upstream `BYTE` symbol-accounting fix.
 - `EXR 0` and `EXR` with more than ten registers are rejected because they
   touch compiler/runtime state.
 - The assembler has one global symbol namespace. Avoid reusing labels across

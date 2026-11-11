@@ -1,24 +1,32 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .venv/
+venv/
 .env
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Generated compiler output
 *.asm
 !badgec/runtime/runtime.asm
 !lib/asm/**/*.asm
 *.hex
-!vendor/**/*.hex
 
-# Generated at runtime / by the demo
+# Generated at runtime
 captures/
 badge-backup/
-photobooth.toml
-epaper_badge/data/app_list
-epaper_badge/data/user_apps.py
-epaper_badge/data/graphics/supercon_photo*.png
+.badgec-build/
 
 # VS Code extension build output
 editors/vscode/node_modules/
 editors/vscode/out/
 editors/vscode/*.vsix
-.badgec-build/
+
+# Editor and OS noise
+.DS_Store
+*~

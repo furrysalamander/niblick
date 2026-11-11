@@ -1,38 +1,34 @@
 # Toolchain
 
-The vendored `2022-Supercon6-Badge-Tools` tree contains a Python assembler, a
-disassembler, a Tk emulator, example programs, and Windows serial helpers. This
-page documents how to use them for BadgeC development and where they stop being
-faithful to hardware.
-
-Vendored root:
-
-```
-vendor/2022-Supercon6-Badge-Tools/
-  assembler/assemble.py
-  assembler/disassemble.py
-  emulator/bvm.py
-  examples/
-  firmware/
-  software/Windows Tools/
-```
+The Supercon.6 toolchain lives in the upstream
+[Hack-a-Day/2022-Supercon6-Badge-Tools](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
+repository, which contains the Python assembler, a disassembler, a Tk emulator,
+example programs, and Windows serial helpers. BadgeC uses the assembler through
+the `supercon6-assembler` package; that package is installed automatically as a
+BadgeC dependency. This page documents how to use the upstream tools for BadgeC
+development and where they stop being faithful to hardware.
 
 ## Assembler
 
 ### Basic use
 
-```sh
-cd vendor/2022-Supercon6-Badge-Tools/assembler
+The package installs a `supercon6-assemble` console script and an importable
+`assemble` module:
 
-python3 assemble.py program.asm          # writes program.hex
-python3 assemble.py program.asm -q       # quiet; file output only
-python3 assemble.py program.asm -n       # show word addresses
-python3 assemble.py program.asm -s       # 12-bit words with spaces
+```sh
+supercon6-assemble program.asm          # writes program.hex
+supercon6-assemble program.asm -q       # quiet; file output only
+supercon6-assemble program.asm -n       # show word addresses
+supercon6-assemble program.asm -s       # 12-bit words with spaces
 ```
 
 The output path is the input path with the extension replaced by `.hex`, in the
-same directory as the input. The assembler requires Python 3. It has no
+same directory as the input. The assembler requires Python 3.10+ and has no
 dependencies beyond the standard library.
+
+To run tools from an upstream checkout instead, clone
+<https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools> and use
+`python3 assembler/assemble.py ...`.
 
 ### Options
 
@@ -107,7 +103,11 @@ PY
 
 ### Disassembler
 
+The disassembler is not part of the installed `supercon6-assembler` package. Run
+it from an upstream checkout:
+
 ```sh
+cd 2022-Supercon6-Badge-Tools/assembler
 python3 disassemble.py program.hex        # writes program.s
 python3 disassemble.py program.hex -q
 python3 disassemble.py program.hex -f     # continue if checksum is bad
@@ -119,13 +119,20 @@ The disassembler validates the header and checksum. `-c` shows source comments,
 sequences. A round trip is therefore semantically equivalent, not textually
 identical.
 
-## Building and running the examples
+## Building and running upstream examples
+
+Clone the upstream repository before using its examples:
+
+```sh
+git clone https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools
+cd 2022-Supercon6-Badge-Tools
+```
 
 Most examples have a small makefile that calls the assembler and, optionally,
 flashes the badge:
 
 ```sh
-cd vendor/2022-Supercon6-Badge-Tools/examples/Hackaday-bouncy_ball
+cd examples/Hackaday-bouncy_ball
 make bouncy_ball.hex          # assemble only
 make flash PORT=/dev/ttyUSB0  # assemble + send via cat
 ```
@@ -142,23 +149,14 @@ There is no repository-wide build or test target. The Hamlet examples include
 ad-hoc comparison scripts under `test/`; they assume a reference disassembly and
 are not wired into `make`.
 
-Useful smoke tests:
-
-```sh
-python3 -m py_compile assembler/assemble.py assembler/disassemble.py \
-    emulator/bvm.py emulator/badge.py emulator/bvmCPU.py emulator/bvmParser.py
-
-# assemble a known-good example, disassemble it, and check the checksum
-python3 assembler/assemble.py examples/Hackaday-heart/heart.asm -q
-python3 assembler/disassemble.py examples/Hackaday-heart/heart.hex -q -f
-```
-
 ## Emulator (BVM)
 
 ### Running
 
+The upstream GUI is run from a checkout:
+
 ```sh
-cd vendor/2022-Supercon6-Badge-Tools/emulator
+cd 2022-Supercon6-Badge-Tools/emulator
 python3 -m pip install pillow
 python3 bvm.py ../examples/Hackaday-heart/heart.hex
 ```
@@ -166,7 +164,17 @@ python3 bvm.py ../examples/Hackaday-heart/heart.hex
 Run from the `emulator/` directory: the GUI loads `gui_assets/badgeface.jpg`,
 `gui_assets/pnp.csv`, and LED images by relative path. Tkinter must be available
 (`python3-tk` on Debian/Ubuntu). A GUI display is required; there is no headless
-mode.
+mode in the upstream GUI.
+
+The headless CPU core (`badge`, `bvmCPU`, and `bvmParser`) is available as the
+optional `supercon6-emulator` package:
+
+```sh
+python3 -m pip install "git+https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools.git#subdirectory=emulator"
+```
+
+BadgeC's own emulator lives in `badgec/emulator.py` and is the primary test
+model. The `fidelity` extra installs the upstream core for cross-checks.
 
 The README calls the input a `.bin`; in practice `badge.py` expects the
 assembler's 8-byte header + length + words + checksum container, so pass the
@@ -222,7 +230,8 @@ cat /dev/ttyUSB0 > out.hex       # start this first
 # then press SAVE
 ```
 
-Windows helpers are in `software/Windows Tools/`:
+Windows helpers are in the upstream repository's `software/Windows Tools/`
+directory:
 
 * `win_flash.py` — sends a file with pyserial. Set `PORT` at the top, then
   `python win_flash.py program.hex`. It writes 1024 trailing NUL bytes to work
@@ -287,7 +296,7 @@ This is separate from program LOAD and takes a raw firmware image, not a program
 
 1. Hold **ALT + LOAD** and ground the **RES** pin on the main header.
 2. Release; LOAD blinks slowly.
-3. Send the firmware image at 9600 8N1 raw (vendor image:
+3. Send the firmware image at 9600 8N1 raw (the upstream vendor image is
    `firmware/Badge_v99r3.bin`).
 4. LOAD blinks fast; after roughly 20-30 s SAVE and LOAD are both solid.
 5. Press **MODE** to view version/checksum; MODE again to exit.

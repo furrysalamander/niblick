@@ -98,6 +98,7 @@ def connect_with_retry(timeout: float = 5.0) -> socket.socket:
     while True:
         try:
             sock = socket.create_connection((HOST, PORT), timeout=1.0)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             sock.settimeout(10.0)
             return sock
         except OSError:
@@ -241,16 +242,18 @@ def test_mc_void_status_and_login(tmp_path: Path) -> None:
 
         pytest.skip("port 25565 is unavailable")
 
-    errors: list[BaseException] = []
+    errors: list[tuple[str, BaseException]] = []
     done = threading.Event()
 
     def client() -> None:
+        stage = "status"
         try:
             status_test()
             time.sleep(0.2)
+            stage = "login"
             login_test()
         except BaseException as error:  # noqa: BLE001 - surfaced by the test
-            errors.append(error)
+            errors.append((stage, error))
         finally:
             done.set()
 
@@ -259,11 +262,17 @@ def test_mc_void_status_and_login(tmp_path: Path) -> None:
 
     cpu = W5500Emulator(model)
     cpu.load_hex(hex_path)
+    deadline = time.monotonic() + 90.0
     try:
-        while not done.is_set() and cpu.total_steps < 20_000_000:
-            cpu.step()
+        while not done.is_set() and time.monotonic() < deadline:
+            for _ in range(1000):
+                cpu.step()
+                if done.is_set():
+                    break
+            time.sleep(0)
     finally:
         model.close()
         thread.join(timeout=5)
 
-    assert not errors, errors
+    assert not thread.is_alive(), "client thread did not finish"
+    assert not errors, (errors, f"after {cpu.total_steps} steps")

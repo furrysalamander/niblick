@@ -1,9 +1,10 @@
 # BadgeC — a compiler for the Supercon.6 (Voja4) badge
 
 BadgeC is a small C-like cross-compiler for the Hackaday Supercon.6 2022
-badge. It compiles to the badge's 12-bit assembly, uses the vendored
-assembler to produce a `.hex` file, and includes a headless emulator for
-fast tests.
+badge. It compiles to the badge's 12-bit assembly, uses the
+[supercon6-assembler](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
+package to produce a `.hex` file, and includes a headless emulator for fast
+tests.
 
 The badge CPU is extremely small: 4-bit data, 4,096 12-bit code words,
 256 nibbles of data RAM, 10 general registers, and a 5-level hardware call
@@ -50,8 +51,17 @@ them, and a 32-bit divide takes milliseconds at 250 kHz. See
 
 ## Quick start
 
+Install the compiler and its assembler dependency:
+
 ```bash
-python3 -m badgec examples/hello.badge --run
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
+```
+
+Then compile and run a program:
+
+```bash
+.venv/bin/python -m badgec examples/hello.badge --run
 ```
 
 This writes `examples/hello.asm` and `examples/hello.hex`, then runs the
@@ -120,7 +130,7 @@ source.badge
    -> lexer -> parser -> AST
    -> BadgeC code generator (fixed-register expression convention)
    -> badge assembly
-   -> vendored assemble.py
+   -> supercon6-assembler package
    -> .hex
 ```
 
@@ -153,6 +163,14 @@ python3 -m pytest
 The test suite covers the emulator's instruction semantics and end-to-end
 BadgeC programs: loops, char arrays, functions, tail recursion, flash
 string iteration, UART transmit/receive, and error cases.
+
+The optional `fidelity` extra installs the upstream headless emulator so the
+two CPU models can be cross-checked:
+
+```bash
+python3 -m pip install -e ".[fidelity]"
+python3 -m pytest tests/test_upstream_emulator.py
+```
 
 The emulator lives in `badgec/emulator.py` and models the CPU plus a small
 UART FIFO so serial programs can be tested without hardware. It does not
@@ -362,14 +380,21 @@ nothing until you use it. See `docs/stdlib.md` and
 - `docs/testing.md` — test layers and hardware development loop
 - `docs/keys.md` — measured front-panel key codes
 - `docs/toolchain.md` — assembler/emulator usage
-- `docs/upstream/` — vendored manuals and license/provenance notes
+- `docs/upstream-errata.md` — contradictions found in the upstream manuals
+- `RELEASING.md` — pre-publish checklist
 
-## Vendored tools
+## Assembler dependency
 
-The upstream Hack-a-Day tools and manuals are vendored under
-`vendor/2022-Supercon6-Badge-Tools/` and copied into `docs/upstream/`.
-The assembler is MIT-licensed; the emulator is GPLv3. Preserve their
-licenses. See `docs/upstream/README.md`.
+BadgeC uses the upstream
+[Supercon.6 assembler](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
+through the `supercon6-assembler` package. The package is fetched directly from
+that repository by `pip`; the source is not vendored here.
+
+## License
+
+BadgeC is licensed under the GNU General Public License, version 3. The
+assembler is MIT-licensed and is distributed as a separate package. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
 
 ## Roadmap
 

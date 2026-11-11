@@ -1,4 +1,4 @@
-"""Tests for the vendored assembler's data pseudo-ops."""
+"""Tests for the assembler's data pseudo-ops."""
 
 from __future__ import annotations
 

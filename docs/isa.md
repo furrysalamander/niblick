@@ -2,8 +2,11 @@
 
 The Supercon.6 (2022) "Voja4" badge executes a 12-bit, 4-bit-word CPU implemented in
 PIC24 firmware. This page is a compact reference for compiler and assembler work.
-Primary source: `docs/upstream/manuals/2.Instruction_Set_v4.pdf` (rev. 4, 2022-11-02);
-cross-checked against `1.User_Manual_v4.pdf` and the vendored assembler.
+Primary source: the upstream
+[Instruction Set](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/2.Instruction_Set_v4.pdf)
+(rev. 4, 2022-11-02); cross-checked against the
+[User Manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/1.User_Manual_v4.pdf)
+and the assembler.
 
 ## Machine model
 
@@ -99,14 +102,14 @@ pseudo-ops generate the full two-word sequence.
 | 2 | R2 | |
 | 3 | I/O port | `IN`/`INB` for `BIT` (source); `OUT`/`OUTB` for `BSET`/`BCLR`/`BTG` (destination) |
 
-The vendored assembler maps `RS` **and** `R3` to G=3. On hardware G=3 selects an
+The assembler maps `RS` **and** `R3` to G=3. On hardware G=3 selects an
 I/O port, not R3: `BIT R3,n` reads an input bit, while `BSET R3,n`,
 `BCLR R3,n`, and `BTG R3,n` modify an output bit. This matches the vendor examples
 (`BIT R3` = "in" register; `BTG R3` = GPIO output). Do not use these forms to
 touch R3; use another register or an explicit `MOV`/`AND`/`OR` sequence. The
 manual's prose sometimes calls the G=3 register `IN` even for the write forms;
 the examples and addresses `0x0A`/`0xFA` show that the write forms target `OUT`.
-(See errata in `docs/upstream/README.md`.)
+(See [upstream-errata.md](upstream-errata.md).)
 
 `BIT` sets `Z=1` when the tested bit is **zero**, and `Z=0` when it is one.
 

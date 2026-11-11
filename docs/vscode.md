@@ -10,7 +10,7 @@ For the language server, either create a project `.venv` (the extension
 auto-detects `.venv/bin/python` and `venv/bin/python`):
 
 ```bash
-cd /path/to/hackaday_supercon_2026
+cd /path/to/badgec
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[lsp]"
 ```

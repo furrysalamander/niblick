@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,11 +8,33 @@ version = "0.1.0"
 description = "A small C-like compiler for the Hackaday Supercon.6 (Voja4) 4-bit badge"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Mike Abbott" }]
+dependencies = [
+    "supercon6-assembler @ git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git@c576ebd08d4916909c89497fba1e1158eb540685#subdirectory=assembler",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pyserial>=3.5"]
+dev = ["pytest>=8.0", "pyserial>=3.5", "build>=1.2"]
 lsp = ["pygls>=2.0"]
+fidelity = [
+    "supercon6-emulator @ git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git@c576ebd08d4916909c89497fba1e1158eb540685#subdirectory=emulator",
+]
 
 [project.scripts]
 badgec = "badgec.cli:main"

@@ -167,10 +167,11 @@ Run from the `emulator/` directory: the GUI loads `gui_assets/badgeface.jpg`,
 mode in the upstream GUI.
 
 The headless CPU core (`badge`, `bvmCPU`, and `bvmParser`) is available as the
-optional `supercon6-emulator` package:
+optional `supercon6-emulator` package. Install it with BadgeC's `fidelity`
+extra:
 
 ```sh
-python3 -m pip install "git+https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools.git#subdirectory=emulator"
+python3 -m pip install -e ".[fidelity]"
 ```
 
 BadgeC's own emulator lives in `badgec/emulator.py` and is the primary test

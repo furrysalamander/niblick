@@ -12,7 +12,7 @@
 import "lib/time.badge";
 
 const nibble AUDIO_MASK = 1;
-const nibble NOTE_REST = 15;
+const char NOTE_REST = 0xFE;
 
 // Half-period loop counts for C4..D#5 at Clock=100 kHz.
 const word audio_note_half_periods[] = {
@@ -42,9 +42,10 @@ fn void audio_tone_raw(word half_period, word cycles) {
     }
 }
 
-// Play one note from the table.  Note 15 is a rest.
-fn void audio_note(nibble note, word cycles) {
-    if (note == NOTE_REST) {
+// Play one note from the table.  Notes 0..15 are C4..D#5; NOTE_REST is
+// silent, and 0xFF terminates a melody.
+fn void audio_note(char note, word cycles) {
+    if (note == NOTE_REST || note > 15) {
         audio_silence();
         return;
     }
@@ -59,6 +60,10 @@ fn void audio_play(flashptr melody) {
     while (note != 255) {
         duration = flash_next(&melody);
         if (note == NOTE_REST) {
+            while (duration > 15) {
+                delay(15);
+                duration = duration - 15;
+            }
             delay((nibble)duration);
         } else {
             audio_note((nibble)note, (word)duration);

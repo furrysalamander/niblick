@@ -287,7 +287,9 @@ def test_system_power_and_time_helpers(tmp_path: Path) -> None:
         import "lib/system.badge";
         import "lib/time.badge";
         import "lib/uart.badge";
-        nibble power;
+        nibble power80;
+        nibble power150;
+        nibble power255;
         nibble sync;
         nibble baud;
         nibble error;
@@ -296,8 +298,13 @@ def test_system_power_and_time_helpers(tmp_path: Path) -> None:
         fn main() {
             uart_init(3);
             dimmer(7);
+            power_auto_off_minutes(80);
+            power80 = power_remaining();
+            power_auto_off_minutes(150);
+            power150 = power_remaining();
+            power_auto_off_minutes(255);
+            power255 = power_remaining();
             power_keep_awake();
-            power = power_remaining();
             time_clock_set(CLOCK_100K);
             time_sync_set(SYNC_10HZ);
             sync = time_sync_get();
@@ -310,7 +317,9 @@ def test_system_power_and_time_helpers(tmp_path: Path) -> None:
         }
         """,
     )
-    assert value(compiler, emu, "power") == 15
+    assert value(compiler, emu, "power80") == 8
+    assert value(compiler, emu, "power150") == 15
+    assert value(compiler, emu, "power255") == 15
     assert value(compiler, emu, "sync") == 10
     assert value(compiler, emu, "flags") == 10
     assert value(compiler, emu, "baud") == 3
@@ -577,3 +586,60 @@ def test_power_sleep_halts_emulator(tmp_path: Path) -> None:
     )
     assert emu.sleeping is True
     assert emu.halted is True
+
+
+def test_audio_rest_code_is_silent(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/audio.badge";
+        nibble out;
+        fn main() {
+            audio_init();
+            audio_silence();
+            audio_note(NOTE_REST, 4);
+            out = peek(0x0A) & 1;
+        }
+        """,
+        trace=True,
+    )
+    assert value(compiler, emu, "out") == 0
+    bit_events = [
+        e
+        for e in (emu.io_trace or [])
+        if e.kind == "bit" and e.address == 0x0A and e.bit == 0
+    ]
+    assert len(bit_events) <= 2
+
+
+def test_string_16_32_conversion(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/string.badge";
+        char buf[11];
+        char round[11];
+        nibble ok_dec16;
+        nibble ok_dec32;
+        nibble ok_hex16;
+        nibble ok_hex32;
+        fn main() {
+            str_from_dec16(&buf, 65535);
+            str_from_dec16(&round, str_to_dec16(&buf));
+            ok_dec16 = str_eq_flash(&round, "65535");
+            str_from_dec32(&buf, 4294967295);
+            str_from_dec32(&round, str_to_dec32(&buf));
+            ok_dec32 = str_eq_flash(&round, "4294967295");
+            str_from_hex16(&buf, 0xABCD);
+            str_from_hex16(&round, str_to_hex16(&buf));
+            ok_hex16 = str_eq_flash(&round, "ABCD");
+            str_from_hex32(&buf, 0x12345678);
+            str_from_hex32(&round, str_to_hex32(&buf));
+            ok_hex32 = str_eq_flash(&round, "12345678");
+        }
+        """,
+    )
+    assert value(compiler, emu, "ok_dec16") == 1
+    assert value(compiler, emu, "ok_dec32") == 1
+    assert value(compiler, emu, "ok_hex16") == 1
+    assert value(compiler, emu, "ok_hex32") == 1

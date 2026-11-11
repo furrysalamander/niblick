@@ -632,3 +632,25 @@ def test_void_inliner_does_not_duplicate_side_effects(tmp_path: Path) -> None:
     assert "GOSUB fn_set_value" in asm
     emu = run(hex_path, steps=50000)
     assert emu.ram[ram_nibble(compiler, "calls")] == 1
+
+
+def test_call_results_survive_nested_calls(tmp_path: Path) -> None:
+    # The left call result is live while the right call runs.  Its temporary
+    # must live in the caller's frame, not the shared scratch area.
+    compiler, hex_path = build(
+        tmp_path,
+        """
+        nibble result;
+        fn nibble one() { nibble a; a = 1; return a; }
+        fn nibble fourteen() {
+            nibble b;
+            b = 2;
+            return (nibble)((b + 5) * (b + 1));
+        }
+        fn main() {
+            result = one() + fourteen();
+        }
+        """,
+    )
+    emu = run(hex_path)
+    assert emu.ram[ram_nibble(compiler, "result")] == 6

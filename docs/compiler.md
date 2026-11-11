@@ -37,10 +37,12 @@ Every expression leaves its result in fixed registers:
 `R0` is reserved for the instructions that can only access memory through
 it (`MOV [NN],R0`, `MOV R0,[NN]`, `CP R0,N`, `ADD R0,N`).
 
-Nested binary expressions park the left operand in a static temporary slot
-in `0x20..0x37`, evaluate the right operand, then reload and combine. No
-runtime stack pointer is needed for expression temporaries; the slot
-addresses are known at compile time.
+Nested binary expressions park the left operand in a temporary slot, evaluate
+the right operand, then reload and combine. Most functions use the shared
+`0x20..0x37` scratch area. If an expression keeps a temporary live across a
+call, the compiler gives that function a private small scratch area at the top
+of its frame, so the callee cannot clobber it. No runtime stack pointer is
+needed; all slot addresses are known at compile time.
 
 ## Memory allocation
 
@@ -48,7 +50,7 @@ addresses are known at compile time.
 |---|---|
 | `0x00..0x0F` | registers and SFRs |
 | `0x10..0x1F` | hardware subroutine stack |
-| `0x20..0x37` | compile-time expression temporaries (24 nibbles) |
+| `0x20..0x37` | shared expression temporaries (24 nibbles) |
 | `0x38..0x3F` | word multiply/divide runtime scratch (8 nibbles) |
 | user RAM | optional 24-nibble dword mul/div scratch, allocated on demand |
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays (176 nibbles) |
@@ -59,11 +61,14 @@ builds a conservative frame-interference graph:
 
 - a caller and its transitive callees never share a frame;
 - callees evaluated in the same statement never share a frame;
+- functions reachable from a nested argument call never share a frame;
 - imported assembly call edges are included.
 
 Functions in separate branches share the same slot block, so their parameter
-and local slots are reused. The fixed-register calling convention and the
-lack of a software frame pointer are unchanged.
+and local slots are reused. A function that needs call-safe temporaries gets
+a frame scratch area sized by a probe compile that records the maximum number
+of live temporaries at every call site. The fixed-register calling convention
+and the lack of a software frame pointer are unchanged.
 
 ## Imports
 
@@ -207,6 +212,8 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Inline `asm { ... }` statements with lexical `${...}` placeholders, local
   labels, call-graph/runtime-linking integration, and optimizer opacity.
 - Call-graph frame overlay for parameter and local slots.
+- Per-function call-safe temporary scratch, sized by a probe compile and
+  allocated inside the function's overlaid frame.
 - Peephole removal of redundant `MOV`s.
 - Basic-block copy propagation: a `MOV Rd,Rs` is dropped when `Rd` already
   holds `Rs`'s value.
@@ -252,12 +259,11 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 
 ## Current code-size pressure
 
-The Tetris demo is now around **2577 / 4096 words** and **117 / 176 usable
+The Tetris demo is now around **2577 / 4096 words** and **134 / 176 usable
 RAM nibbles**. That leaves roughly 1500 words for new features. The
 `hello.badge` example is about **146 words** after constant-address lowering,
-small void inlining, and frame overlay. A dword-heavy demo
-(`dword_math.badge`) plus the 32-bit multiply/divide runtime remains a few
-thousand words.
+small void inlining, and frame overlay. The dword-heavy
+`dword_math.badge` demo is about **2295 words** and **97 RAM nibbles**.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2800-word
@@ -275,7 +281,7 @@ sizes, flash-data size, startup overhead, and the total:
   runtime:
     __bc_uart_putc: 6 words
   startup/other: 2 words
-  total: 2494 words
+  total: 2577 words
 ```
 
 `--map-json` carries the same data (`functions[].words`, `runtime_words`,

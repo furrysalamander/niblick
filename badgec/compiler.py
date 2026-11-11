@@ -13,6 +13,7 @@ call stack is used for GOSUB/RET; tail calls become GOTO.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import re
 from dataclasses import dataclass, field
@@ -151,6 +152,8 @@ class FunctionSymbol:
     local_next: int = 0
     param_size: int = 0
     overlay_depth: int = 0
+    temp_size: int = 0
+    temp_base: int = 0
 
 
 class Scope:
@@ -201,6 +204,7 @@ class TempAllocator:
         self.start = start
         self.end = end
         self.top = start
+        self.peak = 0
 
     def mark(self) -> int:
         return self.top
@@ -216,6 +220,7 @@ class TempAllocator:
             )
         address = self.top
         self.top += size
+        self.peak = max(self.peak, self.top - self.start)
         return address
 
 
@@ -243,6 +248,10 @@ class Compiler:
         self.used_runtime: set[str] = set()
         self.mem = MemoryAllocator()
         self.temp = TempAllocator()
+        self.spill_sizes: dict[str, int] = {}
+        self.call_temp_live: dict[str, int] = {}
+        self.temp_peak: dict[str, int] = {}
+        self._is_probe = False
         self.lines: list[str] = []
         self.globals: dict[str, VarSymbol] = {}
         self.functions: dict[str, FunctionSymbol] = {}
@@ -283,6 +292,13 @@ class Compiler:
                 "load the program with badgec.loader.load_program()"
             )
         optimize_program(self.program)
+        probe = Compiler(copy.deepcopy(self.program), self.filename)
+        probe.run_probe()
+        self.spill_sizes = {
+            name: probe.temp_peak.get(name, 0)
+            for name, live in probe.call_temp_live.items()
+            if live > 0
+        }
         self.prepare_globals()
         self.prepare_functions()
         if "main" not in self.functions:
@@ -343,6 +359,13 @@ class Compiler:
             )
         if prune and "main" in {fn.name for fn in self.program.functions}:
             optimize_program(self.program)
+        probe = Compiler(copy.deepcopy(self.program), self.filename)
+        probe.run_probe()
+        self.spill_sizes = {
+            name: probe.temp_peak.get(name, 0)
+            for name, live in probe.call_temp_live.items()
+            if live > 0
+        }
         self.prepare_globals()
         self.prepare_functions()
         for fn in self.program.functions:
@@ -729,6 +752,7 @@ class Compiler:
                 walk_stmt(stmt.body)
 
         walk_stmt(decl.body)
+        size += self.spill_sizes.get(decl.name, 0)
         return size
 
     def _collect_expr_callees(
@@ -784,6 +808,7 @@ class Compiler:
         known = set(self.functions)
         edges: dict[str, set[str]] = {name: set() for name in self.functions}
         calls: dict[str, set[str]] = {name: set() for name in self.functions}
+        groups: list[tuple[str, set[str]]] = []
 
         def add_edge(a: str, b: str) -> None:
             if a != b and a in edges and b in edges:
@@ -792,12 +817,9 @@ class Compiler:
 
         def add_clique(caller: str, callees: set[str]) -> None:
             calls[caller].update(callees)
+            groups.append((caller, set(callees)))
             for callee in callees:
                 add_edge(caller, callee)
-            items = sorted(callees)
-            for index, left in enumerate(items):
-                for right in items[index + 1 :]:
-                    add_edge(left, right)
 
         def process_block(caller: str, block: ast.Block) -> None:
             for stmt in block.statements:
@@ -833,19 +855,36 @@ class Compiler:
                         calls[caller].add(target)
                         add_edge(caller, target)
 
-        # A function's frame is live for its entire subtree, so it cannot
-        # share slots with any transitive callee.
-        for name in self.functions:
-            stack = list(calls.get(name, ()))
+        def descendants(name: str) -> set[str]:
             seen: set[str] = set()
+            stack = list(calls.get(name, ()))
             while stack:
                 callee = stack.pop()
                 if callee in seen:
                     continue
                 seen.add(callee)
                 stack.extend(calls.get(callee, ()))
-            for callee in seen:
+            return seen
+
+        # A function's frame is live for its entire subtree, so it cannot
+        # share slots with any transitive callee.
+        for name in self.functions:
+            for callee in descendants(name):
                 add_edge(name, callee)
+
+        # A callee's parameter slots stay live while its remaining arguments
+        # are evaluated, and those arguments can call other functions.  Every
+        # function reachable from a same-statement callee must therefore stay
+        # disjoint from the other functions in that statement.
+        for caller, callees in groups:
+            members: set[str] = set(callees)
+            for callee in callees:
+                members.update(descendants(callee))
+            members.add(caller)
+            items = sorted(members)
+            for index, left in enumerate(items):
+                for right in items[index + 1 :]:
+                    add_edge(left, right)
         return edges
 
     def allocate_function_slots(self) -> None:
@@ -899,7 +938,9 @@ class Compiler:
             fn.block_end = fn.ram_base + size
             fn.overlay_depth = index
             fn.param_size = sum(param.type.ram_size for param in fn.decl.params)
-            if fn.param_size > size:
+            fn.temp_size = self.spill_sizes.get(name, 0)
+            fn.temp_base = fn.block_end - fn.temp_size
+            if fn.param_size + fn.temp_size > size:
                 raise BadgeCompileError(
                     f"{self.filename}: parameter footprint for {name!r} exceeds its function slot"
                 )
@@ -1275,6 +1316,12 @@ class Compiler:
             return
         self.current_function = fn
         self.loop_stack = []
+        if self._is_probe:
+            self.temp = TempAllocator(TEMP_START, TEMP_START + 128)
+        elif fn.temp_size:
+            self.temp = TempAllocator(fn.temp_base, fn.temp_base + fn.temp_size)
+        else:
+            self.temp = TempAllocator()
         scope = Scope()
         for param in fn.params:
             scope.define(param, self.filename)
@@ -1525,10 +1572,11 @@ class Compiler:
             raise BadgeCompileError(
                 f"{location(filename, line)}: local allocation outside a function"
             )
-        if fn.local_next + size > fn.block_end:
+        local_limit = fn.block_end - fn.temp_size
+        if fn.local_next + size > local_limit:
             raise BadgeCompileError(
                 f"{location(filename, line)}: function slot overflow allocating {what} "
-                f"({size} nibbles; {fn.block_end - fn.local_next} free)"
+                f"({size} nibbles; {local_limit - fn.local_next} free)"
             )
         address = fn.local_next
         fn.local_next += size
@@ -2076,12 +2124,14 @@ class Compiler:
             return DWORD
 
         mark = self.temp.mark()
+        # Allocate the operand slots one at a time.  A nested dword
+        # expression needs 16 nibbles of its own, so holding both slots
+        # while compiling the left side would exhaust the temporary area.
         left_addr = self.temp.alloc(8, "dword expression", self.filename, expr.line)
-        right_addr = self.temp.alloc(8, "dword expression", self.filename, expr.line)
-
         typ = self.compile_expr(expr.left, scope)
         self.coerce(typ, DWORD, expr.line)
         self.store_temp(DWORD, left_addr)
+        right_addr = self.temp.alloc(8, "dword expression", self.filename, expr.line)
         typ = self.compile_expr(expr.right, scope)
         self.coerce(typ, DWORD, expr.line)
         self.store_temp(DWORD, right_addr)
@@ -2310,10 +2360,10 @@ class Compiler:
     ) -> Type:
         mark = self.temp.mark()
         left_addr = self.temp.alloc(8, "dword multiply", self.filename, line)
-        right_addr = self.temp.alloc(8, "dword multiply", self.filename, line)
         typ = self.compile_expr(left, scope)
         self.coerce(typ, DWORD, line)
         self.store_temp(DWORD, left_addr)
+        right_addr = self.temp.alloc(8, "dword multiply", self.filename, line)
         typ = self.compile_expr(right, scope)
         self.coerce(typ, DWORD, line)
         self.store_temp(DWORD, right_addr)
@@ -2426,10 +2476,10 @@ class Compiler:
     ) -> Type:
         mark = self.temp.mark()
         left_addr = self.temp.alloc(8, "dword divide", self.filename, line)
-        right_addr = self.temp.alloc(8, "dword divide", self.filename, line)
         typ = self.compile_expr(left, scope)
         self.coerce(typ, DWORD, line)
         self.store_temp(DWORD, left_addr)
+        right_addr = self.temp.alloc(8, "dword divide", self.filename, line)
         typ = self.compile_expr(right, scope)
         self.coerce(typ, DWORD, line)
         self.store_temp(DWORD, right_addr)
@@ -2623,6 +2673,23 @@ class Compiler:
     # Calls
     # ------------------------------------------------------------------
 
+    def _record_call_temp(self) -> None:
+        if self.current_function is None:
+            return
+        live = self.temp.top - self.temp.start
+        name = self.current_function.name
+        self.call_temp_live[name] = max(self.call_temp_live.get(name, 0), live)
+
+    def run_probe(self) -> dict[str, int]:
+        """Compile once to measure how many temporaries are live at calls."""
+        self._is_probe = True
+        self.prepare_globals()
+        self.prepare_functions()
+        for fn in self.program.functions:
+            self.compile_function(self.functions[fn.name])
+            self.temp_peak[fn.name] = self.temp.peak
+        return self.call_temp_live
+
     def compile_call(self, expr: ast.Call, scope: Scope) -> Type:
         if expr.name in BUILTINS:
             return self.compile_builtin(expr, scope)
@@ -2637,6 +2704,7 @@ class Compiler:
                 f"arguments, got {len(expr.args)}"
             )
 
+        self._record_call_temp()
         for arg, param in zip(expr.args, fn.params):
             typ = self.compile_expr(arg, scope)
             self.coerce(typ, param.type, arg.line)
@@ -2661,6 +2729,7 @@ class Compiler:
                 f"arguments, got {len(expr.args)}"
             )
 
+        self._record_call_temp()
         mark = self.temp.mark()
         temp_addresses: list[int] = []
         for arg, param in zip(expr.args, fn.params):

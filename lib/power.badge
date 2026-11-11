@@ -15,9 +15,15 @@ fn void power_auto_off(nibble units) {
     poke(0xF9, units);
 }
 
-// minutes is rounded down to 10-minute units.  0 sleeps immediately.
-fn void power_auto_off_minutes(nibble minutes) {
-    poke(0xF9, minutes / 10);
+// minutes is rounded down to 10-minute units and saturates at 150 minutes.
+// 0 sleeps immediately.
+fn void power_auto_off_minutes(char minutes) {
+    char units;
+    units = minutes / 10;
+    if (units > 15) {
+        units = 15;
+    }
+    poke(0xF9, (nibble)units);
 }
 
 fn void power_sleep() {

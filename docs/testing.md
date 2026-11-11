@@ -25,6 +25,9 @@ and can exercise UART transmit/receive without hardware.
 | Debugger | `tests/test_debugmap.py`, `tests/test_debug.py` | PC-to-source maps, breakpoints, stepping, variables, stack frames |
 | W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | W5500 driver fast SPI helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
 | Standard library | `tests/test_library.py`, `tests/test_stdlib.py`, `tests/test_signed_lib.py` | UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, audio/PDM |
+| Inlining / overlay | `tests/test_compiler.py`, `tests/test_overlay.py` | Small return/void inlining, side-effect guards, frame interference and slot reuse |
+| Optimizer proofs | `tests/test_peephole_z3.py` | Z3 proofs for constant-address lowering and peephole identities |
+| Property tests | `tests/test_hypothesis_compiler.py` | Generated nibble expressions versus a Python reference |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
 | Examples | `tests/test_examples.py` | Every checked-in example still compiles and fits |
 
@@ -121,10 +124,11 @@ current `Clock` setting.
 
 ## Hardware self-test
 
-`examples/hw_test.badge` is a 67-check self-test that waits for a single
+`examples/hw_test.badge` is a hardware self-test that waits for a single
 `0x01` UART byte. It exercises arithmetic, loops, tail recursion, RAM
-arrays, memset/memcpy, peek/poke, flash tables, flash iteration, UART TX/RX,
-GPIO, display paging, dimmer, random, WrFlags, key reads, and delay.
+arrays, `mem_*` helpers, peek/poke, flash tables, flash iteration, UART TX/RX,
+GPIO, display paging, dimmer, random, power/status SFRs, WrFlags, key reads,
+and delay.
 
 ```bash
 python3 -m badgec examples/hw_test.badge

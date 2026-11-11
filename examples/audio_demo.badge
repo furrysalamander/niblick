@@ -4,7 +4,7 @@ import "lib/time.badge";
 
 const char melody[] = {
     0, 8, 1, 8, 2, 8, 3, 8,
-    4, 16, 15, 8,
+    4, 16, 0xFE, 8,
     0xFF
 };
 

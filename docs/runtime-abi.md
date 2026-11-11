@@ -44,14 +44,17 @@ BadgeC uses **static parameter slots**, not register argument passing:
 3. The caller executes `GOSUB fn_name`.
 4. The callee returns with `RET R0,0`. A `nibble` result is in `R1`; a `char`
    result is low in `R1`, high in `R2`.
-5. The caller treats `R0`–`R9` as clobbered. Live expression values are
-   always parked in RAM temporaries before a call, so no callee-saved
-   register convention is needed.
+5. The caller treats `R0`–`R9` as clobbered. Temporaries that must survive
+   a call live in the caller's frame while the call is in progress, so no
+   callee-saved register convention is needed.
 
 Static slots avoid software frame pointers and keep the code small. The
-trade-off is that functions are non-reentrant and storage is not overlaid
-yet. The inliner removes tiny `return <expr>` functions entirely, which
-also removes their parameter slots.
+trade-off is that functions are non-reentrant. Parameter and local slots are
+overlaid across functions that cannot be active at the same time, and a
+function that keeps an expression temporary live across a call gets a small
+private temporary area in its own frame. The inliner removes tiny `return`
+helpers and small single-statement `void` wrappers entirely, which also
+removes their parameter slots.
 
 ### Tail calls
 
@@ -196,10 +199,14 @@ Runtime stack costs from user code:
 
 | Call | Stack levels used |
 |---|---:|
-| `uart_init`, `uart_putc`, `uart_getc`, `uart_available` | 1 |
+| `uart_putc`, `uart_getc` | 1 |
 | `flash_next` | 2 |
-| `flash_read_nibble`, `flash_read_char` | 2–3 |
-| `uart_puts` | 3 |
+| `flash_read_nibble`, `flash_read_char` | 3 |
+| `gpio_set` / `gpio_clear` / `gpio_toggle` / `gpio_test` runtime fallback | 2 |
+| `delay`, `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | 1 |
+
+`uart_init`, `uart_available`, and `uart_puts` are library functions now, so
+they add a normal user call frame around the runtime byte primitive.
 
 These costs are why deep user call chains should use tail calls or
 inlining. The compiler derives them from the runtime assembly itself

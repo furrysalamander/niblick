@@ -4,6 +4,10 @@
 physical mapping is not the obvious button-label order, so it was measured
 on hardware with `examples/keymap.badge`.
 
+Import `lib/key.badge` to use the helpers below. `lib/key.badge` only names
+the five codes that have been confirmed on hardware; the raw `key_status()`
+and `key_code()` intrinsics work for any code.
+
 ## Confirmed mapping
 
 | Physical button | `KeyReg` |
@@ -15,7 +19,9 @@ on hardware with `examples/keymap.badge`.
 | DEP+ / CLOCK / STEP | 0 |
 
 Only these five have been confirmed so far. The remaining front-panel keys
-have not been mapped.
+have not been mapped. `key_op1()`, `key_op2()`, `key_op4()`, `key_op8()`, and
+`key_dep()` return the confirmed codes; use `key_name(code)` for a flash
+string label.
 
 `KeyStatus` at `0xFC` supplies:
 
@@ -27,7 +33,9 @@ have not been mapped.
 | 0 | `JustPress` |
 
 Reading `KeyStatus` clears `JustPress`. Use `key_just()` to wait for a new
-press, then `key_code()` to read `KeyReg`.
+press, then `key_code()` to read `KeyReg`. The `*_of(status)` helpers
+(`key_alt_of`, `key_any_of`, `key_just_of`, `key_last_of`) test bits from an
+already-read status value.
 
 ## Measuring more keys
 

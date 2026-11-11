@@ -29,7 +29,7 @@ BUDGETS = {
     "w5500_dashboard.badge": 4096,
     "mc_void.badge": 4096,
     "text_scroll.badge": 2050,
-    "audio_demo.badge": 500,
+    "audio_demo.badge": 550,
     "pdm_demo.badge": 200,
 }
 

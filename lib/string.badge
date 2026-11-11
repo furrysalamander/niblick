@@ -329,3 +329,131 @@ fn char str_trim(char addr) {
     poke8(end, 255);
     return start;
 }
+
+// ---------------------------------------------------------------------------
+// 16- and 32-bit conversion
+//
+// Buffer sizes: dec16 needs 6 bytes (5 digits + terminator), dec32 needs 11
+// bytes (10 digits + terminator), hex16 needs 5 bytes, hex32 needs 9 bytes.
+// ---------------------------------------------------------------------------
+
+fn nibble str_from_dec16(char addr, word value) {
+    nibble digit;
+    nibble started;
+    nibble len;
+    started = 0;
+    len = 0;
+    digit = (nibble)(value / 10000);
+    value = value % 10000;
+    if (digit != 0) {
+        poke8(addr, '0' + digit);
+        addr = addr + 2;
+        len = len + 1;
+        started = 1;
+    }
+    digit = (nibble)(value / 1000);
+    value = value % 1000;
+    if (started != 0 || digit != 0) {
+        poke8(addr, '0' + digit);
+        addr = addr + 2;
+        len = len + 1;
+        started = 1;
+    }
+    digit = (nibble)(value / 100);
+    value = value % 100;
+    if (started != 0 || digit != 0) {
+        poke8(addr, '0' + digit);
+        addr = addr + 2;
+        len = len + 1;
+        started = 1;
+    }
+    digit = (nibble)(value / 10);
+    value = value % 10;
+    if (started != 0 || digit != 0) {
+        poke8(addr, '0' + digit);
+        addr = addr + 2;
+        len = len + 1;
+    }
+    poke8(addr, '0' + (nibble)value);
+    addr = addr + 2;
+    len = len + 1;
+    poke8(addr, 255);
+    return len;
+}
+
+fn word str_to_dec16(char addr) {
+    word value;
+    char c;
+    value = 0;
+    c = peek8(addr);
+    while (c >= '0' && c <= '9') {
+        value = value * 10 + (word)(c - '0');
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+    return value;
+}
+
+fn nibble str_from_dec32(char addr, dword value) {
+    dword divisor;
+    nibble digit;
+    nibble started;
+    nibble len;
+    divisor = 1000000000;
+    started = 0;
+    len = 0;
+    while (divisor != 0) {
+        digit = (nibble)(value / divisor);
+        value = value % divisor;
+        if (started != 0 || digit != 0 || divisor == 1) {
+            poke8(addr, '0' + digit);
+            addr = addr + 2;
+            len = len + 1;
+            started = 1;
+        }
+        divisor = divisor / 10;
+    }
+    poke8(addr, 255);
+    return len;
+}
+
+fn dword str_to_dec32(char addr) {
+    dword value;
+    char c;
+    value = 0;
+    c = peek8(addr);
+    while (c >= '0' && c <= '9') {
+        value = value * 10 + (dword)(c - '0');
+        addr = addr + 2;
+        c = peek8(addr);
+    }
+    return value;
+}
+
+fn nibble str_from_hex16(char addr, word value) {
+    str_from_hex8(addr, (char)(value >> 8));
+    str_from_hex8(addr + 4, (char)value);
+    return 4;
+}
+
+fn word str_to_hex16(char addr) {
+    word high;
+    word low;
+    high = (word)str_to_hex8(addr);
+    low = (word)str_to_hex8(addr + 4);
+    return (high << 8) | low;
+}
+
+fn nibble str_from_hex32(char addr, dword value) {
+    str_from_hex16(addr, (word)(value >> 16));
+    str_from_hex16(addr + 8, (word)value);
+    return 8;
+}
+
+fn dword str_to_hex32(char addr) {
+    dword high;
+    dword low;
+    high = (dword)str_to_hex16(addr);
+    low = (dword)str_to_hex16(addr + 8);
+    return (high << 16) | low;
+}

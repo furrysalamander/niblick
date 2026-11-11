@@ -36,11 +36,11 @@ modules use `0xFF` as the terminator, matching flash strings and `uart_puts`.
 
 ## Why some helpers are builtins
 
-The compiler has no inlining or call-graph local overlay yet. A BadgeC function
-uses static parameter and local slots in user RAM, and its body is compiled by
-the normal code generator. Hand-written runtime assembly is smaller, uses
-registers instead of RAM slots, and does not add a user call-depth level.
-That is why a small set of hot or deeply nested helpers stays intrinsic:
+BadgeC inlines tiny `return` helpers and small single-statement `void`
+wrappers, and overlays parameter/local slots for functions that are not live at
+the same time. That makes ordinary wrappers cheap. A small set of helpers stays
+intrinsic because they need compiler support, a specific instruction, or a
+hand-written runtime path:
 
 | Intrinsic | Reason |
 |---|---|
@@ -54,9 +54,9 @@ That is why a small set of hot or deeply nested helpers stays intrinsic:
 | `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | W5500-specific runtime fast paths, not standard API |
 | `mul*`, `divmod*`, flash word/dword reads | Compiler-generated arithmetic and data access |
 
-Everything else is ordinary library code. When a library wrapper is used, its
-parameter and local slots remain allocated for the life of the program, so
-RAM-constrained programs should prefer the intrinsic where one exists.
+Everything else is ordinary library code. Overlay shares slots between
+disjoint functions, but the largest active call chain still needs its frames,
+so RAM-constrained programs should prefer the intrinsic where one exists.
 
 ## Intrinsics
 
@@ -128,9 +128,11 @@ is the array's nibble address (`&screen`).
 | `dimmer(n)` / `dimmer_get()` | `void` / `nibble` | LED PWM duty |
 | `leds_enable(enable)` / `matrix_enable(enable)` | `void` | ALU panel LEDs / matrix |
 | `display_fill(page, value)` / `display_clear(page)` / `display_invert(page)` | `void` | Whole-page operations |
+| `display_page_get()` | `nibble` | Read `Page` |
 | `display_copy(src, dst)` | `void` | Copy one page |
 | `pixel_get(base, x, y)` | `nibble` | Pixel test |
 | `pixel_set(base, x, y, on)` / `pixel_toggle` / `pixel_clear` | `void` | Pixel edits |
+| `disp_addr(base, x, y)` / `disp_mask(x)` | `char` / `nibble` | Byte address / bit mask for a pixel |
 | `hline(base, x0, x1, y, on)` / `vline` | `void` | Straight lines |
 | `fill_rect(base, x0, y0, x1, y1, on)` | `void` | Filled rectangle |
 | `clear_screen(base)` | `void` | Zero all 32 nibbles |
@@ -156,6 +158,10 @@ read.
 | `key_op8/op4/op2/op1()`, `key_dep()` | `nibble` | Measured key codes |
 | `key_wait()` / `key_wait_release()` / `key_wait_any()` | `nibble` | Blocking helpers |
 | `key_name(code)` | `flashptr` | Flash string name |
+
+Only the five key codes measured on hardware are named. See
+[keys.md](keys.md) for the mapping and for the `examples/keymap.badge`
+procedure to measure the rest.
 
 ## Time
 
@@ -186,9 +192,13 @@ Sync constants: `SYNC_1000HZ` through `SYNC_1HZ`.
 |---|---|
 | `power_keep_awake()` | Write 15 to `AutoOff` |
 | `power_auto_off(units)` | Write raw 10-minute units; 0 sleeps |
-| `power_auto_off_minutes(minutes)` | Convert minutes to 10-minute units |
+| `power_auto_off_minutes(minutes)` | Convert `char` minutes to 10-minute units, rounding down |
 | `power_sleep()` | Write 0: enter SLEEP immediately |
 | `power_remaining()` | Read the current counter |
+
+Constants: `POWER_MAX` = 15 (150 minutes), `POWER_10_MIN` = 1,
+`POWER_150_MIN` = 15. `power_auto_off_minutes` accepts 0..255 but values above
+`POWER_150_MIN` saturate at 15 in the 4-bit SFR.
 
 `lib/system.badge` provides raw status/control access:
 
@@ -231,7 +241,7 @@ two consecutive nibbles.
 | `mem_move8(dst, src, len)` | Overlap-safe byte move |
 | `mem_search8(addr, len, value)` | Address of first match, or 0 |
 | `mem_reverse8(addr, len)` | Reverse a byte range |
-| `mem_popcount8(value)` | Number of set bits |
+| `mem_popcount(value)` / `mem_popcount8(value)` | Number of set bits in a nibble / byte |
 | `mem_sum8(addr, len)` / `mem_crc8(addr, len, seed)` | 8-bit sum / CRC-8/ATM |
 | `mem_peek16_le/be(addr)` / `mem_poke16_le/be(addr, value)` | 16-bit access |
 | `mem_peek32_le/be(addr)` / `mem_poke32_le/be(addr, value)` | 32-bit access |
@@ -247,8 +257,12 @@ two consecutive nibbles.
 | `str_copy(dst, src)` / `str_cat(dst, src)` | Copy / append |
 | `str_chr(addr, ch)` | Address of first match, or 0 |
 | `str_len_flash(p)` / `str_copy_flash(dst, p)` | Flash strings |
-| `str_from_dec8(addr, value)` / `str_from_hex8(addr, value)` | Format into RAM |
-| `str_to_dec8(addr)` / `str_to_hex8(addr)` | Parse from RAM |
+| `str_from_dec8(addr, value)` / `str_from_hex8(addr, value)` | Format an 8-bit value into RAM |
+| `str_to_dec8(addr)` / `str_to_hex8(addr)` | Parse an 8-bit value from RAM |
+| `str_from_dec16(addr, value)` / `str_from_hex16(addr, value)` | Format a 16-bit value |
+| `str_to_dec16(addr)` / `str_to_hex16(addr)` | Parse a 16-bit value |
+| `str_from_dec32(addr, value)` / `str_from_hex32(addr, value)` | Format a 32-bit value |
+| `str_to_dec32(addr)` / `str_to_hex32(addr)` | Parse a 32-bit value |
 | `str_find(addr, needle)` | Address of a flash substring, or 0 |
 | `str_contains` / `str_starts_with` / `str_eq_flash` | Flash-string tests |
 | `str_cat_flash(dst, p)` | Append a flash string |
@@ -256,13 +270,18 @@ two consecutive nibbles.
 | `str_upper(addr)` / `str_lower(addr)` | In-place case conversion |
 | `str_reverse(addr)` / `str_trim(addr)` | In-place reverse / trim; trim returns the new start |
 
+Buffer sizes: `dec16` needs 6 bytes (5 digits plus terminator), `dec32` needs
+11 bytes, `hex16` needs 5 bytes, and `hex32` needs 9 bytes. `str_from_*`
+returns the number of digits written and always terminates the buffer with
+`0xFF`.
+
 ## Math
 
 `lib/math.badge`:
 
 | Call | Returns | Notes |
 |---|---|---|
-| `math_min(a, b)` / `math_max` / `math_clamp` | `nibble` | Nibble helpers |
+| `math_min(a, b)` / `math_max` / `math_clamp` / `math_abs_diff` | `nibble` | Nibble helpers |
 | `math_min8` / `math_max8` / `math_clamp8` / `math_abs_diff8` | `char` | 8-bit helpers |
 | `math_map8(v, in_min, in_max, out_min, out_max)` | `char` | Clamped unsigned linear map |
 | `math_mul`, `math_div`, `math_mod`, `math_div8`, `math_mod8` | various | Nibble/char arithmetic |
@@ -271,11 +290,32 @@ two consecutive nibbles.
 | `math_gcd8(a, b)` / `math_lcm8(a, b)` | `char` / `word` | GCD / LCM |
 | `math_sign8(v)` / `math_wrap8(v, mod)` / `math_div_round8(a, b)` | raw sign / wrapped / rounded | Signed and rounding helpers |
 
-`lib/signed.badge` interprets raw bits as two's complement and provides
-comparison, clamp, sign-extension, arithmetic-shift, multiply, divide, and
-modulo helpers. `lib/fixed.badge` adds Q4.4 fixed point.
+`lib/signed.badge` interprets raw bits as two's complement. The `4`, `8`, and
+`16` suffixes select the storage width:
 
-`lib/trig.badge` provides a 32-step Q4.4 sine/cosine table:
+| Family | Calls |
+|---|---|
+| Negate / absolute value | `s_neg4/8/16`, `s_abs4/8/16` |
+| Sign test | `s_is_neg4/8/16` |
+| Comparison | `s_lt4/8/16`, `s_le4/8/16`, `s_gt4/8/16`, `s_ge4/8/16` |
+| Min / max / clamp | `s_min4/8/16`, `s_max4/8/16`, `s_clamp4/8/16` |
+| Sign extension | `s_ext4(v)` -> `char`, `s_ext8(v)` -> `word`, `s_ext16(v)` -> `dword` |
+| Arithmetic shift right | `s_sar4/8/16(v, n)` |
+| Multiply | `s_mul4`, `s_mul4_nib`, `s_mul8`, `s_mul16` |
+| Divide / modulo | `s_div4/8/16`, `s_mod4/8/16` |
+
+`lib/fixed.badge` adds signed Q4.4 fixed point (`0x10` = 1.0):
+
+| Call | Returns | Notes |
+|---|---|---|
+| `q4_4_add(a, b)` / `q4_4_sub(a, b)` | `char` | Add / subtract |
+| `q4_4_neg(v)` | `char` | Negate |
+| `q4_4_mul(a, b)` / `q4_4_div(a, b)` | `char` | Fixed-point multiply / divide |
+| `q4_4_from_int(v)` / `q4_4_to_int(v)` | `char` / `nibble` | Convert to / from integer |
+| `q4_4_min` / `q4_4_max` / `q4_4_clamp` | `char` | Saturating helpers |
+
+`lib/trig.badge` provides a 32-step Q4.4 sine/cosine table. `TRIG_STEPS` is
+32 and `TRIG_90` is 8:
 
 ```c
 char s = sin_q4_4(8);   // 0x10 = 1.0
@@ -284,10 +324,15 @@ char c = cos_q4_4(0);   // 0x10 = 1.0
 
 ## Font and text
 
-`lib/font.badge` contains a 5x8 font covering ASCII 32..127 and
-`text_draw_char(base, x, y, c)`. The glyph data is adapted from the upstream
-Hack-a-Day 2022 Supercon.6 Hamlet scroller demo by Voja Antonic; see
-[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+`lib/font.badge` contains a 5x8 font covering ASCII 32..127. The glyph data
+is adapted from the upstream Hack-a-Day 2022 Supercon.6 Hamlet scroller demo
+by Voja Antonic; see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+
+| Call | Returns | Notes |
+|---|---|---|
+| `font5x8_column(c, col)` | `char` | Five column bytes for a glyph; `col` is 0..4 |
+| `font5x8_width(c)` | `nibble` | Advance width for a character |
+| `text_draw_char(base, x, y, c)` | `void` | Draw one glyph at the top-left pixel |
 
 `lib/textscroll.badge` provides a horizontal scroller:
 
@@ -302,10 +347,12 @@ fn main() {
 }
 ```
 
-The scroller uses the top eight rows of the 8x16 framebuffer and advances one
-column per `UserSync` tick. A 5x8 glyph is five columns wide, so static text
-can show at most one full glyph across an eight-column row; the scroller is the
-natural way to display longer strings.
+`text_scroll_once(base, s, divider)` draws one pass and returns;
+`text_scroll_loop(base, s, divider)` repeats forever. The scroller uses the top
+eight rows of the 8x16 framebuffer and advances one column per `UserSync` tick.
+A 5x8 glyph is five columns wide, so static text can show at most one full
+glyph across an eight-column row; the scroller is the natural way to display
+longer strings.
 
 ## Audio and PDM
 
@@ -318,14 +365,24 @@ pin to a low-pass filter and an amplifier. The note table is calibrated for
 |---|---|
 | `audio_init()` | Select `CLOCK_100K` |
 | `audio_tone_raw(half_period, cycles)` | Raw square wave |
-| `audio_note(note, cycles)` | Note 0..15 from the table; 15 is a rest |
+| `audio_note(note, cycles)` | Notes 0..15 are C4..D#5; `NOTE_REST` is silent |
 | `audio_play(melody)` | Flash note/duration byte pairs, terminated by `0xFF` |
 | `audio_silence()` | Drive the output low |
 
+Constants: `AUDIO_MASK` is 1 (OUT0) and `NOTE_REST` is `0xFE`. Melody bytes
+`0..15` select notes, `0xFE` is a rest, and `0xFF` ends the melody. Note
+durations are `delay()` units; rest durations above 15 are split into multiple
+15-unit delay chunks.
+
 `lib/pdm.badge` implements the upstream first-order PDM encoder. It drives
 OUT bits 1–3 (bit 0 stays 1) and expects a low-pass filter and amplifier.
-`pdm_encode(sample)` is the tight-loop primitive; `pdm_play(samples)` and
-`pdm_play_loop(samples)` stream a flash sample table terminated by `0xFF`.
+
+| Call | Notes |
+|---|---|
+| `pdm_init()` | Select `CLOCK_100K` and silence the output |
+| `pdm_silence()` | Drive the PDM output low |
+| `pdm_encode(sample)` | Tight-loop encoder for one 4-bit sample |
+| `pdm_play(samples)` / `pdm_play_loop(samples)` | Stream a flash sample table terminated by `0xFF` |
 
 Audio timing depends on the Clock SFR, the compiler version, and the actual
 instruction mix. Measure the pitch on hardware and adjust the note table or
@@ -333,9 +390,17 @@ instruction mix. Measure the pitch on hardware and adjust the note table or
 
 ## SPI and drivers
 
-`lib/spi.badge` is a generic bit-banged SPI mode-0 master. The W5500 Ethernet
-driver is a separate device driver under `lib/drivers/`; see
-[drivers/w5500.md](drivers/w5500.md).
+`lib/spi.badge` is a generic bit-banged SPI mode-0 master:
+
+| Call | Returns | Notes |
+|---|---|---|
+| `spi_init()` | `void` | Configure SCLK, MOSI, MISO, and CS as outputs/inputs |
+| `spi_begin()` / `spi_end()` | `void` | Assert / release CS |
+| `spi_xfer(out)` | `char` | Exchange one byte |
+
+Pin constants are `SPI_SCLK` = 4, `SPI_MOSI` = 8, `SPI_MISO` = 1, and
+`SPI_CS` = 2. The W5500 Ethernet driver is a separate device driver under
+`lib/drivers/`; see [drivers/w5500.md](drivers/w5500.md).
 
 ## Missing / planned
 
@@ -347,4 +412,6 @@ driver is a separate device driver under `lib/drivers/`; see
 - Interrupt-driven UART
 - Bit-banged I2C/1-Wire helpers
 - A fully calibrated millisecond/audio timing model
+- Display circles, sprites, and right/up/down scrolling
+- Key repeat and multi-key combinations
 - More static-text layout helpers for the 5x8 font

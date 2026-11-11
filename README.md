@@ -387,8 +387,9 @@ nothing until you use it. See `docs/stdlib.md` and
 
 BadgeC uses the upstream
 [Supercon.6 assembler](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
-through the `supercon6-assembler` package. The package is fetched directly from
-that repository by `pip`; the source is not vendored here.
+through the `supercon6-assembler` package. The package is installed from a
+pinned git revision of that repository by `pip`; the source is not vendored
+here.
 
 ## License
 

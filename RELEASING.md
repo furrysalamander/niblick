@@ -12,6 +12,12 @@ packaging branch of the fork.
    at:
    `furrysalamander/2022-Supercon6-Badge-Tools` at commit
    `c576ebd08d4916909c89497fba1e1158eb540685`, subdirectory `assembler`.
+   That commit is on the fork's `packaging/pyproject` branch, which includes
+   the assembler fixes plus the packaging metadata. The fork also carries two
+   smaller branches for focused upstream PRs:
+   - `fix/assembler-reporting` — the two assembler fixes, based on upstream `main`
+   - `packaging/pyproject-only` — packaging metadata only, based on upstream `main`
+
    If the packaging change lands upstream, switch the URL to the upstream
    repository and pin the merged commit or a release tag.
 3. **Optional emulator extra.** The `fidelity` extra points at the same fork

@@ -48,7 +48,6 @@ That is why a small set of hot or deeply nested helpers stays intrinsic:
 | `flash_read_char`, `flash_read_nibble`, `flash_next` | Code-memory access and flash iteration |
 | `in`, `out` | Raw page-0 I/O port operations |
 | `gpio_set`, `gpio_clear`, `gpio_toggle`, `gpio_test` | Constant masks lower to `BSET`/`BCLR`/`BTG`/`BIT` |
-| `gpio_alt` | Tiny WrFlags route helper; kept for size, RAM, and stack depth |
 | `uart_putc`, `uart_getc` | Hot UART handshake/FIFO byte access |
 | `delay` | Hot busy loop used by drivers at deep call sites |
 | `high_nibble`, `low_nibble` | Tiny hot formatting helpers |
@@ -70,7 +69,6 @@ RAM-constrained programs should prefer the intrinsic where one exists.
 | `in()` / `out(v)` | `nibble` / `void` | Raw bank-0 I/O port |
 | `gpio_set(mask)` / `gpio_clear(mask)` / `gpio_toggle(mask)` | `void` | Constant masks become single bit instructions |
 | `gpio_test(mask)` | `nibble` | `BIT` for a single-bit constant mask |
-| `gpio_alt(enable)` | `void` | Set/clear `WrFlags.IOPos` (bit 1) |
 | `uart_putc(c)` / `uart_getc()` | `void` / `char` | Blocking UART byte I/O |
 | `delay(n)` | `void` | Approximate 15x15 busy delay |
 | `high_nibble(c)` / `low_nibble(c)` | `nibble` | Byte halves |
@@ -114,7 +112,7 @@ remain available for output bits.
 | `gpio_read()` | `nibble` | Read the active input port (honors `IOPos`) |
 | `gpio_write(v)` | `void` | Write the active output latch |
 | `gpio_set/clear/toggle/test` | see above | Intrinsics with constant-mask lowering |
-| `gpio_alt(enable)` | `void` | Intrinsic: move OUT/IN to `0xFA`/`0xFB` |
+| `gpio_alt(enable)` | `void` | Move OUT/IN to `0xFA`/`0xFB` |
 
 ## Display
 

@@ -27,7 +27,6 @@ ROUTINE_LABELS = {
     "__bc_flash_read_word",
     "__bc_flash_read_dword",
     "__bc_gpio_read",
-    "__bc_gpio_alt",
     "__bc_gpio_read_out",
     "__bc_gpio_write",
     "__bc_gpio_set",

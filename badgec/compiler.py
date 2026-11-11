@@ -77,7 +77,6 @@ BUILTINS = {
     "gpio_clear": VOID,
     "gpio_toggle": VOID,
     "gpio_test": NIBBLE,
-    "gpio_alt": VOID,
     "peek8": CHAR,
     "poke8": VOID,
     "high_nibble": NIBBLE,
@@ -99,7 +98,6 @@ RUNTIME_ENTRY = {
     "gpio_clear": "__bc_gpio_clear",
     "gpio_toggle": "__bc_gpio_toggle",
     "gpio_test": "__bc_gpio_test",
-    "gpio_alt": "__bc_gpio_alt",
     "delay": "__bc_delay",
     "w5500_spi_tx_fast": "__bc_w5500_spi_tx_fast",
     "w5500_spi_xfer_fast": "__bc_w5500_spi_xfer_fast",
@@ -2769,13 +2767,6 @@ class Compiler:
             self.emit("MOV R0, R8")
             self.emit(f"MOV [{addr + 2}], R0")
             return CHAR
-
-        if name == "gpio_alt":
-            self.require_args(expr, 1)
-            typ = self.compile_expr(expr.args[0], scope)
-            self.coerce(typ, NIBBLE, expr.line)
-            self.emit("GOSUB __bc_gpio_alt")
-            return VOID
 
         if name in ("gpio_set", "gpio_clear", "gpio_toggle", "gpio_test"):
             self.require_args(expr, 1)

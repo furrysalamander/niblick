@@ -84,7 +84,6 @@ the same expression-result registers:
 | `__bc_gpio_test` | `R1` = mask | `R1` = 0/1 |
 | `__bc_gpio_read` | none | `R1` = input nibble |
 | `__bc_gpio_write` | `R1` = output nibble | none |
-| `__bc_gpio_alt` | `R1` = enable | none |
 | `__bc_delay` | `R1` = units | none |
 | `__bc_w5500_spi_tx_fast` | `R1:R2` = char | none |
 | `__bc_w5500_spi_xfer_fast` | `R1:R2` = char | `R1:R2` = char |
@@ -158,27 +157,21 @@ the compiler emits `BSET`/`BCLR`/`BTG`/`BIT` directly (see
 `docs/stdlib.md`). This matters for hot bit-bang loops and the hardware
 stack budget.
 
-Other SFR helpers are direct memory operations:
+Other SFR helpers live in the standard library, not the runtime:
 
-| Helper | SFR |
+| Helper | Module / SFR |
 |---|---|
-| `display_page(page)` | `Page` at `0xF0` |
-| `display_poke(page,index,value)` | RAM address `(page<<4) | index` |
-| `display_peek(page,index)` | RAM address `(page<<4) | index` |
-| `random()` | `Random` at `0xFF` |
-| `seed(n)` | `Random` at `0xFF` |
-| `dimmer(n)` | `Dimmer` at `0xFE` |
-| `key_status()` | `KeyStatus` at `0xFC` |
-| `key_code()` | `KeyReg` at `0xFD` |
-| `key_any/key_alt/key_just/key_last()` | individual `KeyStatus` bits |
+| `display_page(page)` / `display_poke` / `display_peek` | `lib/display.badge` / `Page` |
+| `random()` / `seed(n)` | `lib/random.badge` / `Random` |
+| `dimmer(n)` | `lib/display.badge` / `Dimmer` |
+| `key_status()` / `key_code()` | `lib/key.badge` / `KeyStatus`, `KeyReg` |
+| `gpio_alt`, `uart_route`, `leds_enable`, `matrix_enable` | `lib/gpio`, `lib/uart`, `lib/display` |
+| `uart_write(addr, len)` | `lib/uart.badge` |
+| `mem_fill` / `mem_copy` / byte helpers | `lib/mem.badge` |
 
-The `WrFlags` helpers are `gpio_alt`, `uart_route`, `leds_enable`, and
-`matrix_enable`. They take a nonzero/nibble value for enable and preserve
-the other `WrFlags` bits.
-
-`uart_write(buf, len)` transmits `len` bytes (`1..15`) from a RAM `char[]`.
-`memset(buf, value, len)` fills `len` elements (`1..15`) of a RAM
-`nibble[]` or `char[]`.
+These are ordinary BadgeC calls. They use the static parameter/local slots
+described below; the compiler's frame overlay lets unrelated functions reuse
+the same slots.
 
 ## Memory layout
 

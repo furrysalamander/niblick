@@ -12,6 +12,8 @@
 // by lib/drivers/w5500.badge also assume bank 0, so call spi_init() before
 // using the W5500 driver.
 
+import "lib/gpio.badge";
+
 const nibble SPI_SCLK = 4;
 const nibble SPI_MOSI = 8;
 const nibble SPI_CS = 2;

@@ -1215,19 +1215,6 @@ __bc_gpio_read:
 ; Write the 4-bit connector output, honoring WrFlags.IOPos.
 ; Read the 4-bit output latch, honoring WrFlags.IOPos.
 
-__bc_gpio_alt:
-    MOV R0, R1
-    CP R0, 0
-    SKIP Z, 4
-    MOV R0, [0xF3]
-    OR R0, 2
-    MOV [0xF3], R0
-    RET R0, 0
-    MOV R0, [0xF3]
-    AND R0, 0xD
-    MOV [0xF3], R0
-    RET R0, 0
-
 __bc_delay:
     MOV R2, R1
     MOV R0, R2

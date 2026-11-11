@@ -18,3 +18,12 @@ fn void gpio_write(nibble value) {
         poke(0x0A, value);
     }
 }
+
+// Set/clear WrFlags.IOPos (bit 1).  Enable moves OUT/IN to 0xFA/0xFB.
+fn void gpio_alt(nibble enable) {
+    if (enable != 0) {
+        poke(0xF3, peek(0xF3) | 2);
+    } else {
+        poke(0xF3, peek(0xF3) & 13);
+    }
+}

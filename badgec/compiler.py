@@ -13,6 +13,7 @@ call stack is used for GOSUB/RET; tail calls become GOTO.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,7 @@ from .asm_text import (
     NO_OPTIMIZE_BEGIN,
     NO_OPTIMIZE_END,
     PLACEHOLDER_RE,
+    asm_function_references,
     code_part,
     has_file_marker,
     label_name,
@@ -140,6 +142,11 @@ class FunctionSymbol:
     params: list[VarSymbol] = field(default_factory=list)
     locals: list[VarSymbol] = field(default_factory=list)
     labels_seen: set[str] = field(default_factory=set)
+    ram_base: int = 0
+    block_end: int = 0
+    local_next: int = 0
+    param_size: int = 0
+    overlay_depth: int = 0
 
 
 class Scope:
@@ -678,19 +685,227 @@ class Compiler:
                 label=f"fn_{decl.name}",
             )
             for param in decl.params:
-                address = self.mem.alloc(
-                    param.type.ram_size, f"parameter {param.name}", self.filename, param.line
-                )
                 fn.params.append(
                     VarSymbol(
                         name=param.name,
                         type=param.type,
-                        address=address,
+                        address=None,
                         is_param=True,
                         line=param.line,
                     )
                 )
             self.functions[decl.name] = fn
+        self.allocate_function_slots()
+
+    # ------------------------------------------------------------------
+    # Function-slot overlay
+    # ------------------------------------------------------------------
+
+    def _function_footprint(self, decl: ast.FunctionDecl) -> int:
+        size = sum(param.type.ram_size for param in decl.params)
+
+        def walk_stmt(stmt: ast.Stmt) -> None:
+            nonlocal size
+            if isinstance(stmt, ast.VarDecl):
+                if not (stmt.is_const and stmt.array_len is None):
+                    size += (stmt.array_len or 1) * stmt.type.ram_size
+            elif isinstance(stmt, ast.Block):
+                for child in stmt.statements:
+                    walk_stmt(child)
+            elif isinstance(stmt, ast.If):
+                walk_stmt(stmt.then_block)
+                if stmt.else_block is not None:
+                    walk_stmt(stmt.else_block)
+            elif isinstance(stmt, ast.While):
+                walk_stmt(stmt.body)
+            elif isinstance(stmt, ast.For):
+                if stmt.init is not None:
+                    walk_stmt(stmt.init)
+                walk_stmt(stmt.body)
+
+        walk_stmt(decl.body)
+        return size
+
+    def _collect_expr_callees(
+        self, expr: ast.Expr, known: set[str], callees: set[str]
+    ) -> None:
+        if isinstance(expr, ast.Call):
+            if expr.name in known:
+                callees.add(expr.name)
+            for arg in expr.args:
+                self._collect_expr_callees(arg, known, callees)
+            return
+        for field in dataclasses.fields(expr):
+            value = getattr(expr, field.name)
+            if isinstance(value, ast.Expr):
+                self._collect_expr_callees(value, known, callees)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr):
+                        self._collect_expr_callees(item, known, callees)
+
+    def _collect_shallow_stmt_callees(
+        self, stmt: ast.Stmt, known: set[str], callees: set[str]
+    ) -> None:
+        """Collect callees evaluated directly by *stmt*, not by nested blocks."""
+        if isinstance(stmt, ast.InlineAsm):
+            callees.update(asm_function_references(stmt.text) & known)
+            return
+        for field in dataclasses.fields(stmt):
+            value = getattr(stmt, field.name)
+            if isinstance(value, ast.Expr):
+                self._collect_expr_callees(value, known, callees)
+            elif isinstance(value, ast.Block):
+                continue
+            elif isinstance(value, ast.Stmt):
+                self._collect_shallow_stmt_callees(value, known, callees)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr):
+                        self._collect_expr_callees(item, known, callees)
+                    elif isinstance(item, ast.Stmt):
+                        self._collect_shallow_stmt_callees(item, known, callees)
+
+    def _function_interference(self) -> dict[str, set[str]]:
+        """Build a conservative frame-interference graph.
+
+        A caller and its callee interfere.  Callees evaluated within the same
+        statement also interfere: one callee's parameter slots can be live
+        while another is called from an argument expression.  Sequential
+        statements can share a frame.
+        """
+        from .inline import _collect_calls_expr
+
+        known = set(self.functions)
+        edges: dict[str, set[str]] = {name: set() for name in self.functions}
+        calls: dict[str, set[str]] = {name: set() for name in self.functions}
+
+        def add_edge(a: str, b: str) -> None:
+            if a != b and a in edges and b in edges:
+                edges[a].add(b)
+                edges[b].add(a)
+
+        def add_clique(caller: str, callees: set[str]) -> None:
+            calls[caller].update(callees)
+            for callee in callees:
+                add_edge(caller, callee)
+            items = sorted(callees)
+            for index, left in enumerate(items):
+                for right in items[index + 1 :]:
+                    add_edge(left, right)
+
+        def process_block(caller: str, block: ast.Block) -> None:
+            for stmt in block.statements:
+                callees: set[str] = set()
+                self._collect_shallow_stmt_callees(stmt, known, callees)
+                add_clique(caller, callees)
+                if isinstance(stmt, ast.If):
+                    process_block(caller, stmt.then_block)
+                    if stmt.else_block is not None:
+                        process_block(caller, stmt.else_block)
+                elif isinstance(stmt, ast.While):
+                    process_block(caller, stmt.body)
+                elif isinstance(stmt, ast.For):
+                    process_block(caller, stmt.body)
+
+        for name, fn in self.functions.items():
+            process_block(name, fn.decl.body)
+
+        # Global initializers run in main.
+        for _symbol, expr in self.global_inits:
+            callees = set()
+            _collect_calls_expr(expr, callees)
+            add_clique("main", callees & known)
+
+        # Imported assembly routines can call BadgeC functions directly.
+        for source in self.program.asm_sources:
+            scan = scan_asm(source.text, source.path)
+            for call in scan.calls:
+                if call.caller_label.startswith("fn_") and call.target_label.startswith("fn_"):
+                    caller = call.caller_label[3:]
+                    target = call.target_label[3:]
+                    if caller in known and target in known:
+                        calls[caller].add(target)
+                        add_edge(caller, target)
+
+        # A function's frame is live for its entire subtree, so it cannot
+        # share slots with any transitive callee.
+        for name in self.functions:
+            stack = list(calls.get(name, ()))
+            seen: set[str] = set()
+            while stack:
+                callee = stack.pop()
+                if callee in seen:
+                    continue
+                seen.add(callee)
+                stack.extend(calls.get(callee, ()))
+            for callee in seen:
+                add_edge(name, callee)
+        return edges
+
+    def allocate_function_slots(self) -> None:
+        footprints = {
+            name: self._function_footprint(fn.decl)
+            for name, fn in self.functions.items()
+        }
+        interference = self._function_interference()
+
+        # Greedy weighted coloring, largest frame first.
+        blocks: list[dict[str, object]] = []
+        assignment: dict[str, int] = {}
+        order = sorted(
+            self.functions,
+            key=lambda name: (-footprints[name], name),
+        )
+        for name in order:
+            size = footprints[name]
+            placed = False
+            for index, block in enumerate(blocks):
+                block_size = int(block["size"])
+                members = block["members"]
+                assert isinstance(members, set)
+                if block_size < size:
+                    continue
+                if any(other in interference[name] for other in members):
+                    continue
+                members.add(name)
+                assignment[name] = index
+                placed = True
+                break
+            if not placed:
+                assignment[name] = len(blocks)
+                blocks.append({"size": size, "members": {name}})
+
+        total = sum(int(block["size"]) for block in blocks)
+        if total:
+            overlay_base = self.mem.alloc(
+                total, "function slots", self.filename, 0
+            )
+        else:
+            overlay_base = self.mem.next
+
+        offsets: list[int] = []
+        cursor = overlay_base
+        for block in blocks:
+            offsets.append(cursor)
+            cursor += int(block["size"])
+
+        for name, fn in self.functions.items():
+            index = assignment[name]
+            size = int(blocks[index]["size"])
+            fn.ram_base = offsets[index]
+            fn.block_end = fn.ram_base + size
+            fn.overlay_depth = index
+            fn.param_size = sum(param.type.ram_size for param in fn.decl.params)
+            if fn.param_size > size:
+                raise BadgeCompileError(
+                    f"{self.filename}: parameter footprint for {name!r} exceeds its function slot"
+                )
+            fn.local_next = fn.ram_base + fn.param_size
+            address = fn.ram_base
+            for param in fn.params:
+                param.address = address
+                address += param.type.ram_size
 
     # ------------------------------------------------------------------
     # Imported assembly
@@ -1302,6 +1517,21 @@ class Compiler:
         )
         return BadgeCompileError(f"{prefix}: {match.group('msg')}")
 
+    def alloc_local(self, size: int, what: str, filename: str, line: int) -> int:
+        fn = self.current_function
+        if fn is None:
+            raise BadgeCompileError(
+                f"{location(filename, line)}: local allocation outside a function"
+            )
+        if fn.local_next + size > fn.block_end:
+            raise BadgeCompileError(
+                f"{location(filename, line)}: function slot overflow allocating {what} "
+                f"({size} nibbles; {fn.block_end - fn.local_next} free)"
+            )
+        address = fn.local_next
+        fn.local_next += size
+        return address
+
     def compile_var_decl(self, stmt: ast.VarDecl, scope: Scope) -> None:
         if stmt.name in scope.symbols:
             raise BadgeCompileError(
@@ -1336,7 +1566,7 @@ class Compiler:
                 self.current_function.locals.append(symbol)
             return
         size = (stmt.array_len or 1) * stmt.type.ram_size
-        address = self.mem.alloc(size, stmt.name, self.filename, stmt.line)
+        address = self.alloc_local(size, stmt.name, self.filename, stmt.line)
         symbol = VarSymbol(
             name=stmt.name,
             type=stmt.type,

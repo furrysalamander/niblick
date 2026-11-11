@@ -41,7 +41,7 @@ badgec = "badgec.cli:main"
 badgec-lsp = "badgec.lsp:main"
 
 [tool.setuptools]
-packages = ["badgec"]
+packages = ["badgec", "badgec.runtime"]
 
 [tool.setuptools.package-data]
 badgec = ["runtime/*.asm"]

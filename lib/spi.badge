@@ -1,10 +1,10 @@
 // Bit-banged SPI mode 0 on the badge's main I/O connector.
 //
-// Default wiring (all outputs are on the 4-bit OUT latch, MISO is IN0):
+// Pin assignments live in lib/boards/voja4.badge:
 //
 //   OUT2 = SCLK
 //   OUT3 = MOSI
-//   OUT1 = CS
+//   OUT1 = W5500 CS / default SPI CS
 //   IN0  = MISO
 //
 // The module uses GPIO bank 0 (WrFlags.IOPos = 0).  Unused functions are
@@ -12,12 +12,8 @@
 // by lib/drivers/w5500.badge also assume bank 0, so call spi_init() before
 // using the W5500 driver.
 
+import "lib/boards/voja4.badge";
 import "lib/gpio.badge";
-
-const nibble SPI_SCLK = 4;
-const nibble SPI_MOSI = 8;
-const nibble SPI_CS = 2;
-const nibble SPI_MISO = 1;
 
 fn void spi_init() {
     gpio_alt(0);

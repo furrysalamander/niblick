@@ -47,6 +47,12 @@ class Index(Expr):
 
 
 @dataclass
+class Member(Expr):
+    base: Expr = field(default_factory=Expr)
+    field: str = ""
+
+
+@dataclass
 class Unary(Expr):
     op: str = ""
     operand: Expr = field(default_factory=Expr)

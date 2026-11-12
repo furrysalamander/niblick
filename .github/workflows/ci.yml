@@ -41,7 +41,7 @@ jobs:
       - name: Ruff
         run: ruff check .
       - name: mypy
-        run: mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
+        run: mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py badgec/parser.py badgec/types.py
 
   coverage:
     name: Coverage
@@ -92,4 +92,7 @@ jobs:
         run: python -m pip install dist/*.whl
       - name: Smoke test installed wheel
         working-directory: /tmp
-        run: python -m badgec "$GITHUB_WORKSPACE/examples/hello.badge" --run
+        run: |
+          python -m badgec "$GITHUB_WORKSPACE/examples/hello.badge" --run
+          python -m badgec "$GITHUB_WORKSPACE/examples/struct_demo.badge" --run
+          python -m badgec "$GITHUB_WORKSPACE/examples/w5500_probe.badge" --no-assemble

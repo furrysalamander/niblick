@@ -51,7 +51,7 @@ ASM_REGISTERS = [f"R{index}" for index in range(16)] + [
 BADGEC_KEYWORDS = [
     "fn", "nibble", "char", "word", "dword", "flashptr", "void",
     "const", "if", "else", "while", "for", "return", "break",
-    "continue", "import", "extern", "true", "false",
+    "continue", "import", "extern", "true", "false", "struct",
 ]
 
 

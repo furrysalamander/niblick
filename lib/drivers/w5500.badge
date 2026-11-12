@@ -1,12 +1,16 @@
 // Minimal W5500 register access over SPI.
 //
-// W5500 wiring assumed:
-//   OUT0 = RST
-//   SPI module pins: OUT2=SCLK, OUT3=MOSI, OUT1=CS, IN0=MISO
+// Wiring lives in lib/boards/voja4.badge:
+//   OUT0 = W5500 RST
+//   OUT1 = W5500 CS
+//   OUT2 = SCLK
+//   OUT3 = MOSI
+//   IN0  = MISO
 //
 // This module only implements reset and register read/write.  Socket setup
 // and UDP/TCP helpers can be layered on top.
 
+import "lib/boards/voja4.badge";
 import "lib/spi.badge";
 import "lib/drivers/asm/w5500.asm";
 
@@ -16,8 +20,6 @@ extern fn char w5500_rx_peek(word offset);
 extern fn void w5500_rx_consume(word count);
 
 char w5500_scratch[4];
-
-const nibble W5500_RST = 1;
 
 fn void w5500_reset() {
     gpio_clear(W5500_RST);
@@ -34,22 +36,22 @@ fn void w5500_reset() {
 fn char w5500_read(nibble bsb, char addr_hi, char addr_lo) {
     char value;
 
-    gpio_clear(SPI_CS);
+    gpio_clear(W5500_CS);
     w5500_spi_xfer_fast(addr_hi);
     w5500_spi_xfer_fast(addr_lo);
     w5500_spi_xfer_fast((char)bsb << 3);       // read; OM = 00
     value = w5500_spi_xfer_fast(0);
-    gpio_set(SPI_CS);
+    gpio_set(W5500_CS);
     return value;
 }
 
 fn void w5500_write(nibble bsb, char addr_hi, char addr_lo, char value) {
-    gpio_clear(SPI_CS);
+    gpio_clear(W5500_CS);
     w5500_spi_xfer_fast(addr_hi);
     w5500_spi_xfer_fast(addr_lo);
     w5500_spi_xfer_fast(((char)bsb << 3) | 4);   // write; OM = 00
     w5500_spi_xfer_fast(value);
-    gpio_set(SPI_CS);
+    gpio_set(W5500_CS);
 }
 
 // Set a socket's TX buffer size.  The BSB for socket n is 3n+1, which can
@@ -58,12 +60,12 @@ fn void w5500_set_tx_size(char socket, char size) {
     char bsb;
 
     bsb = (char)(3 * socket + 1);
-    gpio_clear(SPI_CS);
+    gpio_clear(W5500_CS);
     w5500_spi_xfer_fast(0x00);
     w5500_spi_xfer_fast(0x1F);
     w5500_spi_xfer_fast((char)((bsb << 3) | 4));
     w5500_spi_xfer_fast(size);
-    gpio_set(SPI_CS);
+    gpio_set(W5500_CS);
 }
 
 fn char w5500_version() {
@@ -193,7 +195,7 @@ fn void w5500_tx_set_pointer(word pointer) {
 
 // Start a write burst into the socket 0 TX buffer at the given address.
 fn void w5500_tx_stream_begin(char addr_hi, char addr_lo) {
-    gpio_clear(SPI_CS);
+    gpio_clear(W5500_CS);
     w5500_spi_xfer_fast(addr_hi);
     w5500_spi_xfer_fast(addr_lo);
     w5500_spi_xfer_fast(0x14);                // BSB 2, write
@@ -201,14 +203,14 @@ fn void w5500_tx_stream_begin(char addr_hi, char addr_lo) {
 
 // Start a read burst from the socket 0 RX buffer at the given address.
 fn void w5500_rx_stream_begin(char addr_hi, char addr_lo) {
-    gpio_clear(SPI_CS);
+    gpio_clear(W5500_CS);
     w5500_spi_xfer_fast(addr_hi);
     w5500_spi_xfer_fast(addr_lo);
     w5500_spi_xfer_fast(0x18);                // BSB 3, read
 }
 
 fn void w5500_stream_end() {
-    gpio_set(SPI_CS);
+    gpio_set(W5500_CS);
 }
 
 // Issue a SEND command for everything currently between TX_RD and TX_WR.

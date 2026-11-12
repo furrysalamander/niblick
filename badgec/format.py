@@ -21,6 +21,7 @@ from .types import (
     FLASHPTR,
     NIBBLE,
     WORD,
+    StructType,
     Type,
     promoted_mul_type,
     wider,
@@ -389,6 +390,20 @@ class PrintExpander:
                     f"{location(self.filename, expr.line)}: array {expr.name!r} used without an index"
                 )
             return decl.type
+        if isinstance(expr, ast.Member):
+            base_type = self.infer_type(expr.base)
+            if not isinstance(base_type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: {base_type} has no field "
+                    f"{expr.field!r}"
+                )
+            field = base_type.field(expr.field)
+            if field is None:
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: struct {base_type.name} "
+                    f"has no field {expr.field!r}"
+                )
+            return field.type
         if isinstance(expr, ast.Index):
             if not isinstance(expr.base, ast.Var):
                 raise BadgeTypeError(

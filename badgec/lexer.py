@@ -28,6 +28,7 @@ KEYWORDS = {
     "import",
     "extern",
     "asm",
+    "struct",
 }
 
 # Longest operators first.
@@ -55,7 +56,7 @@ OPERATORS = [
     ">",
 ]
 
-PUNCTUATION = set("(){}[],;")
+PUNCTUATION = set("(){}[],;.")
 
 
 @dataclass

@@ -55,6 +55,8 @@ Only `MOV RX,RY`, `MOV RX,#N`, `INC RY` and `DEC RY` with `JSR`/`PCL` as the
 destination trigger a call/jump. An absolute store such as `MOV [0x0D],R0` writes
 the PCL latch without branching.
 
+Board-level names for the output and input bits are in [pins.md](pins.md).
+
 ### Hardware stack (`0x10`-`0x1E`)
 
 | Item | Value |

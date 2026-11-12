@@ -17,6 +17,7 @@ Working today:
 
 - `nibble` (u4), `char` (u8), `word` (u16), `dword` (u32), and `flashptr` (12-bit code address)
 - Globals, locals, fixed-size RAM arrays, `const` flash arrays, and scalar `const` values folded to immediates
+- Structs with scalar fields, field access, and arrays of structs
 - Functions, parameters, returns, and tail-call optimization
 - `if`/`else`, `while`, `for`, `break`, `continue`
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
@@ -40,7 +41,7 @@ Not implemented yet:
 - 64-bit integers and floating point
 - Native signed types (raw-bit signed helpers live in `lib/signed.badge`)
 - General pointers and pointer arithmetic
-- Structs, varargs, dynamic allocation
+- Struct parameters/returns, nested structs, aggregate initializers, varargs, and dynamic allocation
 - Full register allocation and a broader peephole/optimization pipeline
 - UART interrupt-driven or buffered I/O beyond the hardware FIFO
 
@@ -290,8 +291,9 @@ datagrams to a host.
 - Host destination port: `5001`
 - Payload: `hello from badge\n`
 
-Default SPI wiring: `OUT2=SCLK`, `OUT3=MOSI`, `OUT1=CS`, `IN0=MISO`, and
-`OUT0=W5500 RST` if reset is controlled by the badge. The W5500 needs a clean
+Default SPI wiring is defined in `lib/boards/voja4.badge`: `OUT2=SCLK`,
+`OUT3=MOSI`, `OUT1=CS`, `IN0=MISO`, and `OUT0=W5500 RST` if reset is
+controlled by the badge. The W5500 needs a clean
 3.3 V supply and roughly 130 mA; a separate 3.3 V supply with common ground is
 recommended.
 
@@ -377,6 +379,8 @@ W5500 fast SPI path. `docs/stdlib.md` explains why those stay builtins.
 - `docs/memory-map.md` — data/code memory and SFRs
 - `docs/serial.md` — UART details and load/save workflow
 - `docs/stdlib.md` — standard library, intrinsics, and module reference
+- `docs/pins.md` — Voja4 I/O pin map and board assignments
+- `docs/structs.md` — struct syntax, layout, and current limits
 - `docs/drivers/w5500.md` — W5500 Ethernet driver
 - `docs/runtime-abi.md` — BadgeC calling convention and runtime
 - `docs/compiler.md` — compiler internals and optimization roadmap

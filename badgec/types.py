@@ -42,6 +42,31 @@ DWORD = Type("dword", ram_size=8, flash_size=8)
 FLASHPTR = Type("flashptr", ram_size=3, flash_size=0)
 VOID = Type("void", ram_size=0, flash_size=0, is_scalar=False)
 
+
+@dataclass(frozen=True)
+class StructField:
+    name: str
+    type: Type
+    offset: int
+
+
+@dataclass(frozen=True)
+class StructType(Type):
+    """A RAM-only aggregate with scalar fields.
+
+    ``ram_size`` is padded to a power of two so existing array-address
+    arithmetic (which shifts by the element size) can index arrays of
+    structs.
+    """
+
+    fields: tuple[StructField, ...] = ()
+
+    def field(self, name: str) -> StructField | None:
+        for item in self.fields:
+            if item.name == name:
+                return item
+        return None
+
 SCALAR_TYPES = {
     "nibble": NIBBLE,
     "char": CHAR,

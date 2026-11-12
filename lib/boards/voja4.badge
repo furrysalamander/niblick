@@ -1,0 +1,29 @@
+// Voja4 I/O connector pin masks.
+//
+// The badge exposes four output bits and four input bits on the main I/O
+// connector.  These constants are masks for the nibble-wide ports used by
+// gpio_read/gpio_write, gpio_set/gpio_clear/gpio_toggle, and gpio_test.
+//
+// Import this module instead of hard-coding pin numbers in drivers:
+//
+//   import "lib/boards/voja4.badge";
+
+const nibble OUT0 = 1;
+const nibble OUT1 = 2;
+const nibble OUT2 = 4;
+const nibble OUT3 = 8;
+
+const nibble IN0 = 1;
+const nibble IN1 = 2;
+const nibble IN2 = 4;
+const nibble IN3 = 8;
+
+// Default SPI and W5500 wiring.
+const nibble SPI_SCLK = OUT2;
+const nibble SPI_MOSI = OUT3;
+const nibble SPI_MISO = IN0;
+const nibble W5500_CS = OUT1;
+const nibble W5500_RST = OUT0;
+
+// Backwards-compatible name for the default W5500 chip select.
+const nibble SPI_CS = W5500_CS;

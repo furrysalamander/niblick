@@ -51,6 +51,7 @@ from .types import (
     NIBBLE,
     VOID,
     WORD,
+    StructType,
     Type,
     is_comparable,
     is_integer,
@@ -607,6 +608,22 @@ class Compiler:
                     f"{location(self.filename, decl.line)}: duplicate global {decl.name!r}"
                 )
 
+            if isinstance(decl.type, StructType):
+                if decl.is_const:
+                    raise BadgeTypeError(
+                        f"{location(self.filename, decl.line)}: const struct "
+                        f"{decl.name!r} is not supported"
+                    )
+                if (
+                    decl.init is not None
+                    or decl.init_list is not None
+                    or decl.init_string is not None
+                ):
+                    raise BadgeCompileError(
+                        f"{location(self.filename, decl.line)}: struct initializers "
+                        "are not supported yet; assign fields individually"
+                    )
+
             if decl.is_const and decl.array_len is None:
                 if not is_integer(decl.type):
                     raise BadgeTypeError(
@@ -711,6 +728,17 @@ class Compiler:
                 raise BadgeCompileError(
                     f"{location(self.filename, decl.line)}: main() cannot be extern"
                 )
+            if isinstance(decl.return_type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, decl.line)}: struct return values "
+                    "are not supported yet"
+                )
+            for param in decl.params:
+                if isinstance(param.type, StructType):
+                    raise BadgeTypeError(
+                        f"{location(self.filename, param.line)}: struct parameters "
+                        "are not supported yet"
+                    )
             fn = FunctionSymbol(
                 name=decl.name,
                 decl=decl,
@@ -1413,15 +1441,22 @@ class Compiler:
             typ = self.compile_expr(stmt.value, scope)
             self.coerce(typ, target_type, stmt.line)
 
-            if isinstance(stmt.target, ast.Index):
-                # The index expression may clobber R1/R2, so park the value
-                # while the address is computed.
+            if isinstance(stmt.target, (ast.Index, ast.Member)):
+                # The index/address expression may clobber R1/R2, so park the
+                # value while the address is computed.
                 mark = self.temp.mark()
                 temp_addr = self.temp.alloc(
                     target_type.ram_size, "assignment", self.filename, stmt.line
                 )
                 self.store_temp(target_type, temp_addr)
-                self.store_index_from_temp(stmt.target, scope, target_type, temp_addr, stmt.line)
+                if isinstance(stmt.target, ast.Member):
+                    self.store_member_from_temp(
+                        stmt.target, scope, target_type, temp_addr, stmt.line
+                    )
+                else:
+                    self.store_index_from_temp(
+                        stmt.target, scope, target_type, temp_addr, stmt.line
+                    )
                 self.temp.reset(mark)
             else:
                 self.store_lvalue(stmt.target, scope, stmt.line)
@@ -1591,6 +1626,17 @@ class Compiler:
             raise BadgeCompileError(
                 f"{location(self.filename, stmt.line)}: duplicate local {stmt.name!r}"
             )
+        if isinstance(stmt.type, StructType):
+            if stmt.is_const:
+                raise BadgeTypeError(
+                    f"{location(self.filename, stmt.line)}: const struct "
+                    f"{stmt.name!r} is not supported"
+                )
+            if stmt.init is not None:
+                raise BadgeCompileError(
+                    f"{location(self.filename, stmt.line)}: struct initializers "
+                    "are not supported yet; assign fields individually"
+                )
         if stmt.is_const and stmt.array_len is None:
             if not is_integer(stmt.type):
                 raise BadgeTypeError(
@@ -1743,6 +1789,12 @@ class Compiler:
             self.emit_flashptr(label)
             return FLASHPTR
 
+        if isinstance(expr, ast.Member):
+            field = self.member_info(expr, scope)
+            self.compile_member_addr(expr, scope)
+            self.load_indirect(field.type, expr.line)
+            return field.type
+
         if isinstance(expr, ast.Var):
             symbol = self.lookup(expr.name, scope, expr.line)
             if symbol.array_len is not None:
@@ -1751,6 +1803,11 @@ class Compiler:
                     return FLASHPTR
                 raise BadgeTypeError(
                     f"{location(self.filename, expr.line)}: array {expr.name!r} used without an index"
+                )
+            if isinstance(symbol.type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: struct {expr.name!r} "
+                    "must be used through a field"
                 )
             self.load_symbol(symbol, expr.line)
             return symbol.type
@@ -2517,6 +2574,15 @@ class Compiler:
                     f"for {symbol.name}[{symbol.array_len}]"
                 )
 
+        if isinstance(symbol.type, StructType):
+            if symbol.flash_label is not None:
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: struct arrays cannot be "
+                    "stored in flash"
+                )
+            self.compile_ram_addr(symbol, expr.index, scope, expr.line)
+            return symbol.type
+
         if symbol.flash_label is not None:
             self.compile_flash_addr(symbol, expr.index, scope, expr.line)
             if symbol.type is CHAR:
@@ -2595,6 +2661,152 @@ class Compiler:
     # ------------------------------------------------------------------
     # Address helpers
     # ------------------------------------------------------------------
+
+    def member_info(self, expr: ast.Member, scope: Scope):
+        base_type = self.infer_type(expr.base, scope)
+        if not isinstance(base_type, StructType):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: {base_type} has no field "
+                f"{expr.field!r}"
+            )
+        field = base_type.field(expr.field)
+        if field is None:
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: struct {base_type.name} has "
+                f"no field {expr.field!r}"
+            )
+        if isinstance(field.type, StructType):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: nested struct field "
+                f"{expr.field!r} is not supported yet"
+            )
+        return field
+
+    def compile_member_addr(self, expr: ast.Member, scope: Scope) -> None:
+        field = self.member_info(expr, scope)
+        base = expr.base
+        if isinstance(base, ast.Var):
+            symbol = self.lookup(base.name, scope, base.line)
+            if symbol.array_len is not None:
+                raise BadgeTypeError(
+                    f"{location(self.filename, base.line)}: struct array "
+                    f"{symbol.name!r} needs an index"
+                )
+            if symbol.address is None:
+                raise BadgeCompileError(
+                    f"{location(self.filename, base.line)}: {symbol.name!r} has no RAM storage"
+                )
+            self.emit(f"MOV R4, {(symbol.address >> 4) & 0xF}")
+            self.emit(f"MOV R5, {symbol.address & 0xF}")
+        elif isinstance(base, ast.Index):
+            base_type = self.compile_expr(base, scope)
+            if not isinstance(base_type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, base.line)}: indexed value is not a struct"
+                )
+        else:
+            raise BadgeTypeError(
+                f"{location(self.filename, base.line)}: unsupported struct field base"
+            )
+
+        offset = field.offset
+        low = offset & 0xF
+        high = (offset >> 4) & 0xF
+        if low:
+            self.emit(f"MOV R0, {low}")
+            self.emit("ADD R5, R0")
+            self.emit("SKIP NC, 1")
+            self.emit("INC R4")
+        if high:
+            self.emit(f"MOV R0, {high}")
+            self.emit("ADD R4, R0")
+
+    def load_indirect(self, typ: Type, line: int) -> None:
+        if typ is NIBBLE:
+            self.emit("MOV R0, [R4:R5]")
+            self.emit("MOV R1, R0")
+            return
+        if typ is DWORD:
+            self.emit("MOV R6, R4")
+            self.emit("MOV R7, R5")
+            for index in range(8):
+                self.emit("MOV R0, [R6:R7]")
+                self.emit(f"MOV R{index + 1}, R0")
+                if index != 7:
+                    self.emit("INC R7")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R6")
+            return
+        if typ not in (CHAR, FLASHPTR, WORD):
+            raise BadgeTypeError(
+                f"{location(self.filename, line)}: cannot load {typ} from memory"
+            )
+        for index in range(typ.ram_size):
+            self.emit("MOV R0, [R4:R5]")
+            self.emit(f"MOV R{index + 1}, R0")
+            if index != typ.ram_size - 1:
+                self.emit("INC R5")
+                self.emit("SKIP NC, 1")
+                self.emit("INC R4")
+
+    def store_member_from_temp(
+        self, target: ast.Member, scope: Scope, typ: Type, temp_addr: int, line: int
+    ) -> None:
+        self.compile_member_addr(target, scope)
+        if typ is DWORD:
+            self.emit("MOV R6, R4")
+            self.emit("MOV R7, R5")
+            for index in range(8):
+                self.emit(f"MOV R0, [{temp_addr + index}]")
+                self.emit("MOV [R6:R7], R0")
+                if index != 7:
+                    self.emit("INC R7")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R6")
+            return
+        if typ is WORD:
+            self.emit("MOV R6, R4")
+            self.emit("MOV R7, R5")
+        self.load_temp(typ, temp_addr)
+        if typ is NIBBLE:
+            self.emit("MOV R0, R1")
+            self.emit("MOV [R4:R5], R0")
+            return
+        if typ is CHAR:
+            self.emit("MOV R0, R1")
+            self.emit("MOV [R4:R5], R0")
+            self.emit("INC R5")
+            self.emit("SKIP NC, 1")
+            self.emit("INC R4")
+            self.emit("MOV R0, R2")
+            self.emit("MOV [R4:R5], R0")
+            return
+        if typ is FLASHPTR:
+            self.emit("MOV R0, R1")
+            self.emit("MOV [R4:R5], R0")
+            self.emit("INC R5")
+            self.emit("SKIP NC, 1")
+            self.emit("INC R4")
+            self.emit("MOV R0, R2")
+            self.emit("MOV [R4:R5], R0")
+            self.emit("INC R5")
+            self.emit("SKIP NC, 1")
+            self.emit("INC R4")
+            self.emit("MOV R0, R3")
+            self.emit("MOV [R4:R5], R0")
+            return
+        if typ in (WORD, DWORD):
+            for index in range(typ.ram_size):
+                self.emit(f"MOV R0, R{index + 1}")
+                self.emit("MOV [R6:R7], R0")
+                if index != typ.ram_size - 1:
+                    self.emit("INC R7")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R6")
+            return
+        raise BadgeTypeError(
+            f"{location(self.filename, line)}: cannot store {typ} to a struct field"
+        )
 
     def compile_ram_addr(self, symbol: VarSymbol, index: ast.Expr, scope: Scope, line: int) -> None:
         assert symbol.address is not None
@@ -3051,6 +3263,11 @@ class Compiler:
                 raise BadgeTypeError(
                     f"{location(self.filename, target.line)}: cannot assign to const {target.name!r}"
                 )
+            if isinstance(symbol.type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, target.line)}: cannot assign a whole "
+                    f"struct value; assign fields of {symbol.name!r} individually"
+                )
             return symbol.type
         if isinstance(target, ast.Index):
             if not isinstance(target.base, ast.Var):
@@ -3066,7 +3283,20 @@ class Compiler:
                 raise BadgeTypeError(
                     f"{location(self.filename, target.line)}: cannot write to const array {symbol.name!r}"
                 )
+            if isinstance(symbol.type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, target.line)}: cannot assign a whole "
+                    f"struct value; assign fields of {symbol.name!r} individually"
+                )
             return symbol.type
+        if isinstance(target, ast.Member):
+            field = self.member_info(target, scope)
+            if isinstance(field.type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, target.line)}: nested struct assignment "
+                    "is not supported yet"
+                )
+            return field.type
         raise BadgeTypeError(
             f"{location(self.filename, target.line)}: invalid assignment target"
         )
@@ -3863,6 +4093,8 @@ class Compiler:
                     f"{location(self.filename, expr.line)}: {symbol.name!r} is not an array"
                 )
             return symbol.type
+        if isinstance(expr, ast.Member):
+            return self.member_info(expr, scope).type
         if isinstance(expr, ast.Unary):
             if expr.op == "&":
                 return CHAR

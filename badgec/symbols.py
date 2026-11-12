@@ -842,6 +842,8 @@ class ProgramIndex:
         elif isinstance(expression, ast.Index):
             self._visit_expr(expression.base, scopes, function_name)
             self._visit_expr(expression.index, scopes, function_name)
+        elif isinstance(expression, ast.Member):
+            self._visit_expr(expression.base, scopes, function_name)
         elif isinstance(expression, ast.Unary):
             self._visit_expr(expression.operand, scopes, function_name)
         elif isinstance(expression, ast.AddressOf):

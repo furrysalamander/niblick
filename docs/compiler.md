@@ -142,6 +142,11 @@ cover it.
 
 ## Types and coercions
 
+BadgeC has scalar `nibble`, `char`, `word`, `dword`, and `flashptr` types.
+`struct` declarations add RAM-only aggregates with scalar fields; see
+[structs.md](structs.md). Struct values can be indexed and their fields loaded
+or stored, but they cannot be passed, returned, copied, or stored in flash.
+
 Integer widths are `nibble` (4), `char` (8), `word` (16), and `dword` (32).
 Widening is implicit and zero-extends into the higher result registers.
 Narrowing is rejected unless an explicit cast is used:

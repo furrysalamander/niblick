@@ -27,6 +27,8 @@ and can exercise UART transmit/receive without hardware.
 | Standard library | `tests/test_library.py`, `tests/test_stdlib.py`, `tests/test_signed_lib.py` | UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, audio/PDM |
 | Inlining / overlay | `tests/test_compiler.py`, `tests/test_overlay.py` | Small return/void inlining, side-effect guards, frame interference and slot reuse |
 | Print formatting | `tests/test_print.py` | Literal format parsing, typed placeholders, generated UART helpers, and error cases |
+| Structs | `tests/test_structs.py` | Layout, field access, arrays of structs, and unsupported forms |
+| Board pin map | `tests/test_board.py` | Voja4 output/input masks and default SPI/W5500 assignments |
 | Optimizer proofs | `tests/test_peephole_z3.py` | Z3 proofs for constant-address lowering and peephole identities |
 | Property tests | `tests/test_hypothesis_compiler.py` | Generated nibble expressions versus a Python reference |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
@@ -208,7 +210,7 @@ The development extras include `ruff`, `mypy`, `pytest-cov`, `hypothesis`,
 ```bash
 python3 -m pip install -e ".[dev]"
 ruff check .
-mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py
+mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py badgec/parser.py badgec/types.py
 python3 -m pytest --cov=badgec
 pre-commit install
 ```

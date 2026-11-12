@@ -8,7 +8,7 @@ from typing import Optional
 from . import ast_nodes as ast
 from .errors import BadgeSyntaxError, location
 from .lexer import Token, tokenize
-from .types import Type, type_from_name
+from .types import SCALAR_TYPES, StructField, StructType, Type, type_from_name
 
 
 TYPE_NAMES = {"nibble", "char", "word", "dword", "flashptr", "void"}
@@ -41,6 +41,7 @@ class Parser:
         self.tokens = tokens
         self.filename = filename
         self.pos = 0
+        self.struct_types: dict[str, StructType] = {}
 
     # ------------------------------------------------------------------
     # Token helpers
@@ -95,13 +96,19 @@ class Parser:
 
     def expect_type(self) -> Type:
         token = self.current()
-        if token.kind != "keyword" or token.value not in TYPE_NAMES:
-            raise self.error(f"expected a type, got {token.value!r}")
-        self.advance()
-        return type_from_name(str(token.value))
+        if token.kind == "keyword" and token.value in TYPE_NAMES:
+            self.advance()
+            return type_from_name(str(token.value))
+        if token.kind == "ident" and token.value in self.struct_types:
+            self.advance()
+            return self.struct_types[str(token.value)]
+        raise self.error(f"expected a type, got {token.value!r}")
 
     def at_type(self) -> bool:
-        return self.current().kind == "keyword" and self.current().value in TYPE_NAMES
+        token = self.current()
+        return (
+            token.kind == "keyword" and token.value in TYPE_NAMES
+        ) or (token.kind == "ident" and token.value in self.struct_types)
 
     # ------------------------------------------------------------------
     # Program
@@ -110,7 +117,9 @@ class Parser:
     def parse_program(self) -> ast.Program:
         program = ast.Program()
         while not self.at_end():
-            if self.check("import", "keyword"):
+            if self.check("struct", "keyword"):
+                self.parse_struct()
+            elif self.check("import", "keyword"):
                 self.advance()
                 path = self.current()
                 if path.kind != "string":
@@ -136,6 +145,55 @@ class Parser:
                 raise self.error(f"unexpected top-level token {self.current().value!r}")
         _annotate_program(program, self.filename)
         return program
+
+    def parse_struct(self) -> None:
+        self.expect("struct", "keyword")
+        name_token = self.expect_ident_token()
+        if name_token.kind != "ident":
+            raise self.error("struct name must be an identifier", name_token)
+        name = str(name_token.value)
+        if name in self.struct_types:
+            raise self.error(f"duplicate struct {name!r}", name_token)
+        if name in SCALAR_TYPES or name in TYPE_NAMES:
+            raise self.error(f"struct name {name!r} conflicts with a builtin type", name_token)
+        self.expect("{")
+        fields: list[StructField] = []
+        offset = 0
+        while not self.check("}"):
+            field_type = self.expect_type()
+            if isinstance(field_type, StructType) or field_type.name == "void":
+                raise self.error("struct fields must use scalar types")
+            if self.check("["):
+                raise self.error("struct fields cannot be arrays")
+            field_token = self.expect_ident_token()
+            if any(item.name == field_token.value for item in fields):
+                raise self.error(
+                    f"duplicate field {field_token.value!r} in struct {name!r}",
+                    field_token,
+                )
+            self.expect(";")
+            fields.append(
+                StructField(
+                    name=str(field_token.value),
+                    type=field_type,
+                    offset=offset,
+                )
+            )
+            offset += field_type.ram_size
+        self.expect("}")
+        self.expect(";")
+        if not fields:
+            raise self.error(f"struct {name!r} must have at least one field", name_token)
+        size = 1
+        while size < offset:
+            size <<= 1
+        self.struct_types[name] = StructType(
+            name=name,
+            ram_size=size,
+            flash_size=0,
+            is_scalar=False,
+            fields=tuple(fields),
+        )
 
     def parse_function(self) -> ast.FunctionDecl:
         start = self.current()
@@ -229,12 +287,12 @@ class Parser:
         if not self.check("["):
             # Scalar constant, e.g. ``const nibble PIN = 1;``.
             self.expect("=")
-            init = self.parse_expression()
+            scalar_init = self.parse_expression()
             self.expect(";")
             return ast.GlobalDecl(
                 name=name,
                 type=type_,
-                init=init,
+                init=scalar_init,
                 is_const=True,
                 line=line,
                 column=column,
@@ -385,7 +443,7 @@ class Parser:
         column = token.column
         expr = self.parse_expression()
         if self.match("="):
-            if not isinstance(expr, (ast.Var, ast.Index)):
+            if not isinstance(expr, (ast.Var, ast.Index, ast.Member)):
                 raise self.error("left side of assignment must be a variable or array element")
             value = self.parse_expression()
             self.expect(";")
@@ -587,6 +645,15 @@ class Parser:
                     index,
                     line=bracket.line,
                     column=bracket.column,
+                )
+            elif self.check("."):
+                dot = self.advance()
+                field_token = self.expect_ident_token()
+                expr = ast.Member(
+                    expr,
+                    str(field_token.value),
+                    line=dot.line,
+                    column=dot.column,
                 )
             elif self.check("("):
                 self.advance()

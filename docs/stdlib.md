@@ -442,9 +442,11 @@ instruction mix. Measure the pitch on hardware and adjust the note table or
 | `spi_begin()` / `spi_end()` | `void` | Assert / release CS |
 | `spi_xfer(out)` | `char` | Exchange one byte |
 
-Pin constants are `SPI_SCLK` = 4, `SPI_MOSI` = 8, `SPI_MISO` = 1, and
-`SPI_CS` = 2. The W5500 Ethernet driver is a separate device driver under
-`lib/drivers/`; see [drivers/w5500.md](drivers/w5500.md).
+Pin constants live in [pins.md](pins.md) and `lib/boards/voja4.badge`:
+`SPI_SCLK` = `OUT2`, `SPI_MOSI` = `OUT3`, `SPI_MISO` = `IN0`, and
+`W5500_CS` = `OUT1` (`SPI_CS` remains an alias). The W5500 Ethernet driver is
+a separate device driver under `lib/drivers/`; see
+[drivers/w5500.md](drivers/w5500.md).
 
 ## Missing / planned
 

@@ -5,12 +5,13 @@ import "lib/time.badge";
 // and lets one vanilla 1.8.9 client join a void world.  No encryption, no
 // compression, no world storage, no terrain.
 //
-// Wiring is the same as the other W5500 examples:
+// Wiring is defined in lib/boards/voja4.badge:
 //   OUT0 = W5500 RST, OUT1 = CS, OUT2 = SCLK, OUT3 = MOSI, IN0 = MISO.
 //
 // The client must be in offline mode (the badge never sends an encryption
 // request).  That is automatic: vanilla clients connect to offline servers.
 
+import "lib/boards/voja4.badge";
 import "lib/spi.badge";
 import "lib/drivers/w5500.badge";
 import "mc_void.asm";
@@ -97,7 +98,7 @@ char pong[8];
 
 fn void mc_tx_begin() {
     tx_wr = w5500_tx_pointer();
-    gpio_clear(SPI_CS);
+    gpio_clear(W5500_CS);
     w5500_spi_xfer_fast((char)(tx_wr >> 8));
     w5500_spi_xfer_fast((char)tx_wr);
     w5500_spi_xfer_fast(0x14);                // BSB 2, write
@@ -109,7 +110,7 @@ fn void mc_tx_put(char value) {
 }
 
 fn void mc_tx_end() {
-    gpio_set(SPI_CS);
+    gpio_set(W5500_CS);
     w5500_write(1, 0x00, 0x24, (char)(tx_wr >> 8));
     w5500_write(1, 0x00, 0x25, (char)tx_wr);
     w5500_write(1, 0x00, 0x01, 0x20);   // SEND

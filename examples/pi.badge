@@ -1,0 +1,149 @@
+// Compute pi and print it over UART.
+//
+// Machin's formula:
+//
+//     pi = 16*atan(1/5) - 4*atan(1/239)
+//
+//     atan(1/x) = 1/x - 1/(3x^3) + 1/(5x^5) - ...
+//
+// The work is done in fixed-point decimal with one digit per nibble.  Three
+// arrays of 48 digits hold the accumulator, the current power term, and the
+// current series term; that is 144 of the 176 available RAM nibbles.  The
+// last three digits are guard digits that absorb truncation from the long
+// divisions, so 44 decimal places are printed.
+
+import "lib/uart.badge";
+
+const uint16_t FRAC = 44;
+const uint16_t GUARD = 3;
+const uint16_t LAST = FRAC + GUARD;
+const uint16_t SIZE = LAST + 1;
+
+nibble acc[48];
+nibble t[48];
+nibble term[48];
+
+// Accumulate one atan(1/x) series into acc.
+//
+// `subtract` sets the sign of the first term (the sign alternates from
+// there).  Only small-integer divisions are used: x is 5 or 239 and the odd
+// divisor is at most about 100.
+fn void atan_series(char x, char coeff, nibble subtract) {
+    char i;
+    char rem;
+    uint16_t cur;
+    nibble more;
+    char k;
+    char m;
+    nibble sign;
+    uint16_t carry;
+    uint16_t v;
+
+    // t = 10^LAST / x
+    i = 0;
+    while (i < SIZE) {
+        t[i] = 0;
+        i = i + 1;
+    }
+    t[0] = 1;
+    i = 0;
+    rem = 0;
+    while (i < SIZE) {
+        cur = (uint16_t)(rem * 10 + t[i]);
+        t[i] = (nibble)(cur / x);
+        rem = (char)(cur % x);
+        i = i + 1;
+    }
+
+    k = 0;
+    sign = subtract;
+    more = 1;
+    while (more != 0) {
+        // term = t / (2k+1)
+        m = (char)(2 * k + 1);
+        i = 0;
+        rem = 0;
+        while (i < SIZE) {
+            cur = (uint16_t)(rem * 10 + t[i]);
+            term[i] = (nibble)(cur / m);
+            rem = (char)(cur % m);
+            i = i + 1;
+        }
+
+        // acc += sign ? -(coeff * term) : (coeff * term)
+        i = (char)SIZE;
+        carry = 0;
+        while (i != 0) {
+            i = i - 1;
+            v = (uint16_t)(coeff * term[i] + carry);
+            if (sign == 0) {
+                cur = (uint16_t)(acc[i] + v);
+                acc[i] = (nibble)(cur % 10);
+                carry = (uint16_t)(cur / 10);
+            } else if (v <= acc[i]) {
+                acc[i] = (nibble)(acc[i] - v);
+                carry = 0;
+            } else {
+                cur = (uint16_t)(v - acc[i]);
+                acc[i] = (nibble)((10 - (cur % 10)) % 10);
+                carry = (uint16_t)(cur / 10);
+                if ((cur % 10) != 0) {
+                    carry = carry + 1;
+                }
+            }
+        }
+
+        // t = t / x / x; stop once it is zero.
+        i = 0;
+        rem = 0;
+        while (i < SIZE) {
+            cur = (uint16_t)(rem * 10 + t[i]);
+            t[i] = (nibble)(cur / x);
+            rem = (char)(cur % x);
+            i = i + 1;
+        }
+        i = 0;
+        rem = 0;
+        more = 0;
+        while (i < SIZE) {
+            cur = (uint16_t)(rem * 10 + t[i]);
+            t[i] = (nibble)(cur / x);
+            rem = (char)(cur % x);
+            if (t[i] != 0) {
+                more = 1;
+            }
+            i = i + 1;
+        }
+        k = k + 1;
+        sign = (nibble)(1 - sign);
+    }
+}
+
+fn main() {
+    char i;
+
+    i = 0;
+    while (i < SIZE) {
+        acc[i] = 0;
+        i = i + 1;
+    }
+
+    atan_series(5, 16, 0);
+    atan_series(239, 4, 1);
+
+    uart_route(1);
+    uart_init(3);
+    uart_puts("pi = ");
+    i = 0;
+    while (i <= FRAC) {
+        if (i == 1) {
+            uart_putc('.');
+        }
+        uart_putc('0' + acc[i]);
+        i = i + 1;
+    }
+    uart_putc(13);
+    uart_putc(10);
+    while (1) {
+    }
+}

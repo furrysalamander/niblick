@@ -23,6 +23,7 @@
 | `word_math.badge` | 16-bit words, casts, and `* / %` |
 | `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |
 | `math32_test.badge` | 32-bit arithmetic self-test; send `0x01` over UART |
+| `pi.badge` | Computes pi to 44 decimal places over UART |
 | `w5500_probe.badge` | Read W5500 `VERSIONR`/`PHYCFGR` over SPI and print on UART |
 | `w5500_udp.badge` | Send UDP datagrams from `192.168.1.50` to `192.168.1.10:5001` |
 | `w5500_http.badge` | Minimal HTTP server at `http://192.168.1.50/` |

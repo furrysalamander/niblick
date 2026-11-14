@@ -122,6 +122,14 @@ fn void atan_series(char x, char coeff, nibble subtract) {
 fn main() {
     char i;
 
+    // Configure the UART before the computation: with RxTxPos still 0 the
+    // main-header TX pin is driven by the OUT latch, which reads as a break
+    // on the host side.  Printing the prefix immediately also shows the
+    // program is alive while the digits are being computed.
+    uart_route(1);
+    uart_init(3);
+    uart_puts("pi = ");
+
     i = 0;
     while (i < SIZE) {
         acc[i] = 0;
@@ -131,9 +139,6 @@ fn main() {
     atan_series(5, 16, 0);
     atan_series(239, 4, 1);
 
-    uart_route(1);
-    uart_init(3);
-    uart_puts("pi = ");
     i = 0;
     while (i <= FRAC) {
         if (i == 1) {

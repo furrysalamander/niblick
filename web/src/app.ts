@@ -919,7 +919,7 @@ async function compile(): Promise<void> {
       projectOverrides(),
     );
     showResult(result);
-    timingStatus.textContent = `compile ${Math.round(performance.now() - started)} ms; runtime ${Math.round(runtime.startupMs)} ms`;
+    timingStatus.textContent = `compile ${Math.round(performance.now() - started)} ms`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     compileStatus.textContent = "compile failed";
@@ -1409,7 +1409,7 @@ async function boot(): Promise<void> {
       runtimeStatus.textContent = "loading";
     });
     loading.classList.add("hidden");
-    runtimeStatus.textContent = `ready ${Math.round(runtime.startupMs)} ms`;
+    runtimeStatus.textContent = "ready";
     compileButton.disabled = false;
 
     const examples = await runtime.listExamples();

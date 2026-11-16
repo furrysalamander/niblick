@@ -93,18 +93,12 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 export class NiblickRuntime {
   private pyodide: PyodideInterface | null = null;
-  private initMs = 0;
 
   get ready(): boolean {
     return this.pyodide !== null;
   }
 
-  get startupMs(): number {
-    return this.initMs;
-  }
-
   async init(progress: RuntimeProgress): Promise<void> {
-    const started = performance.now();
     progress("Loading Pyodide");
     const pyodideModule = (await import(
       /* @vite-ignore */ `${PYODIDE_CDN}pyodide.mjs`
@@ -157,8 +151,7 @@ import niblick.web
 `);
 
     this.pyodide = pyodide;
-    this.initMs = performance.now() - started;
-    progress(`Ready in ${Math.round(this.initMs)} ms`);
+    progress("Ready");
   }
 
   async compile(

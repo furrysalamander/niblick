@@ -35,6 +35,19 @@ BINARY_PRECEDENCE = {
     "%": 10,
 }
 
+COMPOUND_OPS = {
+    "+=": "+",
+    "-=": "-",
+    "*=": "*",
+    "/=": "/",
+    "%=": "%",
+    "&=": "&",
+    "|=": "|",
+    "^=": "^",
+    "<<=": "<<",
+    ">>=": ">>",
+}
+
 
 class Parser:
     def __init__(self, tokens: list[Token], filename: str = "<input>") -> None:
@@ -89,7 +102,7 @@ class Parser:
 
     def expect_ident_token(self) -> Token:
         token = self.current()
-        if token.kind not in ("ident", "keyword"):
+        if token.kind != "ident":
             raise self.error(f"expected identifier, got {token.value!r}")
         self.advance()
         return token
@@ -136,11 +149,12 @@ class Parser:
             elif self.check("const", "keyword"):
                 program.globals.append(self.parse_const_global())
             elif self.at_type():
-                # Either a global declaration or a C-style function definition.
-                if self.peek().kind in ("ident", "keyword") and self.peek(2).value == "(":
-                    program.functions.append(self.parse_function())
-                else:
-                    program.globals.append(self.parse_global())
+                if self.peek().kind == "ident" and self.peek(2).value == "(":
+                    raise self.error(
+                        "C-style function definitions are not supported; "
+                        "use 'fn [type] name(...)'"
+                    )
+                program.globals.append(self.parse_global())
             else:
                 raise self.error(f"unexpected top-level token {self.current().value!r}")
         _annotate_program(program, self.filename)
@@ -196,18 +210,14 @@ class Parser:
         )
 
     def parse_function(self) -> ast.FunctionDecl:
-        start = self.current()
+        start = self.expect("fn", "keyword")
         line = start.line
         column = start.column
-        if self.match("fn", "keyword"):
-            if self.at_type():
-                return_type = self.expect_type()
-            else:
-                return_type = type_from_name("void")
-            name_token = self.expect_ident_token()
-        else:
+        if self.at_type():
             return_type = self.expect_type()
-            name_token = self.expect_ident_token()
+        else:
+            return_type = type_from_name("void")
+        name_token = self.expect_ident_token()
 
         params = self.parse_params()
         body = self.parse_block()
@@ -232,15 +242,12 @@ class Parser:
         start = self.expect("extern", "keyword")
         line = start.line
         column = start.column
-        if self.match("fn", "keyword"):
-            if self.at_type():
-                return_type = self.expect_type()
-            else:
-                return_type = type_from_name("void")
-            name_token = self.expect_ident_token()
-        else:
+        self.expect("fn", "keyword")
+        if self.at_type():
             return_type = self.expect_type()
-            name_token = self.expect_ident_token()
+        else:
+            return_type = type_from_name("void")
+        name_token = self.expect_ident_token()
 
         params = self.parse_params()
         self.expect(";")
@@ -273,8 +280,52 @@ class Parser:
                 )
                 if not self.match(","):
                     break
+                if self.check(")"):
+                    break
         self.expect(")")
         return params
+
+    def parse_array_suffix(self) -> tuple[Optional[int], Optional[ast.Expr]]:
+        if not self.match("["):
+            return None, None
+        if self.check("]"):
+            self.expect("]")
+            return None, None
+        expr = self.parse_expression()
+        self.expect("]")
+        if isinstance(expr, ast.Number):
+            return int(expr.value), None
+        return None, expr
+
+    def parse_string_value(self) -> str:
+        if self.current().kind != "string":
+            raise self.error(f"expected a string literal, got {self.current().value!r}")
+        parts = [str(self.advance().value)]
+        while self.current().kind == "string":
+            parts.append(str(self.advance().value))
+        return "".join(parts)
+
+    def parse_initializer(
+        self, type_: Type
+    ) -> tuple[Optional[ast.Expr], Optional[list[ast.Expr]], Optional[str]]:
+        if self.check("{"):
+            self.advance()
+            init_list: list[ast.Expr] = []
+            if not self.check("}"):
+                while True:
+                    init_list.append(self.parse_expression())
+                    if not self.match(","):
+                        break
+                    if self.check("}"):
+                        break
+            self.expect("}")
+            return None, init_list, None
+        if self.current().kind == "string":
+            value = self.parse_string_value()
+            if type_ is not U8:
+                raise self.error("string literals can only initialize char arrays")
+            return None, None, value
+        return self.parse_expression(), None, None
 
     def parse_const_global(self) -> ast.GlobalDecl:
         self.expect("const", "keyword")
@@ -298,36 +349,12 @@ class Parser:
                 column=column,
             )
 
-        self.expect("[")
-        array_len: Optional[int] = None
-        if not self.check("]"):
-            array_len = self.parse_const_int()
-        self.expect("]")
+        array_len, array_len_expr = self.parse_array_suffix()
         self.expect("=")
-
-        init_string: Optional[str] = None
-        init_list: Optional[list[ast.Expr]] = None
-        init: Optional[ast.Expr] = None
-
-        if self.current().kind == "string":
-            init_string = str(self.advance().value)
-            if type_ is not U8:
-                raise self.error("string literals can only initialize const char arrays")
-        elif self.match("{"):
-            init_list = []
-            if not self.check("}"):
-                while True:
-                    init_list.append(self.parse_expression())
-                    if not self.match(","):
-                        break
-                    if self.check("}"):
-                        break
-            self.expect("}")
-        else:
-            init = self.parse_expression()
+        init, init_list, init_string = self.parse_initializer(type_)
         self.expect(";")
 
-        if array_len is None:
+        if array_len is None and array_len_expr is None:
             if init_string is not None:
                 array_len = len(init_string) + 1
             elif init_list is not None:
@@ -339,10 +366,12 @@ class Parser:
             name=name,
             type=type_,
             array_len=array_len,
+            array_len_expr=array_len_expr,
             init=init,
             init_list=init_list,
             init_string=init_string,
             is_const=True,
+            is_array=True,
             line=line,
             column=column,
         )
@@ -351,30 +380,33 @@ class Parser:
         type_ = self.expect_type()
         name_token = self.expect_ident_token()
         name = str(name_token.value)
-        array_len: Optional[int] = None
-        if self.match("["):
-            if not self.check("]"):
-                array_len = self.parse_const_int()
-            self.expect("]")
+        has_array = self.check("[")
+        array_len, array_len_expr = self.parse_array_suffix()
         init: Optional[ast.Expr] = None
+        init_list: Optional[list[ast.Expr]] = None
+        init_string: Optional[str] = None
         if self.match("="):
-            init = self.parse_expression()
+            init, init_list, init_string = self.parse_initializer(type_)
         self.expect(";")
+        if has_array and array_len is None and array_len_expr is None:
+            if init_list is not None:
+                array_len = len(init_list)
+            elif init_string is not None:
+                array_len = len(init_string) + 1
+            else:
+                raise self.error("array requires a length or initializer")
         return ast.GlobalDecl(
             name,
             type_,
             array_len,
+            array_len_expr=array_len_expr,
             init=init,
+            init_list=init_list,
+            init_string=init_string,
+            is_array=has_array,
             line=name_token.line,
             column=name_token.column,
         )
-
-    def parse_const_int(self) -> int:
-        token = self.current()
-        if token.kind != "number":
-            raise self.error("expected an integer literal")
-        self.advance()
-        return int(token.value)
 
     # ------------------------------------------------------------------
     # Statements
@@ -439,36 +471,66 @@ class Parser:
             return self.parse_local_decl()
 
         # Assignment or expression statement.
-        line = token.line
-        column = token.column
         expr = self.parse_expression()
+        stmt = self.parse_assignment_tail(expr, "assignment")
+        self.expect(";")
+        return stmt
+
+    def parse_assignment_tail(self, expr: ast.Expr, context: str) -> ast.Stmt:
+        line = expr.line
+        column = expr.column
         if self.match("="):
             if not isinstance(expr, (ast.Var, ast.Index, ast.Member)):
-                raise self.error("left side of assignment must be a variable or array element")
+                raise self.error(
+                    f"left side of {context} must be a variable or array element"
+                )
             value = self.parse_expression()
-            self.expect(";")
             return ast.Assign(expr, value, line=line, column=column)
-        self.expect(";")
+        token = self.current()
+        if token.kind == "op" and token.value in COMPOUND_OPS:
+            if not isinstance(expr, (ast.Var, ast.Index, ast.Member)):
+                raise self.error(
+                    f"left side of {context} must be a variable or array element"
+                )
+            self.advance()
+            value = self.parse_expression()
+            return ast.CompoundAssign(
+                expr,
+                COMPOUND_OPS[str(token.value)],
+                value,
+                line=line,
+                column=column,
+            )
         return ast.ExprStmt(expr, line=line, column=column)
 
     def parse_local_decl(self) -> ast.VarDecl:
         type_ = self.expect_type()
         name_token = self.expect_ident_token()
         name = str(name_token.value)
-        array_len: Optional[int] = None
-        if self.match("["):
-            if not self.check("]"):
-                array_len = self.parse_const_int()
-            self.expect("]")
+        has_array = self.check("[")
+        array_len, array_len_expr = self.parse_array_suffix()
         init: Optional[ast.Expr] = None
+        init_list: Optional[list[ast.Expr]] = None
+        init_string: Optional[str] = None
         if self.match("="):
-            init = self.parse_expression()
+            init, init_list, init_string = self.parse_initializer(type_)
         self.expect(";")
+        if has_array and array_len is None and array_len_expr is None:
+            if init_list is not None:
+                array_len = len(init_list)
+            elif init_string is not None:
+                array_len = len(init_string) + 1
+            else:
+                raise self.error("array requires a length or initializer")
         return ast.VarDecl(
             name,
             type_,
             array_len,
-            init,
+            array_len_expr=array_len_expr,
+            init=init,
+            init_list=init_list,
+            init_string=init_string,
+            is_array=has_array,
             line=name_token.line,
             column=name_token.column,
         )
@@ -478,21 +540,31 @@ class Parser:
         type_ = self.expect_type()
         name_token = self.expect_ident_token()
         name = str(name_token.value)
-        array_len: Optional[int] = None
-        if self.match("["):
-            if not self.check("]"):
-                array_len = self.parse_const_int()
-            self.expect("]")
+        has_array = self.check("[")
+        array_len, array_len_expr = self.parse_array_suffix()
         init: Optional[ast.Expr] = None
+        init_list: Optional[list[ast.Expr]] = None
+        init_string: Optional[str] = None
         if self.match("="):
-            init = self.parse_expression()
+            init, init_list, init_string = self.parse_initializer(type_)
         self.expect(";")
+        if has_array and array_len is None and array_len_expr is None:
+            if init_list is not None:
+                array_len = len(init_list)
+            elif init_string is not None:
+                array_len = len(init_string) + 1
+            else:
+                raise self.error("array requires a length or initializer")
         return ast.VarDecl(
             name,
             type_,
             array_len,
-            init,
+            array_len_expr=array_len_expr,
+            init=init,
+            init_list=init_list,
+            init_string=init_string,
             is_const=True,
+            is_array=has_array,
             line=name_token.line,
             column=name_token.column,
         )
@@ -535,19 +607,7 @@ class Parser:
                 init = self.parse_local_decl()
             else:
                 init_expr = self.parse_expression()
-                if self.match("="):
-                    if not isinstance(init_expr, (ast.Var, ast.Index)):
-                        raise self.error("left side of for-init must be a variable or array element")
-                    init = ast.Assign(
-                        init_expr,
-                        self.parse_expression(),
-                        line=init_expr.line,
-                        column=init_expr.column,
-                    )
-                else:
-                    init = ast.ExprStmt(
-                        init_expr, line=init_expr.line, column=init_expr.column
-                    )
+                init = self.parse_assignment_tail(init_expr, "for-init")
                 self.expect(";")
         else:
             self.expect(";")
@@ -560,19 +620,7 @@ class Parser:
         update: Optional[ast.Stmt] = None
         if not self.check(")"):
             update_expr = self.parse_expression()
-            if self.match("="):
-                if not isinstance(update_expr, (ast.Var, ast.Index)):
-                    raise self.error("left side of for-update must be a variable or array element")
-                update = ast.Assign(
-                    update_expr,
-                    self.parse_expression(),
-                    line=update_expr.line,
-                    column=update_expr.column,
-                )
-            else:
-                update = ast.ExprStmt(
-                    update_expr, line=update_expr.line, column=update_expr.column
-                )
+            update = self.parse_assignment_tail(update_expr, "for-update")
         self.expect(")")
         body = self.parse_statement_as_block()
         return ast.For(init, condition, update, body, line=line, column=column)
@@ -587,7 +635,26 @@ class Parser:
     # Expressions
     # ------------------------------------------------------------------
 
-    def parse_expression(self, min_precedence: int = 1) -> ast.Expr:
+    def parse_expression(self) -> ast.Expr:
+        return self.parse_conditional()
+
+    def parse_conditional(self) -> ast.Expr:
+        condition = self.parse_binary(1)
+        if self.check("?"):
+            token = self.advance()
+            then_expr = self.parse_expression()
+            self.expect(":")
+            else_expr = self.parse_conditional()
+            return ast.Conditional(
+                condition,
+                then_expr,
+                else_expr,
+                line=token.line,
+                column=token.column,
+            )
+        return condition
+
+    def parse_binary(self, min_precedence: int = 1) -> ast.Expr:
         left = self.parse_unary()
         while True:
             token = self.current()
@@ -597,7 +664,7 @@ class Parser:
             if precedence < min_precedence:
                 break
             op = str(self.advance().value)
-            right = self.parse_expression(precedence + 1)
+            right = self.parse_binary(precedence + 1)
             left = ast.Binary(
                 op, left, right, line=token.line, column=token.column
             )
@@ -605,7 +672,17 @@ class Parser:
 
     def parse_unary(self) -> ast.Expr:
         token = self.current()
-        if token.kind == "op" and token.value in ("-", "~", "!", "&"):
+        if token.kind == "op" and token.value in ("++", "--"):
+            self.advance()
+            operand = self.parse_unary()
+            return ast.IncDec(
+                operand,
+                str(token.value),
+                prefix=True,
+                line=token.line,
+                column=token.column,
+            )
+        if token.kind == "op" and token.value in ("-", "+", "~", "!", "&"):
             self.advance()
             operand = self.parse_unary()
             if token.value == "&":
@@ -665,12 +742,23 @@ class Parser:
                         args.append(self.parse_expression())
                         if not self.match(","):
                             break
+                        if self.check(")"):
+                            break
                 self.expect(")")
                 expr = ast.Call(
                     expr.name,
                     args,
                     line=expr.line,
                     column=expr.column,
+                )
+            elif self.check("++") or self.check("--"):
+                op = self.advance()
+                expr = ast.IncDec(
+                    expr,
+                    str(op.value),
+                    prefix=False,
+                    line=op.line,
+                    column=op.column,
                 )
             else:
                 break
@@ -692,9 +780,8 @@ class Parser:
             )
 
         if token.kind == "string":
-            self.advance()
             return ast.StringLiteral(
-                str(token.value), line=token.line, column=token.column
+                self.parse_string_value(), line=token.line, column=token.column
             )
 
         if token.kind == "keyword" and token.value in ("true", "false"):
@@ -705,7 +792,7 @@ class Parser:
                 column=token.column,
             )
 
-        if token.kind in ("ident", "keyword"):
+        if token.kind == "ident":
             self.advance()
             return ast.Var(
                 str(token.value), line=token.line, column=token.column

@@ -32,7 +32,7 @@ is still unreachable, so an unused module costs neither code nor RAM.
 
 `&array` yields the base **nibble address** of a RAM array. A `char` occupies
 two consecutive nibbles, so byte strings advance by 2 per character. String
-modules use `0xFF` as the terminator, matching flash strings and `uart_puts`.
+modules use `0x00` as the terminator, matching flash strings and `uart_puts`.
 
 ## Why some helpers are builtins
 
@@ -124,7 +124,7 @@ the rest of `lib/uart.badge`, configure the UART with `uart_route()` and
 |---|---|---|
 | `uart_init(baud)` | `void` | Baud index `0..7`; `3` = 9600 |
 | `uart_available()` | `nibble` | Bytes waiting, saturating at 15 |
-| `uart_puts(s)` / `puts(s)` | `void` | Stream a flash string until `0xFF` |
+| `uart_puts(s)` / `puts(s)` | `void` | Stream a flash string until `0x00` |
 | `uart_write(addr, len)` | `void` | Send `len` bytes (`1..15`) from a RAM `char[]`; pass `&buf` |
 | `uart_putc(c)` / `putchar(c)` | `void` | Send one byte |
 | `uart_getc()` | `char` | Wait for and return one byte |
@@ -295,7 +295,7 @@ two consecutive nibbles.
 
 ## Strings
 
-`lib/string.badge` handles RAM byte strings terminated by `0xFF`.
+`lib/string.badge` handles RAM byte strings terminated by `0x00`.
 
 | Call | Notes |
 |---|---|
@@ -319,7 +319,7 @@ two consecutive nibbles.
 Buffer sizes: `dec16` needs 6 bytes (5 digits plus terminator), `dec32` needs
 11 bytes, `hex16` needs 5 bytes, and `hex32` needs 9 bytes. `str_from_*`
 returns the number of digits written and always terminates the buffer with
-`0xFF`.
+`0x00`.
 
 ## Math
 

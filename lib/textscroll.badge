@@ -19,7 +19,7 @@ fn void text_scroll_once(char base, flashptr s, nibble divider) {
     display_show(base);
 
     c = flash_next(&s);
-    while (c != 255) {
+    while (c != 0) {
         col = 0;
         while (col < 5) {
             display_shift_left(base);
@@ -45,7 +45,7 @@ fn void text_scroll_loop(char base, flashptr s, nibble divider) {
     display_show(base);
     while (1) {
         c = flash_next(&s);
-        if (c == 255) {
+        if (c == 0) {
             s = start;
             c = flash_next(&s);
         }

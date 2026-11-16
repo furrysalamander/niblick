@@ -23,6 +23,13 @@ Fields are accessed with `.`. Struct values can be assigned, passed to
 functions by value, and returned from functions. A returned struct can be used
 directly through a field, for example `make_point().x`.
 
+Scalar fields can be initialized in declaration order. Missing fields are
+zero-initialized:
+
+```c
+Point origin = { 3, 4 };
+```
+
 ## Layout
 
 Fields are laid out in declaration order, low nibble first. Each field starts
@@ -61,7 +68,7 @@ are unused.
 - struct fields that are arrays
 - nested struct fields
 - whole-struct comparison
-- aggregate initializers such as `Point p = { 1, 2 };`
+- nested aggregate initializers
 - `const` structs
 - structs in flash tables
 - struct names declared in one file and used in another

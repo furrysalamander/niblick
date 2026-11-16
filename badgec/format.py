@@ -21,6 +21,7 @@ from .types import (
     I8,
     U4,
     U8,
+    VOID,
     StructType,
     Type,
     common_type,
@@ -534,6 +535,38 @@ class PrintExpander:
                 return type_for(operand.ram_size, True)
             operand = self.infer_type(expr.operand)
             return U4 if operand is BOOL else operand
+        if isinstance(expr, ast.Conditional):
+            then_type = self.infer_type(expr.then_expr)
+            else_type = self.infer_type(expr.else_expr)
+            if then_type is VOID or else_type is VOID:
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: ternary branches "
+                    "must produce a value"
+                )
+            if isinstance(then_type, StructType) or isinstance(else_type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: ternary branches "
+                    "cannot be struct values"
+                )
+            if then_type.is_float or else_type.is_float:
+                if (
+                    then_type.is_float
+                    and else_type.is_float
+                    and then_type is not else_type
+                ):
+                    raise BadgeTypeError(
+                        f"{location(self.filename, expr.line)}: mixed float types "
+                        f"{then_type} and {else_type}; use an explicit cast"
+                    )
+                return then_type if then_type.is_float else else_type
+            if then_type is FLASHPTR or else_type is FLASHPTR:
+                if then_type is FLASHPTR and else_type is FLASHPTR:
+                    return FLASHPTR
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: ternary branches "
+                    "must both be flash pointers"
+                )
+            return self._common_expr_type(expr.then_expr, expr.else_expr)
         if isinstance(expr, ast.AddressOf):
             return U8
         if isinstance(expr, ast.Binary):

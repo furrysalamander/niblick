@@ -87,7 +87,7 @@ fn main() {
 
         p = message;
         len = 0;
-        while (flash_next(&p) != 255) {
+        while (flash_next(&p) != 0) {
             len = len + 1;
         }
 
@@ -99,7 +99,7 @@ fn main() {
 
             p = message;
             c = flash_next(&p);
-            while (c != 255) {
+            while (c != 0) {
                 w5500_write(2, ahi, alo, c);
                 alo = alo + 1;
                 if (alo == 0) {

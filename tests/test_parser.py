@@ -58,17 +58,16 @@ def test_parser_reports_unknown_syntax() -> None:
         parse("fn main() { nibble x = ; }", "bad.badge")
 
 
-def test_parser_accepts_c_style_function_definition() -> None:
-    program = parse("nibble add(nibble a, nibble b) { return a + b; }", "test.badge")
-    assert program.functions[0].name == "add"
-    assert program.functions[0].return_type.name == "nibble"
+def test_parser_rejects_c_style_function_definition() -> None:
+    with pytest.raises(BadgeSyntaxError, match="C-style function definitions"):
+        parse("nibble add(nibble a, nibble b) { return a + b; }", "test.badge")
 
 
 def test_parser_accepts_extern_function_declarations() -> None:
     program = parse(
         """
         extern fn char convert(char value);
-        extern uint16_t read16(nibble addr);
+        extern fn uint16_t read16(nibble addr);
         fn main() { }
         """,
         "test.badge",

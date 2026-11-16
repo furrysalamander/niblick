@@ -11,7 +11,7 @@ fn main() {
     p = message;
     while (1) {
         c = flash_next(&p);
-        if (c == 0xFF) {
+        if (c == 0x00) {
             break;
         }
         count = count + 1;

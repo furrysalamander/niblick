@@ -280,7 +280,7 @@ def test_print_signed_and_bool_types(tmp_path: Path) -> None:
             b = -20000;
             c = -100000;
             flag = 2;
-            print("{} {} {} {} {}\n", a, b, c, flag, b < a);
+            print("{} {} {} {} {}\\n", a, b, c, flag, b < a);
         }
         """,
     )

@@ -14,7 +14,7 @@ fn nibble uart_available() {
 fn void uart_puts(flashptr s) {
     char c;
     c = flash_next(&s);
-    while (c != 255) {
+    while (c != 0) {
         uart_putc(c);
         c = flash_next(&s);
     }
@@ -230,7 +230,7 @@ fn void uart_print_dec32_signed(int32_t v) {
 fn void uart_print_str(char addr) {
     char c;
     c = peek8(addr);
-    while (c != 255) {
+    while (c != 0) {
         uart_putc(c);
         addr = addr + 2;
         c = peek8(addr);
@@ -279,7 +279,7 @@ fn nibble uart_read_nibble() {
 }
 
 // Read bytes until CR or LF.  Returns the number of bytes stored.  The
-// buffer is terminated with 0xFF and is not echoed.
+// buffer is terminated with 0x00 and is not echoed.
 fn nibble uart_read_line(char addr, nibble max) {
     nibble count;
     char c;
@@ -293,6 +293,6 @@ fn nibble uart_read_line(char addr, nibble max) {
         }
         c = uart_getc();
     }
-    poke8(addr, 255);
+    poke8(addr, 0);
     return count;
 }

@@ -208,6 +208,8 @@ def _initializers(decl: ast.GlobalDecl) -> list[ast.Expr]:
         exprs.append(decl.init)
     if decl.init_list is not None:
         exprs.extend(decl.init_list)
+    if decl.array_len_expr is not None:
+        exprs.append(decl.array_len_expr)
     return exprs
 
 

@@ -285,6 +285,7 @@ class Compiler:
         self.globals: dict[str, VarSymbol] = {}
         self.functions: dict[str, FunctionSymbol] = {}
         self.global_inits: list[tuple[VarSymbol, ast.Expr]] = []
+        self.global_aggregate_inits: list[ast.Stmt] = []
         self.flash: list[FlashItem] = []
         self.flash_counter = 0
         self.label_counter = 0
@@ -376,6 +377,7 @@ class Compiler:
             if not str(source.path).endswith("float32.asm"):
                 continue
             text = source.text
+            names: tuple[str, ...]
             if use_mul:
                 names = ("div-special", "div-calc")
             elif use_div:
@@ -1074,6 +1076,33 @@ class Compiler:
                 return None
             return self._wrap_value(value, target), target
 
+        if isinstance(expr, ast.Conditional):
+            condition = self.eval_const(expr.condition, scope)
+            if condition is None:
+                return None
+            result_type = self.infer_type(expr, scope or Scope())
+            if expected is not None:
+                if is_integer(result_type) and is_integer(expected):
+                    result_type = widen_type(result_type, expected)
+                elif expected is BOOL:
+                    result_type = BOOL
+                elif is_float_type(expected):
+                    if not is_float_type(result_type):
+                        return None
+                    result_type = expected
+            selected = expr.then_expr if condition[0] else expr.else_expr
+            folded = self.eval_const(selected, scope, result_type)
+            if folded is None:
+                return None
+            value, typ = folded
+            if result_type is BOOL:
+                return (1 if value else 0), BOOL
+            if is_integer(result_type) and is_integer(typ):
+                return self._wrap_value(value, result_type), result_type
+            if is_float_type(result_type) and is_float_type(typ):
+                return value, result_type
+            return folded
+
         if isinstance(expr, ast.Unary):
             if expr.op == "&":
                 return None
@@ -1103,6 +1132,8 @@ class Compiler:
                 result_type = type_for(width, True)
                 return self._wrap_value(-value, result_type), result_type
 
+            if expr.op == "+":
+                return self.eval_const(expr.operand, scope, expected)
             folded = self.eval_const(expr.operand, scope)
             if folded is None:
                 return None
@@ -1223,7 +1254,7 @@ class Compiler:
             decl
             for decl in self.program.globals
             if decl.is_const
-            and decl.array_len is None
+            and not decl.is_array
             and decl.init is not None
             and (is_integer(decl.type) or decl.type is BOOL or decl.type.is_float)
         ]
@@ -1252,6 +1283,170 @@ class Compiler:
                 best = max(best, typ.ram_size)
         return best
 
+    def resolve_array_len(
+        self,
+        array_len: Optional[int],
+        array_len_expr: Optional[ast.Expr],
+        scope: Optional[Scope],
+        name: str,
+        line: int,
+    ) -> Optional[int]:
+        if array_len_expr is not None:
+            folded = self.eval_const(array_len_expr, scope)
+            if folded is None:
+                raise BadgeCompileError(
+                    f"{location(self.filename, line)}: array length for "
+                    f"{name!r} must be a compile-time integer constant"
+                )
+            value, typ = folded
+            if not is_integer(typ):
+                raise BadgeTypeError(
+                    f"{location(self.filename, line)}: array length for "
+                    f"{name!r} must be an integer"
+                )
+            array_len = value
+        if array_len is None:
+            return None
+        if array_len <= 0:
+            raise BadgeCompileError(
+                f"{location(self.filename, line)}: array length for {name!r} "
+                "must be positive"
+            )
+        return int(array_len)
+
+    def resolve_local_array_lengths(self) -> None:
+        def walk(stmt: ast.Stmt) -> None:
+            if isinstance(stmt, ast.VarDecl):
+                stmt.array_len = self.resolve_array_len(
+                    stmt.array_len,
+                    stmt.array_len_expr,
+                    None,
+                    stmt.name,
+                    stmt.line,
+                )
+            elif isinstance(stmt, ast.Block):
+                for child in stmt.statements:
+                    walk(child)
+            elif isinstance(stmt, ast.If):
+                walk(stmt.then_block)
+                if stmt.else_block is not None:
+                    walk(stmt.else_block)
+            elif isinstance(stmt, ast.While):
+                walk(stmt.body)
+            elif isinstance(stmt, ast.For):
+                if stmt.init is not None:
+                    walk(stmt.init)
+                walk(stmt.body)
+
+        for fn in self.program.functions:
+            if not fn.is_extern:
+                walk(fn.body)
+
+    def build_aggregate_inits(
+        self,
+        name: str,
+        type_: Type,
+        is_array: bool,
+        array_len: Optional[int],
+        init_list: Optional[list[ast.Expr]],
+        init_string: Optional[str],
+        line: int,
+        column: int,
+    ) -> list[ast.Stmt]:
+        base = ast.Var(name, line=line, column=column)
+        if init_string is not None:
+            if not is_array or type_ is not U8:
+                raise BadgeTypeError(
+                    f"{location(self.filename, line)}: string initializer "
+                    f"requires a char array"
+                )
+            values: list[ast.Expr] = [
+                ast.Number(ord(ch) & 0xFF, line=line, column=column)
+                for ch in init_string
+            ]
+            values.append(ast.Number(0, line=line, column=column))
+            if array_len is None:
+                array_len = len(values)
+            if len(values) > array_len:
+                raise BadgeCompileError(
+                    f"{location(self.filename, line)}: string initializer for "
+                    f"{name!r} does not fit in {array_len} elements"
+                )
+            while len(values) < array_len:
+                values.append(ast.Number(0, line=line, column=column))
+            return [
+                ast.Assign(
+                    ast.Index(base, ast.Number(index, line=line, column=column)),
+                    value,
+                    line=line,
+                    column=column,
+                )
+                for index, value in enumerate(values)
+            ]
+
+        if init_list is None:
+            return []
+
+        if not is_array and not isinstance(type_, StructType):
+            raise BadgeTypeError(
+                f"{location(self.filename, line)}: brace initializer requires "
+                "an array or struct"
+            )
+
+        if isinstance(type_, StructType) and not is_array:
+            fields = type_.fields
+            if len(init_list) > len(fields):
+                raise BadgeCompileError(
+                    f"{location(self.filename, line)}: too many initializers "
+                    f"for struct {name!r}"
+                )
+            values = list(init_list)
+            while len(values) < len(fields):
+                values.append(ast.Number(0, line=line, column=column))
+            return [
+                ast.Assign(
+                    ast.Member(base, field.name, line=line, column=column),
+                    value,
+                    line=line,
+                    column=column,
+                )
+                for field, value in zip(fields, values)
+            ]
+
+        if not is_array:
+            raise BadgeTypeError(
+                f"{location(self.filename, line)}: brace initializer requires "
+                "an array or struct"
+            )
+
+        if array_len is None:
+            array_len = len(init_list)
+        if len(init_list) > array_len:
+            raise BadgeCompileError(
+                f"{location(self.filename, line)}: too many initializers for "
+                f"{name!r}"
+            )
+
+        values = list(init_list)
+        if isinstance(type_, StructType):
+            if len(values) != array_len:
+                raise BadgeCompileError(
+                    f"{location(self.filename, line)}: array of structs "
+                    f"{name!r} requires all elements initialized"
+                )
+        else:
+            while len(values) < array_len:
+                values.append(ast.Number(0, line=line, column=column))
+        return [
+            ast.Assign(
+                ast.Index(base, ast.Number(index, line=line, column=column)),
+                value,
+                line=line,
+                column=column,
+            )
+            for index, value in enumerate(values)
+        ]
+
     def prepare_globals(self) -> None:
         self.prepare_const_globals()
         for decl in self.program.globals:
@@ -1260,19 +1455,33 @@ class Compiler:
                     f"{location(self.filename, decl.line)}: duplicate global {decl.name!r}"
                 )
 
+            decl.array_len = self.resolve_array_len(
+                decl.array_len,
+                decl.array_len_expr,
+                None,
+                decl.name,
+                decl.line,
+            )
+
+            if decl.type is VOID:
+                raise BadgeTypeError(
+                    f"{location(self.filename, decl.line)}: global {decl.name!r} "
+                    "cannot have type void"
+                )
+
             if isinstance(decl.type, StructType):
                 if decl.is_const:
                     raise BadgeTypeError(
                         f"{location(self.filename, decl.line)}: const struct "
                         f"{decl.name!r} is not supported"
                     )
-                if decl.init_list is not None or decl.init_string is not None:
+                if decl.init_string is not None:
                     raise BadgeCompileError(
-                        f"{location(self.filename, decl.line)}: struct brace "
-                        "initializers are not supported"
+                        f"{location(self.filename, decl.line)}: string initializer "
+                        f"requires a char array"
                     )
 
-            if decl.is_const and decl.array_len is None:
+            if decl.is_const and not decl.is_array:
                 if not (is_integer(decl.type) or decl.type is BOOL or decl.type.is_float):
                     raise BadgeTypeError(
                         f"{location(self.filename, decl.line)}: scalar const "
@@ -1294,7 +1503,7 @@ class Compiler:
                 )
                 continue
 
-            if decl.is_const and decl.array_len is not None:
+            if decl.is_const and decl.is_array:
                 label = self.new_flash_label()
                 values = self.constant_flash_values(decl)
                 self.flash.append(
@@ -1311,6 +1520,11 @@ class Compiler:
                 )
                 continue
 
+            if decl.is_array and decl.array_len is None:
+                raise BadgeCompileError(
+                    f"{location(self.filename, decl.line)}: array {decl.name!r} "
+                    "requires a length or initializer"
+                )
             size = (decl.array_len or 1) * decl.type.ram_size
             address = self.mem.alloc(size, decl.name, self.filename, decl.line)
             symbol = VarSymbol(
@@ -1324,14 +1538,24 @@ class Compiler:
             )
             self.globals[decl.name] = symbol
             if decl.init is not None:
-                if decl.array_len is not None:
+                if decl.is_array:
                     raise BadgeCompileError(
-                        f"{location(self.filename, decl.line)}: array initializers are not supported"
+                        f"{location(self.filename, decl.line)}: array initializer "
+                        f"for {decl.name!r} must use braces or a string"
                     )
                 self.global_inits.append((symbol, decl.init))
-            elif decl.init_list is not None:
-                raise BadgeCompileError(
-                    f"{location(self.filename, decl.line)}: array initializers are not supported"
+            elif decl.init_list is not None or decl.init_string is not None:
+                self.global_aggregate_inits.extend(
+                    self.build_aggregate_inits(
+                        decl.name,
+                        decl.type,
+                        decl.is_array,
+                        decl.array_len,
+                        decl.init_list,
+                        decl.init_string,
+                        decl.line,
+                        decl.column,
+                    )
                 )
 
         size = self._max_struct_size()
@@ -1346,14 +1570,22 @@ class Compiler:
         values: list[int] = []
         if decl.init_string is not None:
             values = [ord(ch) & 0xFF for ch in decl.init_string]
-            values.append(0xFF)
+            values.append(0x00)
         elif decl.init_list is not None:
             for expr in decl.init_list:
-                if not isinstance(expr, ast.Number):
+                folded = self.eval_const(expr, None, decl.type)
+                if folded is None:
                     raise BadgeCompileError(
-                        f"{location(self.filename, expr.line)}: flash array initializers must be integer literals"
+                        f"{location(self.filename, expr.line)}: flash array "
+                        "initializers must be compile-time constants"
                     )
-                values.append(int(expr.value) & mask)
+                value, typ = folded
+                if not (is_integer(typ) or typ is BOOL):
+                    raise BadgeTypeError(
+                        f"{location(self.filename, expr.line)}: flash array "
+                        "initializers must be integers"
+                    )
+                values.append(self._wrap_value(value, decl.type) & mask)
         else:
             values = [0] * (decl.array_len or 0)
 
@@ -1366,6 +1598,7 @@ class Compiler:
         return values
 
     def prepare_functions(self) -> None:
+        self.resolve_local_array_lengths()
         for decl in self.program.functions:
             if decl.name in self.functions:
                 raise BadgeCompileError(
@@ -1411,7 +1644,7 @@ class Compiler:
         def walk_stmt(stmt: ast.Stmt) -> None:
             nonlocal size
             if isinstance(stmt, ast.VarDecl):
-                if not (stmt.is_const and stmt.array_len is None):
+                if not (stmt.is_const and not stmt.is_array):
                     size += (stmt.array_len or 1) * stmt.type.ram_size
             elif isinstance(stmt, ast.Block):
                 for child in stmt.statements:
@@ -2017,6 +2250,7 @@ class Compiler:
                     max(1, expr.line),
                 )
                 if isinstance(symbol.type, StructType):
+                    assert symbol.address is not None
                     self.compile_struct_expr(expr, scope)
                     self._emit_struct_copy_regs_to_static(
                         symbol.type.ram_size, symbol.address
@@ -2025,6 +2259,8 @@ class Compiler:
                     typ = self.compile_expr(expr, scope, symbol.type)
                     self.coerce(typ, symbol.type, expr.line)
                     self.store_symbol(symbol, expr.line)
+            for init_stmt in self.global_aggregate_inits:
+                self.compile_stmt(init_stmt, scope)
 
         self.compile_block(fn.decl.body, scope, tail=False)
 
@@ -2139,7 +2375,13 @@ class Compiler:
             else:
                 self.store_lvalue(stmt.target, scope, stmt.line)
 
+        elif isinstance(stmt, ast.CompoundAssign):
+            self.compile_compound_assign(stmt, scope)
+
         elif isinstance(stmt, ast.ExprStmt):
+            if isinstance(stmt.expr, ast.IncDec):
+                self.compile_incdec(stmt.expr, scope)
+                return
             if isinstance(stmt.expr, ast.Call):
                 fn = self.current_function
                 callee = self.functions.get(stmt.expr.name)
@@ -2306,13 +2548,24 @@ class Compiler:
             raise BadgeCompileError(
                 f"{location(self.filename, stmt.line)}: duplicate local {stmt.name!r}"
             )
-        if isinstance(stmt.type, StructType):
-            if stmt.is_const:
-                raise BadgeTypeError(
-                    f"{location(self.filename, stmt.line)}: const struct "
-                    f"{stmt.name!r} is not supported"
-                )
-        if stmt.is_const and stmt.array_len is None:
+        stmt.array_len = self.resolve_array_len(
+            stmt.array_len,
+            stmt.array_len_expr,
+            scope,
+            stmt.name,
+            stmt.line,
+        )
+        if isinstance(stmt.type, StructType) and stmt.is_const:
+            raise BadgeTypeError(
+                f"{location(self.filename, stmt.line)}: const struct "
+                f"{stmt.name!r} is not supported"
+            )
+        if stmt.is_const and stmt.is_array:
+            raise BadgeTypeError(
+                f"{location(self.filename, stmt.line)}: local const array "
+                f"{stmt.name!r} is not supported"
+            )
+        if stmt.is_const and not stmt.is_array:
             if not (is_integer(stmt.type) or stmt.type is BOOL or stmt.type.is_float):
                 raise BadgeTypeError(
                     f"{location(self.filename, stmt.line)}: scalar const "
@@ -2340,6 +2593,11 @@ class Compiler:
             if self.current_function is not None:
                 self.current_function.locals.append(symbol)
             return
+        if stmt.is_array and stmt.array_len is None:
+            raise BadgeCompileError(
+                f"{location(self.filename, stmt.line)}: array {stmt.name!r} "
+                "requires a length or initializer"
+            )
         size = (stmt.array_len or 1) * stmt.type.ram_size
         address = self.alloc_local(size, stmt.name, self.filename, stmt.line)
         symbol = VarSymbol(
@@ -2354,11 +2612,13 @@ class Compiler:
         if self.current_function is not None:
             self.current_function.locals.append(symbol)
         if stmt.init is not None:
-            if stmt.array_len is not None:
+            if stmt.is_array:
                 raise BadgeCompileError(
-                    f"{location(self.filename, stmt.line)}: local array initializers are not supported"
+                    f"{location(self.filename, stmt.line)}: array initializer "
+                    f"for {stmt.name!r} must use braces or a string"
                 )
             if isinstance(stmt.type, StructType):
+                assert symbol.address is not None
                 self.compile_struct_expr(stmt.init, scope)
                 self._emit_struct_copy_regs_to_static(
                     stmt.type.ram_size, symbol.address
@@ -2367,6 +2627,101 @@ class Compiler:
             typ = self.compile_expr(stmt.init, scope, stmt.type)
             self.coerce(typ, stmt.type, stmt.line)
             self.store_symbol(symbol, stmt.line)
+            return
+        if stmt.init_list is not None or stmt.init_string is not None:
+            for init_stmt in self.build_aggregate_inits(
+                stmt.name,
+                stmt.type,
+                stmt.is_array,
+                stmt.array_len,
+                stmt.init_list,
+                stmt.init_string,
+                stmt.line,
+                stmt.column,
+            ):
+                self.compile_stmt(init_stmt, scope)
+
+    def _expr_has_side_effect(self, expr: ast.Expr) -> bool:
+        if isinstance(expr, (ast.Call, ast.IncDec)):
+            return True
+        for expr_field in dataclasses.fields(expr):
+            value = getattr(expr, expr_field.name)
+            if isinstance(value, ast.Expr) and self._expr_has_side_effect(value):
+                return True
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr) and self._expr_has_side_effect(item):
+                        return True
+        return False
+
+    def _require_pure_lvalue(self, target: ast.Expr, line: int) -> None:
+        if self._expr_has_side_effect(target):
+            raise BadgeCompileError(
+                f"{location(self.filename, line)}: compound assignment and "
+                "increment/decrement require a side-effect-free lvalue"
+            )
+
+    def compile_compound_assign(
+        self, stmt: ast.CompoundAssign, scope: Scope
+    ) -> None:
+        target_type = self.lvalue_type(stmt.target, scope)
+        if not (
+            is_integer(target_type)
+            or target_type is BOOL
+            or target_type.is_float
+        ):
+            raise BadgeTypeError(
+                f"{location(self.filename, stmt.line)}: compound assignment "
+                "requires an integer, bool, or float target"
+            )
+        self._require_pure_lvalue(stmt.target, stmt.line)
+        value = ast.Binary(
+            stmt.op,
+            stmt.target,
+            stmt.value,
+            line=stmt.line,
+            column=stmt.column,
+        )
+        self.compile_stmt(
+            ast.Assign(
+                stmt.target,
+                value,
+                line=stmt.line,
+                column=stmt.column,
+            ),
+            scope,
+        )
+
+    def compile_incdec(self, expr: ast.IncDec, scope: Scope) -> None:
+        target_type = self.lvalue_type(expr.target, scope)
+        if not (
+            is_integer(target_type)
+            or target_type is BOOL
+            or target_type.is_float
+        ):
+            raise BadgeTypeError(
+                f"{location(self.filename, expr.line)}: increment/decrement "
+                "requires an integer, bool, or float target"
+            )
+        self._require_pure_lvalue(expr.target, expr.line)
+        op = "+" if expr.op == "++" else "-"
+        one = ast.Number(1, line=expr.line, column=expr.column)
+        value = ast.Binary(
+            op,
+            expr.target,
+            one,
+            line=expr.line,
+            column=expr.column,
+        )
+        self.compile_stmt(
+            ast.Assign(
+                expr.target,
+                value,
+                line=expr.line,
+                column=expr.column,
+            ),
+            scope,
+        )
 
     def compile_if(self, stmt: ast.If, scope: Scope, tail: bool) -> None:
         end_label = self.new_label("endif")
@@ -2474,6 +2829,8 @@ class Compiler:
                     f"cannot use struct {natural.name} as {expected}"
                 )
             return self.compile_struct_expr(expr, scope)
+        if isinstance(expr, ast.Conditional):
+            return self.compile_conditional(expr, scope, expected, natural)
         if isinstance(expr, (ast.Cast, ast.ToType)) and (
             is_float_type(expr.type)
             or is_float_type(self.infer_type(expr.operand, scope))
@@ -2510,7 +2867,8 @@ class Compiler:
 
         if isinstance(expr, ast.FloatLiteral):
             typ = expected if expected is not None and is_float_type(expected) else F32
-            return self._pack_float(expr.value, typ), typ
+            self._emit_float_bits(expr.value, typ)
+            return typ
 
         if isinstance(expr, ast.Number):
             value = int(expr.value)
@@ -2639,7 +2997,7 @@ class Compiler:
             "+", "-", "&", "|", "^", "<<", ">>", "*", "/", "%"
         ):
             return self._compile_qword_binary(expr, scope, expected)
-        if isinstance(expr, ast.Unary) and expr.op in ("-", "~"):
+        if isinstance(expr, ast.Unary) and expr.op in ("-", "~", "+"):
             return self._compile_qword_unary(expr, scope, expected)
 
         if not self._is_qword(natural):
@@ -2926,6 +3284,11 @@ class Compiler:
                 f"{source} to {target}"
             )
 
+        if isinstance(expr, ast.Unary) and expr.op == "+" and natural.is_float:
+            typ = expected if expected is not None and is_float_type(expected) else natural
+            self.compile_expr(expr.operand, scope, typ)
+            return typ
+
         if isinstance(expr, ast.Unary) and expr.op == "-" and natural.is_float:
             typ = expected if expected is not None and is_float_type(expected) else natural
             self.compile_expr(expr.operand, scope, typ)
@@ -3098,6 +3461,14 @@ class Compiler:
         scope: Scope,
         expected: Optional[Type],
     ) -> Type:
+        if expr.op == "+":
+            target = (
+                expected
+                if expected is not None and self._is_qword(expected)
+                else type_for(16, False)
+            )
+            return self.compile_qword_expr(expr.operand, scope, target)
+
         literal = self._literal_value(expr)
         if literal is not None:
             if literal < -(1 << 63) or literal > (1 << 64) - 1:
@@ -3142,6 +3513,9 @@ class Compiler:
     ) -> Type:
         if expr.op == "&":
             return self.compile_address_of(ast.AddressOf(expr.operand, line=expr.line), scope)
+
+        if expr.op == "+":
+            return self.compile_expr(expr.operand, scope, expected)
 
         if expr.op == "!":
             typ = self.compile_expr(expr.operand, scope)
@@ -3232,6 +3606,42 @@ class Compiler:
         self.emit(f"MOV R1, {symbol.address & 0xF}")
         self.emit(f"MOV R2, {(symbol.address >> 4) & 0xF}")
         return U8
+
+    def compile_conditional(
+        self,
+        expr: ast.Conditional,
+        scope: Scope,
+        expected: Optional[Type],
+        natural: Type,
+    ) -> Type:
+        result_type = natural
+        if expected is not None:
+            if expected is BOOL:
+                result_type = BOOL
+            elif is_integer(result_type) and is_integer(expected):
+                result_type = widen_type(result_type, expected)
+            elif is_float_type(expected):
+                if is_float_type(result_type) and result_type is not expected:
+                    raise BadgeTypeError(
+                        f"{location(self.filename, expr.line)}: mixed float types "
+                        f"{result_type} and {expected}; use an explicit cast"
+                    )
+                result_type = expected
+
+        condition = self.eval_const(expr.condition, scope)
+        if condition is not None:
+            selected = expr.then_expr if condition[0] else expr.else_expr
+            return self.compile_expr(selected, scope, result_type)
+
+        else_label = self.new_label("ternary_else")
+        end_label = self.new_label("ternary_end")
+        self.emit_jump_if_false(expr.condition, else_label, scope)
+        self.compile_expr(expr.then_expr, scope, result_type)
+        self.emit(f"GOTO {end_label}")
+        self.emit(f"{else_label}:")
+        self.compile_expr(expr.else_expr, scope, result_type)
+        self.emit(f"{end_label}:")
+        return result_type
 
     def compile_binary(
         self,
@@ -4642,6 +5052,7 @@ class Compiler:
         self._record_call_temp()
         for arg, param in zip(expr.args, fn.params):
             if isinstance(param.type, StructType):
+                assert param.address is not None
                 self.compile_struct_expr(arg, scope)
                 self._emit_struct_copy_regs_to_static(
                     param.type.ram_size, param.address
@@ -5998,6 +6409,43 @@ class Compiler:
                     self._common_expr_type(expr.left, expr.right, scope)
                 )
             return self._common_expr_type(expr.left, expr.right, scope)
+        if isinstance(expr, ast.Conditional):
+            then_type = self.infer_type(expr.then_expr, scope)
+            else_type = self.infer_type(expr.else_expr, scope)
+            if then_type is VOID or else_type is VOID:
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: ternary branches "
+                    "must produce a value"
+                )
+            if isinstance(then_type, StructType) or isinstance(else_type, StructType):
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: ternary branches "
+                    "cannot be struct values"
+                )
+            if then_type.is_float or else_type.is_float:
+                if (
+                    then_type.is_float
+                    and else_type.is_float
+                    and then_type is not else_type
+                ):
+                    raise BadgeTypeError(
+                        f"{location(self.filename, expr.line)}: mixed float types "
+                        f"{then_type} and {else_type}; use an explicit cast"
+                    )
+                return then_type if then_type.is_float else else_type
+            if then_type is FLASHPTR or else_type is FLASHPTR:
+                if then_type is FLASHPTR and else_type is FLASHPTR:
+                    return FLASHPTR
+                raise BadgeTypeError(
+                    f"{location(self.filename, expr.line)}: ternary branches "
+                    "must both be flash pointers"
+                )
+            return self._common_expr_type(expr.then_expr, expr.else_expr, scope)
+        if isinstance(expr, ast.IncDec):
+            raise BadgeCompileError(
+                f"{location(self.filename, expr.line)}: increment/decrement "
+                "must be a statement"
+            )
         if isinstance(expr, ast.Call):
             if expr.name in BUILTINS:
                 return BUILTINS[expr.name]
@@ -6022,7 +6470,7 @@ class Compiler:
     def new_flash_string(self, value: str) -> str:
         label = self.new_flash_label()
         self.flash.append(
-            FlashItem(label, U8, [ord(ch) & 0xFF for ch in value] + [0xFF], string_value=value)
+            FlashItem(label, U8, [ord(ch) & 0xFF for ch in value] + [0x00], string_value=value)
         )
         return label
 

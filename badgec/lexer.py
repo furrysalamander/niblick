@@ -15,6 +15,7 @@ KEYWORDS = {
     "u8",
     "i8",
     "char",
+    "byte",
     "uint8_t",
     "int8_t",
     "int_least8_t",
@@ -78,6 +79,18 @@ KEYWORDS = {
 
 # Longest operators first.
 OPERATORS = [
+    "<<=",
+    ">>=",
+    "+=",
+    "-=",
+    "*=",
+    "/=",
+    "%=",
+    "&=",
+    "|=",
+    "^=",
+    "++",
+    "--",
     "<<",
     ">>",
     "<=",
@@ -101,7 +114,15 @@ OPERATORS = [
     ">",
 ]
 
-PUNCTUATION = set("(){}[],;.")
+PUNCTUATION = set("(){}[],;.?:")
+
+
+def _is_identifier_start(ch: str) -> bool:
+    return bool(ch) and ch.isascii() and (ch.isalpha() or ch == "_")
+
+
+def _is_identifier_part(ch: str) -> bool:
+    return bool(ch) and ch.isascii() and (ch.isalnum() or ch == "_")
 
 
 @dataclass
@@ -172,7 +193,7 @@ class Lexer:
 
             line, column = self.line, self.column
 
-            if ch.isalpha() or ch == "_":
+            if _is_identifier_start(ch):
                 start_line, start_column = self.line, self.column
                 ident = self.read_identifier()
                 if ident == "asm":
@@ -190,6 +211,13 @@ class Lexer:
                             self.advance()
                         text: list[str] = []
                         while self.pos < len(self.source):
+                            if self.peek() == ";":
+                                while (
+                                    self.pos < len(self.source)
+                                    and self.peek() != "\n"
+                                ):
+                                    text.append(self.advance())
+                                continue
                             if self.peek() == "$" and self.peek(1) == "{":
                                 text.append(self.advance())
                                 text.append(self.advance())
@@ -216,7 +244,7 @@ class Lexer:
                 self.add(kind, ident, start_line, start_column)
                 continue
 
-            if ch.isdigit():
+            if ch.isdigit() or (ch == "." and self.peek(1).isdigit()):
                 value = self.read_number()
                 kind = "float" if isinstance(value, float) else "number"
                 self.add(kind, value, line, column)
@@ -253,53 +281,106 @@ class Lexer:
 
     def read_identifier(self) -> str:
         start = self.pos
-        while self.peek() and (self.peek().isalnum() or self.peek() == "_"):
+        while self.peek() and _is_identifier_part(self.peek()):
             self.advance()
         return self.source[start:self.pos]
 
+    def read_digits(self, valid) -> str:
+        digits: list[str] = []
+        last_separator = False
+        while True:
+            ch = self.peek()
+            if ch and valid(ch):
+                digits.append(self.advance())
+                last_separator = False
+            elif ch == "_":
+                if not digits or last_separator:
+                    raise self.error("misplaced digit separator")
+                self.advance()
+                last_separator = True
+            else:
+                break
+        if last_separator:
+            raise self.error("misplaced digit separator")
+        return "".join(digits)
+
     def read_number(self) -> int | float:
         start = self.pos
+
         if self.peek() == "0" and self.peek(1) and self.peek(1) in "xX":
             self.advance()
             self.advance()
-            digits = self.pos
-            while self.peek() and (self.peek().isdigit() or self.peek().lower() in "abcdef"):
-                self.advance()
-            if self.pos == digits:
+            digits = self.read_digits(
+                lambda ch: ch.isascii() and (ch.isdigit() or ch.lower() in "abcdef")
+            )
+            if not digits:
                 raise self.error("expected hexadecimal digits")
-            return int(self.source[digits:self.pos], 16)
+            if self.peek() and self.peek().isalnum():
+                raise self.error(f"invalid hexadecimal digit {self.peek()!r}")
+            return int(digits, 16)
 
         if self.peek() == "0" and self.peek(1) and self.peek(1) in "bB":
             self.advance()
             self.advance()
-            digits = self.pos
-            while self.peek() and self.peek() in "01":
-                self.advance()
-            if self.pos == digits:
+            digits = self.read_digits(lambda ch: ch in "01")
+            if not digits:
                 raise self.error("expected binary digits")
-            return int(self.source[digits:self.pos], 2)
+            if self.peek() and self.peek().isdigit():
+                raise self.error(f"invalid binary digit {self.peek()!r}")
+            return int(digits, 2)
 
-        # Ordinary decimal, optionally with a fraction and/or exponent.
-        while self.peek().isdigit():
+        if self.peek() == "0" and self.peek(1) and self.peek(1) in "oO":
             self.advance()
+            self.advance()
+            digits = self.read_digits(lambda ch: ch in "01234567")
+            if not digits:
+                raise self.error("expected octal digits")
+            if self.peek() and self.peek().isdigit():
+                raise self.error(f"invalid octal digit {self.peek()!r}")
+            return int(digits, 8)
+
+        if (
+            self.peek() == "0"
+            and self.peek(1)
+            and (self.peek(1).isdigit() or self.peek(1) == "_")
+        ):
+            raise self.error(
+                "leading-zero decimal literals are not supported; use 0o for octal"
+            )
+
         is_float = False
-        if self.peek() == "." and self.peek(1).isdigit():
+        if self.peek() == ".":
             is_float = True
             self.advance()
-            while self.peek().isdigit():
+            digits = self.read_digits(lambda ch: ch.isdigit())
+            if not digits:
+                raise self.error("expected fractional digits")
+        else:
+            whole = self.read_digits(lambda ch: ch.isdigit())
+            if not whole:
+                raise self.error("expected digits")
+            if self.peek() == "." and self.peek(1) != ".":
+                is_float = True
+                after = self.peek(1)
                 self.advance()
+                if after == "_":
+                    raise self.error("misplaced digit separator")
+                if after.isdigit():
+                    self.read_digits(lambda ch: ch.isdigit())
+
         if self.peek() and self.peek() in "eE":
             is_float = True
             self.advance()
             if self.peek() and self.peek() in "+-":
                 self.advance()
-            if not self.peek().isdigit():
+            exponent = self.read_digits(lambda ch: ch.isdigit())
+            if not exponent:
                 raise self.error("expected exponent digits")
-            while self.peek().isdigit():
-                self.advance()
+
+        text = self.source[start:self.pos].replace("_", "")
         if is_float:
-            return float(self.source[start:self.pos])
-        return int(self.source[start:self.pos], 10)
+            return float(text)
+        return int(text, 10)
 
     def read_char_literal(self) -> int:
         self.advance()  # opening quote
@@ -308,6 +389,8 @@ class Lexer:
         ch = self.advance()
         if ch == "\\":
             ch = self.read_escape()
+        if ord(ch) > 0xFF:
+            raise self.error("character literal is not a byte")
         if self.peek() != "'":
             raise self.error("character literal must contain exactly one character")
         self.advance()
@@ -316,15 +399,22 @@ class Lexer:
     def read_string(self) -> str:
         self.advance()  # opening quote
         chars: list[str] = []
-        while self.peek() and self.peek() != '"':
+        while True:
+            if not self.peek():
+                raise self.error("unterminated string literal")
+            if self.peek() == '"':
+                self.advance()
+                break
+            if self.peek() in "\r\n":
+                raise self.error("newline in string literal")
             ch = self.advance()
             if ch == "\\":
-                chars.append(self.read_escape())
-            else:
-                chars.append(ch)
-        if self.peek() != '"':
-            raise self.error("unterminated string literal")
-        self.advance()
+                ch = self.read_escape()
+            if ord(ch) > 0xFF:
+                raise self.error("string literal contains a non-byte character")
+            if ch == "\0":
+                raise self.error("NUL is not allowed in a string literal")
+            chars.append(ch)
         return "".join(chars)
 
     def read_escape(self) -> str:
@@ -332,26 +422,43 @@ class Lexer:
             raise self.error("unterminated escape sequence")
         ch = self.advance()
         escapes = {
+            "a": "\a",
+            "b": "\b",
+            "f": "\f",
             "n": "\n",
             "r": "\r",
             "t": "\t",
-            "0": "\0",
+            "v": "\v",
             "\\": "\\",
             '"': '"',
             "'": "'",
+            "?": "?",
         }
         if ch in escapes:
             return escapes[ch]
         if ch == "x":
             digits = ""
             for _ in range(2):
-                if self.peek() and (self.peek().isdigit() or self.peek().lower() in "abcdef"):
+                if self.peek() and self.peek().isascii() and (
+                    self.peek().isdigit() or self.peek().lower() in "abcdef"
+                ):
                     digits += self.advance()
                 else:
                     break
             if not digits:
                 raise self.error("expected hex digits after \\x")
             return chr(int(digits, 16))
+        if ch in "01234567":
+            digits = ch
+            for _ in range(2):
+                if self.peek() and self.peek() in "01234567":
+                    digits += self.advance()
+                else:
+                    break
+            value = int(digits, 8)
+            if value > 0xFF:
+                raise self.error("octal escape does not fit in a byte")
+            return chr(value)
         raise self.error(f"unknown escape sequence \\{ch}")
 
 

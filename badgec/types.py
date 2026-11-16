@@ -11,9 +11,9 @@ types rather than pretending to be a normal C target:
     flashptr    a 12-bit code-memory address
     void        no value
 
-``char`` is an alias for ``u8`` and is unsigned, because the UART is
-byte-oriented.  ``int`` is signed 16-bit, ``long`` is signed 32-bit, and
-``short`` is signed 16-bit, matching the usual choice for 16-bit targets.
+``char`` and ``byte`` are aliases for ``u8`` and are unsigned, because the
+UART is byte-oriented.  ``int`` is signed 16-bit, ``long`` is signed 32-bit,
+and ``short`` is signed 16-bit, matching the usual choice for 16-bit targets.
 
 There are deliberately no implicit integer promotions: the width of an
 expression comes from its operands and its expected (destination) type.  See
@@ -99,6 +99,7 @@ SCALAR_TYPES = {
     "i4": I4,
     "u8": U8,
     "char": U8,
+    "byte": U8,
     "uint8_t": U8,
     "i8": I8,
     "int8_t": I8,

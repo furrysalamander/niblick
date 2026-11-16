@@ -26,6 +26,10 @@ Working today:
 - Functions, parameters, returns, and tail-call optimization
 - `if`/`else`, `while`, `for`, `break`, `continue`
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
+- Compound assignment (`+= -= *= /= %= &= |= ^= <<= >>=`), `++`/`--` statements, unary `+`, and `?:`
+- Constant-expression array lengths and brace initializers for RAM arrays and structs
+- NUL-terminated text strings; `byte` is an alias for `char`/`u8`
+- Literals: decimal, `0x`, `0b`, `0o`, `_` separators, `.5`/`1.` floats, full escapes, and adjacent string concatenation
 - Explicit casts: `(nibble)`, `(char)`, `(uint16_t)`, `(uint32_t)`, signed types, and `(bool)`
 - `print()` compile-time formatting with typed `{}` / `{:x}` / `{:b}` / `{:c}` / `{:s}` placeholders
 - `import` for the standard modules in `lib/` and device drivers in `lib/drivers/`
@@ -43,9 +47,8 @@ Working today:
 Not implemented yet:
 
 - General (non-tail) recursion
-- Floating point (`half`, `float`, `double`)
 - General pointers and pointer arithmetic
-- Struct parameters/returns, nested structs, aggregate initializers, varargs, and dynamic allocation
+- Nested structs, struct fields that are arrays, varargs, and dynamic allocation
 - Full register allocation and a broader peephole/optimization pipeline
 - UART interrupt-driven or buffered I/O beyond the hardware FIFO
 
@@ -126,7 +129,7 @@ fn main() {
 `char` is unsigned 8-bit. A RAM `char[]` costs two nibbles per element.
 A `const char[]` lives in program memory as a `RET` table: two code words
 per character, read with `flash_next(&p)` or `flash_read_char(ptr)`.
-Strings use `0xFF` as the terminator.
+Text strings use `0x00` as the terminator. `0xFF` is reserved for binary sentinel tables such as audio and PDM data.
 
 ## Architecture
 

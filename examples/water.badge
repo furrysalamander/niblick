@@ -35,14 +35,14 @@ fn nibble cell_get(char i) {
 }
 
 fn void cell_write(char i, nibble v) {
-    char byte;
+    char slot;
     nibble shift;
     nibble mask;
 
-    byte = i >> 1;
+    slot = i >> 1;
     shift = (nibble)((i & 1) << 1);
     mask = 3 << shift;
-    grid[byte] = (grid[byte] & (mask ^ 15)) | (v << shift);
+    grid[slot] = (grid[slot] & (mask ^ 15)) | (v << shift);
 }
 
 fn void put_pixel(nibble x, char y, nibble on) {

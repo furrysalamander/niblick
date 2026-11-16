@@ -227,7 +227,7 @@ entries.
 
 A flash `char[]` is stored as `RET R0,nibble` words: low nibble first, then
 high nibble. A flash `nibble[]` is one `RET` instruction word per element. Strings use
-`0xFF` as the terminator.
+`0x00` as the terminator.
 
 BadgeC emits flash bytes as pairs of `NIBBLE` directives rather than
 `BYTE`, because the upstream assembler miscounts a `BYTE`/`ASCII` directive

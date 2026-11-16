@@ -204,7 +204,7 @@ library for fixed-point and bit-oriented code. See [types.md](types.md).
 
 `char` is unsigned 0..255, `uint16_t` is unsigned 0..65535, and `uint32_t` is
 unsigned 0..4294967295. String literals and `const char[]` are flash objects
-with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
+with a `0x00` terminator. `flash_next(&p)` is a compiler intrinsic:
 it loads the 3-nibble cursor, calls the RET-table reader, and writes the
 advanced cursor back without using a RAM buffer.
 

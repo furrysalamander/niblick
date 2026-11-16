@@ -71,6 +71,20 @@ class Binary(Expr):
 
 
 @dataclass
+class Conditional(Expr):
+    condition: Expr = field(default_factory=Expr)
+    then_expr: Expr = field(default_factory=Expr)
+    else_expr: Expr = field(default_factory=Expr)
+
+
+@dataclass
+class IncDec(Expr):
+    target: Expr = field(default_factory=Expr)
+    op: str = "++"
+    prefix: bool = False
+
+
+@dataclass
 class Call(Expr):
     name: str = ""
     args: list[Expr] = field(default_factory=list)
@@ -119,13 +133,24 @@ class VarDecl(Stmt):
     name: str = ""
     type: Type = None  # type: ignore[assignment]
     array_len: Optional[int] = None
+    array_len_expr: Optional[Expr] = None
     init: Optional[Expr] = None
+    init_list: Optional[list[Expr]] = None
+    init_string: Optional[str] = None
     is_const: bool = False
+    is_array: bool = False
 
 
 @dataclass
 class Assign(Stmt):
     target: Expr = field(default_factory=Expr)
+    value: Expr = field(default_factory=Expr)
+
+
+@dataclass
+class CompoundAssign(Stmt):
+    target: Expr = field(default_factory=Expr)
+    op: str = ""
     value: Expr = field(default_factory=Expr)
 
 
@@ -185,10 +210,12 @@ class GlobalDecl:
     name: str
     type: Type
     array_len: Optional[int] = None
+    array_len_expr: Optional[Expr] = None
     init: Optional[Expr] = None
     init_list: Optional[list[Expr]] = None
     init_string: Optional[str] = None
     is_const: bool = False
+    is_array: bool = False
     line: int = 0
     column: int = 0
     file: str = ""

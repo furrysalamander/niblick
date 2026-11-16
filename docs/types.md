@@ -10,7 +10,7 @@ type it is being assigned to.
 |---|---:|---|---|
 | `nibble` | 4 | no | `u4` |
 | `i4` | 4 | yes | — |
-| `char` | 8 | no | `u8`, `uint8_t` |
+| `char` | 8 | no | `u8`, `byte`, `uint8_t` |
 | `i8` | 8 | yes | `int8_t` |
 | `uint16_t` | 16 | no | `u16` |
 | `i16` | 16 | yes | `int16_t`, `short`, `int` |
@@ -130,6 +130,107 @@ a % b;   // -1
 a >> 1;  // -4
 a < b;   // true
 ```
+
+## Operators
+
+Compound assignment is statement-level:
+
+```c
+x += 2;
+x <<= 1;
+x |= 1;
+a[i] += 3;
+p.field -= 1;
+```
+
+`++` and `--` are statements. Prefix and postfix forms have the same effect:
+
+```c
+x++;
+--x;
+for (i = 0; i < 10; i++) {
+}
+```
+
+Compound assignment and `++`/`--` require an lvalue with a side-effect-free
+index or member base. The lvalue is evaluated once for the read and once for
+the write; expressions with calls in the index are rejected.
+
+Unary `+` is a type-preserving no-op.
+
+## Conditional expressions
+
+`?:` is right-associative and binds below `||`:
+
+```c
+value = cond ? a : b;
+value = a ? b : c ? d : e;   // a ? b : (c ? d : e)
+```
+
+The condition is evaluated once. Only the selected branch executes. Both
+branches are type-checked. The result type is the common type of the branches,
+with the expected destination width applied as a width floor. `bool` results
+normalize to 0/1. Mixed `half`/`float` branches require an explicit cast.
+Branches cannot be `void` or struct values.
+
+A constant condition is folded at compile time. This permits `?:` in scalar
+`const` initializers, array lengths, and inline-assembly `${...}` expressions.
+
+## Literals
+
+Integer literals accept decimal, `0x` hexadecimal, `0b` binary, and `0o` octal
+forms. `_` separates digits. A decimal literal with a leading zero is rejected.
+
+```c
+15
+0xF
+0b1111
+0o17
+1_000
+```
+
+Floating-point literals accept `1.5`, `1.`, `.5`, and exponent forms such as
+`1e3` and `1.5e-3`. There are no integer or float suffixes.
+
+## Strings
+
+Text strings are terminated by `0x00`. `0xFF` is reserved for binary sentinel
+tables such as audio and PDM data.
+
+Adjacent string literals concatenate:
+
+```c
+const char message[] = "abc" "def";
+```
+
+Escapes are `\a \b \f \n \r \t \v \\ \' \" \?`, `\x` with one or two hex
+digits, and octal `\ooo` with one to three digits. Raw newlines and `\0` are
+rejected in string literals. `0xFF` is allowed in text strings and in
+`const char[]` data.
+
+## Array lengths and initializers
+
+Array lengths are constant expressions. They may use integer literals and
+file-scope scalar `const` declarations:
+
+```c
+const nibble N = 3;
+nibble values[N + 1];
+```
+
+RAM arrays and structs accept brace initializers in declaration order. Missing
+scalar elements are zero-initialized:
+
+```c
+nibble values[4] = { 1, 2 };
+Point origin = { 3, 4 };
+char text[] = "hi";
+char buffer[4] = "ab";
+```
+
+A string initializer includes its NUL terminator. The initializer must fit in
+the declared array. Nested aggregate initializers are not supported. Local
+`const` arrays are not supported.
 
 ## `bool`
 

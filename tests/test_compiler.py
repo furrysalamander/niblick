@@ -246,7 +246,7 @@ def test_functions_and_tail_recursion(tmp_path: Path) -> None:
 
 def test_non_tail_recursion_is_rejected(tmp_path: Path) -> None:
     source = """
-    nibble f(nibble n) {
+    fn nibble f(nibble n) {
         if (n == 0) {
             return 1;
         }
@@ -277,7 +277,7 @@ def test_flash_string_iteration(tmp_path: Path) -> None:
             p = msg;
             while (1) {
                 c = flash_next(&p);
-                if (c == 0xFF) {
+                if (c == 0x00) {
                     break;
                 }
                 count = count + 1;
@@ -287,8 +287,8 @@ def test_flash_string_iteration(tmp_path: Path) -> None:
     )
     emu = run(hex_path, steps=50000)
     assert emu.ram[ram_nibble(compiler, "count")] == 3
-    assert emu.ram[ram_nibble(compiler, "c")] == 0xF
-    assert emu.ram[ram_nibble(compiler, "c", 1)] == 0xF
+    assert emu.ram[ram_nibble(compiler, "c")] == 0
+    assert emu.ram[ram_nibble(compiler, "c", 1)] == 0
 
 
 def test_uart_puts_and_echo(tmp_path: Path) -> None:

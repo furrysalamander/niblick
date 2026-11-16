@@ -86,6 +86,8 @@ python3 -m niblick examples/hello.nbl --map-json hello.map.json
 
 - General (non-tail) recursion
 - General pointers and pointer arithmetic
+- `switch`, `do`/`while`, `enum`, `typedef`, `sizeof`, `static`, `volatile`,
+  and `goto`
 - Nested structs, struct fields that are arrays, nested aggregate
   initializers, varargs, and dynamic allocation
 - Local `const` arrays

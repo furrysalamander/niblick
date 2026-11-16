@@ -454,7 +454,8 @@ a separate device driver under `lib/drivers/`; see
 ## Not provided
 
 - Dynamic `print()` format strings and non-UART formatting targets
-- General pointer arithmetic, `char *` parameters, and structs
+- General pointer arithmetic and `char *` parameters
+- Structs in flash tables
 - Q8.8 fixed point
 - `malloc` / free
 - Interrupt-driven UART

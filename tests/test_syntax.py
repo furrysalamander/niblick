@@ -432,6 +432,24 @@ def test_rejected_literals_and_identifiers(tmp_path: Path) -> None:
         parse('const char s[] = "a\\0b";\nfn main() { }\n', "bad.nbl")
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "fn main() { switch (1) { } }",
+        "fn main() { do { } while (1); }",
+        "fn main() { goto done; }",
+        "fn main() { nibble x = sizeof(x); }",
+        "enum E { A };\nfn main() { }",
+        "typedef nibble byte_t;\nfn main() { }",
+        "static nibble x;\nfn main() { }",
+        "fn main() { volatile nibble x; }",
+    ],
+)
+def test_unsupported_keywords_report_clear_errors(source: str) -> None:
+    with pytest.raises(NiblickSyntaxError, match="not supported"):
+        parse(source, "unsupported.nbl")
+
+
 def test_byte_alias_and_trailing_commas(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,

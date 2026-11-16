@@ -75,6 +75,14 @@ KEYWORDS = {
     "extern",
     "asm",
     "struct",
+    "switch",
+    "do",
+    "enum",
+    "typedef",
+    "sizeof",
+    "static",
+    "volatile",
+    "goto",
 }
 
 # Longest operators first.

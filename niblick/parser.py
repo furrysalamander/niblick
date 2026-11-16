@@ -35,6 +35,17 @@ BINARY_PRECEDENCE = {
     "%": 10,
 }
 
+UNSUPPORTED_KEYWORDS = {
+    "switch",
+    "do",
+    "enum",
+    "typedef",
+    "sizeof",
+    "static",
+    "volatile",
+    "goto",
+}
+
 COMPOUND_OPS = {
     "+=": "+",
     "-=": "-",
@@ -130,6 +141,11 @@ class Parser:
     def parse_program(self) -> ast.Program:
         program = ast.Program()
         while not self.at_end():
+            if (
+                self.current().kind == "keyword"
+                and self.current().value in UNSUPPORTED_KEYWORDS
+            ):
+                raise self.error(f"{self.current().value} is not supported")
             if self.check("struct", "keyword"):
                 self.parse_struct()
             elif self.check("import", "keyword"):
@@ -427,6 +443,9 @@ class Parser:
 
     def parse_statement(self) -> ast.Stmt:
         token = self.current()
+
+        if token.kind == "keyword" and token.value in UNSUPPORTED_KEYWORDS:
+            raise self.error(f"{token.value} is not supported")
 
         if token.kind == "asm_block":
             self.advance()
@@ -766,6 +785,9 @@ class Parser:
 
     def parse_primary(self) -> ast.Expr:
         token = self.current()
+
+        if token.kind == "keyword" and token.value in UNSUPPORTED_KEYWORDS:
+            raise self.error(f"{token.value} is not supported")
 
         if token.kind == "number":
             self.advance()

@@ -375,6 +375,41 @@ def test_const_nibble_table_after_char_table(tmp_path: Path) -> None:
     assert emu.ram[ram_nibble(compiler, "value")] == 3
 
 
+def test_const_char_table_high_index(tmp_path: Path) -> None:
+    """A char index times a two-nibble flash element can exceed 8 bits."""
+    values = ", ".join(str(index & 0xFF) for index in range(256))
+    compiler, hex_path = build(
+        tmp_path,
+        f"""
+        const char table[] = {{ {values} }};
+        char a;
+        char b;
+        char c;
+        char d;
+        char e;
+        fn main() {{
+            a = table[0];
+            b = table[127];
+            c = table[128];
+            d = table[200];
+            e = table[255];
+        }}
+        """,
+        name="flash_high_index",
+    )
+    emu = run(hex_path)
+
+    def char_value(name: str) -> int:
+        address = ram_nibble(compiler, name)
+        return emu.ram[address] | (emu.ram[address + 1] << 4)
+
+    assert char_value("a") == 0
+    assert char_value("b") == 127
+    assert char_value("c") == 128
+    assert char_value("d") == 200
+    assert char_value("e") == 255
+
+
 def test_peek_poke_and_out_in(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,

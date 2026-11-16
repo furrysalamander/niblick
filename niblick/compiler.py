@@ -4994,11 +4994,18 @@ class Compiler:
             self.emit("MOV R5, R2")
         else:
             self.emit("MOV R5, 0")
-        for _ in range(scale.bit_length() - 1):
-            self.emit("ADD R5, R5")
+        shifts = scale.bit_length() - 1
+        # A char index can reach 255, so a multi-nibble element needs a
+        # ninth (and tenth) offset bit.  A nibble index tops out at 240
+        # nibbles even for a 16-nibble element, so it fits in R5:R4.
+        use_high = shifts > 0 and index_type.ram_size == 2
+        if use_high:
+            self.emit("MOV R6, 0")
+        for _ in range(shifts):
             self.emit("ADD R4, R4")
-            self.emit("SKIP NC, 1")
-            self.emit("INC R5")
+            self.emit("ADC R5, R5")
+            if use_high:
+                self.emit("ADC R6, R6")
 
         self.emit_flashptr(symbol.flash_label)
         self.emit("ADD R1, R4")
@@ -5008,6 +5015,8 @@ class Compiler:
         self.emit("ADD R2, R5")
         self.emit("MOV R0, 0")
         self.emit("ADC R3, R0")
+        if use_high:
+            self.emit("ADD R3, R6")
 
     # ------------------------------------------------------------------
     # Calls

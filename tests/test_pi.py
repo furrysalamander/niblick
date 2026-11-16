@@ -56,10 +56,9 @@ def test_pi_matrix_banner(tmp_path: Path) -> None:
     assert emulator._read_memory(0xF0) == 7
     assert emulator._read_memory(0xFE) == 8
 
-    # Glyph bits must have reached the framebuffer (t[0..31] at 0x70), and the
-    # bottom half must have been cleared rather than holding leftover `t`
-    # computation junk.
-    top = [emulator._read_memory(0x70 + a) for a in range(16)]
-    bottom = [emulator._read_memory(0x80 + a) for a in range(16)]
-    assert any(top)
-    assert not any(bottom)
+    # Glyph bits must occupy the top eight rows of both halves.  Rows 8..15
+    # stay clear because the banner only draws 5x8 text.
+    left, right = emulator.display_pages()
+    assert any(left[y] or right[y] for y in range(8))
+    assert any(left[y] for y in range(8))
+    assert not any(left[y] or right[y] for y in range(8, 16))

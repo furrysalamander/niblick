@@ -1,7 +1,10 @@
 // Display-page and 8x16 framebuffer helpers.
 //
-// A framebuffer is 32 nibbles: two nibbles per row, 8 pixels per row,
-// row-major.  `base` is the array's nibble address (use `&screen`).
+// A framebuffer is 32 nibbles, aligned to two consecutive display pages.
+// The page at `base` is the right half of the matrix (columns 4..7) and the
+// page at `base + 16` is the left half (columns 0..3).  Row y lives at
+// `base + y` on the right and `base + 16 + y` on the left.  `base` must be
+// page-aligned; use `&screen`.
 
 import "mem.nbl";
 
@@ -98,7 +101,10 @@ fn void display_copy(nibble src, nibble dst) {
 }
 
 fn char disp_addr(char base, nibble x, char y) {
-    return base + (y << 1) + (x >> 2);
+    if (x < 4) {
+        return base + 16 + y;
+    }
+    return base + y;
 }
 
 fn nibble disp_mask(nibble x) {
@@ -167,10 +173,10 @@ fn void display_shift_left(char base) {
     nibble lo;
     row = 0;
     while (row < 16) {
-        hi = peek(base + (row << 1));
-        lo = peek(base + (row << 1) + 1);
-        poke(base + (row << 1), ((hi << 1) & 15) | (lo >> 3));
-        poke(base + (row << 1) + 1, (lo << 1) & 15);
+        hi = peek(base + 16 + row);
+        lo = peek(base + row);
+        poke(base + 16 + row, ((hi << 1) & 15) | (lo >> 3));
+        poke(base + row, (lo << 1) & 15);
         row = row + 1;
     }
 }
@@ -179,12 +185,18 @@ fn void display_shift_left(char base) {
 fn void display_set_column(char base, nibble x, char bits) {
     char row;
     char addr;
+    char column_base;
     nibble mask;
     nibble value;
     mask = 1 << (3 - (x & 3));
+    if (x < 4) {
+        column_base = base + 16;
+    } else {
+        column_base = base;
+    }
     row = 0;
     while (row < 8) {
-        addr = base + (row << 1) + (x >> 2);
+        addr = column_base + row;
         value = peek(addr);
         if ((bits & (128 >> row)) != 0) {
             value = value | mask;

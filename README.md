@@ -246,7 +246,7 @@ Sizes are the compiler's `code+data` word count and data-RAM nibble count.
 | `gpio_blink.nbl` | GPIO output | 49 | 1 | `tests/test_examples.py` |
 | `inline_asm.nbl` | Inline assembly | 8 | 2 | `tests/test_inline_asm.py` |
 | `struct_demo.nbl` | Struct fields and arrays | 645 | 11 | `tests/test_structs.py` |
-| `stdlib_demo.nbl` | Standard library | 2079 | 100 | `tests/test_stdlib.py` |
+| `stdlib_demo.nbl` | Standard library | 2093 | 105 | `tests/test_stdlib.py` |
 | `u16_math.nbl` | 16-bit arithmetic | 1294 | 32 | `tests/test_examples.py` |
 | `u32_math.nbl` | 32-bit arithmetic | 2289 | 97 | `tests/test_examples.py` |
 | `math32_test.nbl` | 32-bit hardware test | 2758 | 68 | `tests/test_examples.py` |
@@ -254,13 +254,13 @@ Sizes are the compiler's `code+data` word count and data-RAM nibble count.
 | `pdm_demo.nbl` | PDM playback | 170 | 7 | `tests/test_examples.py` |
 | `sao_hello.nbl` | SAO header output | 158 | 5 | `tests/test_examples.py` |
 | `keymap.nbl` | Key-map measurement | 240 | 5 | `docs/keys.md` |
-| `hw_test.nbl` | Hardware self-test | 3431 | 121 | `scripts/hw_test.py` |
+| `hw_test.nbl` | Hardware self-test | 3429 | 121 | `scripts/hw_test.py` |
 | `cube.nbl` | 3D wireframe cube | 1795 | 149 | `tests/test_cube.py` |
 | `tetris.nbl` | Tetris | 2573 | 134 | `tests/test_examples.py` |
 | `wave.nbl` | Signed wave field | 1054 | 156 | `tests/test_wave.py` |
 | `water.nbl` | Falling-sand water | 1894 | 132 | `tests/test_water.py` |
-| `text_scroll.nbl` | Scrolling text | 1970 | 69 | `tests/test_examples.py` |
-| `pi.nbl` | Pi digits | 2967 | 173 | `tests/test_pi.py` |
+| `text_scroll.nbl` | Scrolling text | 1925 | 71 | `tests/test_examples.py` |
+| `pi.nbl` | Pi digits | 2850 | 173 | `tests/test_pi.py` |
 | `flash_walk.nbl` | Flash table walk | 105 | 7 | `tests/test_examples.py` |
 | `w5500_probe.nbl` | W5500 link probe | 414 | 12 | `tests/test_examples.py` |
 | `w5500_udp.nbl` | W5500 UDP sender | 1941 | 46 | `tests/test_examples.py` |

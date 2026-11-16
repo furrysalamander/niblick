@@ -162,8 +162,10 @@ remain available for output bits.
 ## Display
 
 `lib/display.nbl` covers pages, the 8x16 framebuffer, PWM, and matrix
-control. A framebuffer is 32 nibbles: two nibbles per row, row-major; `base`
-is the array's nibble address (`&screen`).
+control. A framebuffer is 32 nibbles aligned to two consecutive display
+pages: row y is `base + y` on the right half (columns 4..7) and
+`base + 16 + y` on the left half (columns 0..3). `base` is the array's nibble
+address (`&screen`) and must be page-aligned.
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -177,7 +179,7 @@ is the array's nibble address (`&screen`).
 | `display_copy(src, dst)` | `void` | Copy one page |
 | `pixel_get(base, x, y)` | `nibble` | Pixel test |
 | `pixel_set(base, x, y, on)` / `pixel_toggle` / `pixel_clear` | `void` | Pixel edits |
-| `disp_addr(base, x, y)` / `disp_mask(x)` | `char` / `nibble` | Byte address / bit mask for a pixel |
+| `disp_addr(base, x, y)` / `disp_mask(x)` | `char` / `nibble` | Framebuffer address / bit mask for a pixel |
 | `hline(base, x0, x1, y, on)` / `vline` | `void` | Straight lines |
 | `fill_rect(base, x0, y0, x1, y1, on)` | `void` | Filled rectangle |
 | `clear_screen(base)` | `void` | Zero all 32 nibbles |

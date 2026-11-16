@@ -227,9 +227,10 @@ def test_display_module(tmp_path: Path) -> None:
 
     base = compiler.globals["screen"].address
     assert base is not None
-    # Row 5 occupies nibbles 10 and 11; hline set all eight pixels.
-    assert emu.ram[base + 10] == 15
-    assert emu.ram[base + 11] == 15
+    # Row 5 is the right nibble at base+5 and the left nibble at base+21;
+    # hline set all eight pixels.
+    assert emu.ram[base + 5] == 15
+    assert emu.ram[base + 16 + 5] == 15
     # display_clear cleared page 8.
     assert emu.ram[0x80] == 0
 
@@ -411,6 +412,62 @@ def test_font_and_text_glyph(tmp_path: Path) -> None:
     assert value(compiler, emu, "tail") == 0
 
 
+def test_font_high_ascii_column(tmp_path: Path) -> None:
+    """Glyphs past the first 128 flash bytes must read the right column."""
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/font.nbl";
+        char c0;
+        char c1;
+        char c2;
+        char c3;
+        char c4;
+        fn main() {
+            c0 = font5x8_column('H', 0);
+            c1 = font5x8_column('H', 1);
+            c2 = font5x8_column('H', 2);
+            c3 = font5x8_column('H', 3);
+            c4 = font5x8_column('H', 4);
+        }
+        """,
+    )
+    assert [value(compiler, emu, name) for name in ("c0", "c1", "c2", "c3", "c4")] == [
+        0xFE,
+        0x10,
+        0x10,
+        0x10,
+        0xFE,
+    ]
+
+
+def test_text_scroll_enters_from_right_half(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        import "lib/display.nbl";
+        import "lib/textscroll.nbl";
+        nibble screen[32];
+        fn main() {
+            clear_screen(&screen);
+            text_scroll_once(&screen, "H", SYNC_10HZ);
+        }
+        """,
+    )
+    base = compiler.globals["screen"].address
+    assert base == 0x40
+    left, right = emu.display_pages()
+    rows = [
+        [(left[y] >> (3 - x)) & 1 for x in range(4)]
+        + [(right[y] >> (3 - x)) & 1 for x in range(4)]
+        for y in range(16)
+    ]
+    # After the final shift "H" occupies x=2..6 on rows 0..6.
+    assert rows[0][2:7] == [1, 0, 0, 0, 1]
+    assert rows[3][2:7] == [1, 1, 1, 1, 1]
+    assert rows[7] == [0] * 8
+
+
 def test_display_shift_and_column(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
@@ -421,6 +478,7 @@ def test_display_shift_and_column(tmp_path: Path) -> None:
         nibble right;
         fn main() {
             clear_screen(&screen);
+            display_show(&screen);
             display_set_column(&screen, 7, 0xA5);
             left = pixel_get(&screen, 7, 0);
             right = pixel_get(&screen, 7, 1);
@@ -432,8 +490,13 @@ def test_display_shift_and_column(tmp_path: Path) -> None:
     assert value(compiler, emu, "right") == 0
     base = compiler.globals["screen"].address
     assert base is not None
-    # After the shift, the previous x=7 column is at x=6.
-    assert (emu.ram[base + 1] >> 1) & 1 == 1
+    assert base == 0x40
+    left_page, right_page = emu.display_pages()
+    # The column entered at x=7 and moved to x=6 in the right half.
+    # Bit 1 of the row nibble is column 6; bit 0 is column 7.
+    assert (right_page[0] >> 1) & 1 == 1
+    assert right_page[0] & 1 == 0
+    assert left_page[0] == 0
 
 
 def test_audio_tone_and_melody(tmp_path: Path) -> None:

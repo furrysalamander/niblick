@@ -127,11 +127,11 @@ fn void atan_series(char x, char coeff, nibble subtract) {
 // ---------------------------------------------------------------------------
 // Matrix banner
 //
-// The framebuffer is t[0..31] (0x70..0x8F, pages 7 and 8): two nibbles per
-// row, 8 pixels per row, top 8 rows used for 5x8 text.  Glyph data comes
-// from lib/font.nbl (Voja's Hamlet font); bit 7 of each byte is the top
-// row.  Glyph indices: 0-9 are the digits, 10 '.', 11 'p', 12 'i', 13 ' ',
-// 14 '='.
+// The framebuffer is t[0..31] (0x70..0x8F, pages 7 and 8): row y is at
+// 0x70 + y on the right half and 0x80 + y on the left half.  The top 8 rows
+// are used for 5x8 text.  Glyph data comes from lib/font.nbl (Voja's Hamlet
+// font); bit 7 of each byte is the top row.  Glyph indices: 0-9 are the
+// digits, 10 '.', 11 'p', 12 'i', 13 ' ', 14 '='.
 // ---------------------------------------------------------------------------
 
 const char glyphs[] = {
@@ -206,10 +206,10 @@ fn void scroll_result() {
                 // edge (matches lib/display.nbl's display_shift_left).
                 row = 0;
                 while (row < 16) {
-                    hi = peek((char)(FB + (row << 1)));
-                    lo = peek((char)(FB + (row << 1) + 1));
-                    poke((char)(FB + (row << 1)), (nibble)(((hi << 1) & 15) | (lo >> 3)));
-                    poke((char)(FB + (row << 1) + 1), (nibble)((lo << 1) & 15));
+                    hi = peek((char)(FB + 16 + row));
+                    lo = peek((char)(FB + row));
+                    poke((char)(FB + 16 + row), (nibble)(((hi << 1) & 15) | (lo >> 3)));
+                    poke((char)(FB + row), (nibble)((lo << 1) & 15));
                     row = row + 1;
                 }
 
@@ -220,7 +220,7 @@ fn void scroll_result() {
                 if (col < 5) {
                     row = 0;
                     while (row < 8) {
-                        addr = (char)(FB + (row << 1) + 1);
+                        addr = (char)(FB + row);
                         value = peek(addr);
                         if ((bits & (128 >> row)) != 0) {
                             value = (nibble)(value | 1);

@@ -1,0 +1,23 @@
+{
+  "name": "niblick-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "assets": "../.venv/bin/python ../tools/build_web_assets.py",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.57.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8",
+    "pyodide": "0.29.5"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+public/wheels/
+public/runtime.zip
+public/examples/
+playwright-report/
+test-results/
+*.vsix

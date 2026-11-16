@@ -165,6 +165,22 @@ Tail calls compile to `GOTO`, so tail recursion does not consume a hardware
 stack level. Non-tail recursion is rejected because the hardware stack has five
 entries and there is no stack-relative addressing.
 
+## Web editor
+
+`web/` contains a browser editor: Monaco for source, Pyodide for the compiler
+and assembler. Build the runtime assets before starting Vite:
+
+```bash
+.venv/bin/python tools/build_web_assets.py
+cd web
+npm install
+npm run dev
+```
+
+The production build is `npm run build`; set `VITE_BASE` when serving from a
+GitHub Pages subpath. See `web/README.md` for the asset layout and Playwright
+test.
+
 ## Testing
 
 ```bash

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Niblick</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div>
+          <div class="title">Niblick</div>
+          <div class="subtitle">Supercon.6 / Voja4 compiler</div>
+        </div>
+        <div class="runtime" id="runtime-status">starting</div>
+      </header>
+
+      <div class="toolbar">
+        <label for="example">Example</label>
+        <select id="example"></select>
+        <button id="compile" disabled>Compile</button>
+        <button id="download" disabled>Download .hex</button>
+        <span class="spacer"></span>
+        <span id="compile-status">not compiled</span>
+      </div>
+
+      <main class="workspace">
+        <section class="pane editor-pane">
+          <div id="editor"></div>
+        </section>
+        <section class="pane output-pane">
+          <nav class="tabs" role="tablist">
+            <button class="tab active" data-tab="assembly">Assembly</button>
+            <button class="tab" data-tab="problems">Problems</button>
+            <button class="tab" data-tab="hex">Hex</button>
+          </nav>
+          <div class="tab-body" id="tab-assembly">
+            <pre id="assembly"></pre>
+          </div>
+          <div class="tab-body hidden" id="tab-problems">
+            <div id="problems"></div>
+          </div>
+          <div class="tab-body hidden" id="tab-hex">
+            <pre id="hex-summary"></pre>
+          </div>
+        </section>
+      </main>
+
+      <div class="statusbar" id="statusbar">
+        <span id="size-status"></span>
+        <span id="timing-status"></span>
+      </div>
+
+      <div class="loading" id="loading">
+        <div class="loading-box">
+          <div class="loading-title">Loading Python runtime</div>
+          <div id="loading-message">Preparing Pyodide</div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

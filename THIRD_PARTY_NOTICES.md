@@ -40,6 +40,12 @@ adapted from the upstream demo. Before a public release, confirm that
 redistribution is acceptable or replace the table with a new or public-domain
 5x8 font.
 
+## Web editor
+
+- Monaco Editor: MIT, <https://github.com/microsoft/monaco-editor>
+- Pyodide: MPL-2.0, <https://github.com/pyodide/pyodide>
+- CPython runtime inside Pyodide: PSF-2.0
+
 ## Documentation
 
 The upstream Supercon.6 manuals and tutorial are copyrighted reference material

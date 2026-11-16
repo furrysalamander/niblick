@@ -101,17 +101,50 @@ const OPERATORS = [
   ":",
 ];
 
-import type * as Monaco from "monaco-editor/editor/editor.api";
+import type * as Monaco from "monaco-editor/editor/editor.main";
 
-export type SemanticCompletion = (
-  source: string,
-  line: number,
-  column: number,
-) => Promise<Array<{ name: string; kind: string; detail: string }>>;
+export type CompletionSymbol = {
+  name: string;
+  kind: string;
+  detail: string;
+};
+
+export type DefinitionLocation = {
+  file: string;
+  line: number;
+  column: number;
+};
+
+export type ReferenceLocation = DefinitionLocation & {
+  length: number;
+};
+
+export type NiblickLanguageBridge = {
+  complete: (
+    source: string,
+    line: number,
+    column: number,
+  ) => Promise<CompletionSymbol[]>;
+  definition: (
+    source: string,
+    line: number,
+    column: number,
+  ) => Promise<DefinitionLocation | null>;
+  hover: (
+    source: string,
+    line: number,
+    column: number,
+  ) => Promise<string | null>;
+  references: (
+    source: string,
+    line: number,
+    column: number,
+  ) => Promise<ReferenceLocation[]>;
+};
 
 export function registerNiblick(
-  monaco: typeof import("monaco-editor/editor/editor.api"),
-  semantic?: SemanticCompletion,
+  monaco: typeof import("monaco-editor/editor/editor.main"),
+  bridge?: NiblickLanguageBridge,
 ): void {
   monaco.languages.register({ id: "niblick", extensions: [".nbl"] });
 
@@ -274,9 +307,9 @@ export function registerNiblick(
         insertTextRules?: Monaco.languages.CompletionItemInsertTextRule;
         range: typeof range;
       }> = [];
-      if (semantic !== undefined) {
+      if (bridge !== undefined) {
         try {
-          const items = await semantic(
+          const items = await bridge.complete(
             model.getValue(),
             position.lineNumber,
             position.column,
@@ -332,6 +365,77 @@ export function registerNiblick(
         return true;
       });
       return { suggestions };
+    },
+  });
+
+  if (bridge === undefined) {
+    return;
+  }
+
+  monaco.languages.registerDefinitionProvider("niblick", {
+    provideDefinition: async (model, position) => {
+      const target = await bridge.definition(
+        model.getValue(),
+        position.lineNumber,
+        position.column,
+      );
+      if (target === null) {
+        return null;
+      }
+      return {
+        uri: monaco.Uri.file(target.file),
+        range: new monaco.Range(
+          target.line,
+          target.column,
+          target.line,
+          target.column + 1,
+        ),
+      };
+    },
+  });
+
+  monaco.languages.registerHoverProvider("niblick", {
+    provideHover: async (model, position) => {
+      const text = await bridge.hover(
+        model.getValue(),
+        position.lineNumber,
+        position.column,
+      );
+      if (text === null || text.length === 0) {
+        return null;
+      }
+      const word = model.getWordAtPosition(position);
+      return {
+        contents: [{ value: text }],
+        range:
+          word === null
+            ? undefined
+            : new monaco.Range(
+                position.lineNumber,
+                word.startColumn,
+                position.lineNumber,
+                word.endColumn,
+              ),
+      };
+    },
+  });
+
+  monaco.languages.registerReferenceProvider("niblick", {
+    provideReferences: async (model, position) => {
+      const items = await bridge.references(
+        model.getValue(),
+        position.lineNumber,
+        position.column,
+      );
+      return items.map((item) => ({
+        uri: monaco.Uri.file(item.file),
+        range: new monaco.Range(
+          item.line,
+          item.column,
+          item.line,
+          item.column + item.length,
+        ),
+      }));
     },
   });
 }

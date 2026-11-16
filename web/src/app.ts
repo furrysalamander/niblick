@@ -1,7 +1,4 @@
-import * as monaco from "monaco-editor/editor/editor.api";
-import "monaco-editor/editor/contrib/suggest/browser/suggestController";
-import "monaco-editor/editor/contrib/suggest/browser/suggestInlineCompletions";
-import "monaco-editor/editor/contrib/snippet/browser/snippetController2";
+import * as monaco from "monaco-editor/editor/editor.main";
 import EditorWorker from "monaco-editor/editor/editor.worker?worker";
 import { registerNiblick } from "./niblick-language";
 import { registerVoja4Asm } from "./voja4-asm-language";
@@ -28,9 +25,16 @@ const runtime = new NiblickRuntime();
 
 registerVoja4Asm(monaco);
 
-registerNiblick(monaco, (source, line, column) =>
-  runtime.completions(source, activePath, line, column),
-);
+registerNiblick(monaco, {
+  complete: (source, line, column) =>
+    runtime.completions(source, activePath, line, column),
+  definition: (source, line, column) =>
+    runtime.definition(source, activePath, line, column),
+  hover: (source, line, column) =>
+    runtime.hover(source, activePath, line, column),
+  references: (source, line, column) =>
+    runtime.references(source, activePath, line, column),
+});
 
 const runtimeStatus = document.getElementById("runtime-status")!;
 const compileStatus = document.getElementById("compile-status")!;
@@ -735,6 +739,32 @@ window.addEventListener("resize", () => {
   asmView.layout();
 });
 renderSourceTabs();
+
+monaco.editor.registerEditorOpener({
+  openCodeEditor(_source, resource, selectionOrPosition) {
+    const path = resolveSourcePath(resource.path);
+    if (path === null) {
+      return false;
+    }
+    setActiveSource(path);
+    const model = models.get(path);
+    if (model === undefined) {
+      return false;
+    }
+    let line = 1;
+    if (selectionOrPosition !== undefined) {
+      line =
+        "startLineNumber" in selectionOrPosition
+          ? selectionOrPosition.startLineNumber
+          : selectionOrPosition.lineNumber;
+    }
+    const target = Math.max(1, Math.min(line, model.getLineCount()));
+    editor.setPosition({ lineNumber: target, column: 1 });
+    editor.revealLineInCenterIfOutsideViewport(target);
+    asmView.updateFromSource(path, target);
+    return true;
+  },
+});
 
 compileButton.addEventListener("click", () => {
   void compile();

@@ -65,7 +65,7 @@ const KEYWORDS = [
 ];
 
 export function registerVoja4Asm(
-  monaco: typeof import("monaco-editor/editor/editor.api"),
+  monaco: typeof import("monaco-editor/editor/editor.main"),
 ): void {
   monaco.languages.register({ id: "voja4-asm" });
   monaco.languages.setMonarchTokensProvider("voja4-asm", {

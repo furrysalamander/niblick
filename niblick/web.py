@@ -164,6 +164,83 @@ def _analysis_for_completion(
     return analysis
 
 
+def definition_json(
+    source: str,
+    filename: str = f"{WORK_ROOT}/main.nbl",
+    line: int = 1,
+    column: int = 1,
+    search_paths: Optional[list[str | Path]] = None,
+) -> str:
+    """Return the definition at a source position."""
+
+    try:
+        paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
+        analysis = _analysis_for_completion(filename, source, paths)
+        target = analysis.definition(filename, int(line), int(column))
+        payload: dict[str, object] = {
+            "ok": True,
+            "definition": None
+            if target is None
+            else {
+                "file": target.file,
+                "line": target.line,
+                "column": target.column,
+            },
+        }
+    except Exception as exc:  # noqa: BLE001
+        payload = {"ok": False, "definition": None, "diagnostics": [_diagnostic(exc)]}
+    return json.dumps(payload)
+
+
+def hover_json(
+    source: str,
+    filename: str = f"{WORK_ROOT}/main.nbl",
+    line: int = 1,
+    column: int = 1,
+    search_paths: Optional[list[str | Path]] = None,
+) -> str:
+    """Return hover text for a source position."""
+
+    try:
+        paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
+        analysis = _analysis_for_completion(filename, source, paths)
+        text = analysis.hover(filename, int(line), int(column))
+        payload = {"ok": True, "hover": text}
+    except Exception as exc:  # noqa: BLE001
+        payload = {"ok": False, "hover": None, "diagnostics": [_diagnostic(exc)]}
+    return json.dumps(payload)
+
+
+def references_json(
+    source: str,
+    filename: str = f"{WORK_ROOT}/main.nbl",
+    line: int = 1,
+    column: int = 1,
+    search_paths: Optional[list[str | Path]] = None,
+) -> str:
+    """Return references for the symbol at a source position."""
+
+    try:
+        paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
+        analysis = _analysis_for_completion(filename, source, paths)
+        occurrences = analysis.references(filename, int(line), int(column))
+        payload = {
+            "ok": True,
+            "references": [
+                {
+                    "file": item.file,
+                    "line": item.line,
+                    "column": item.column,
+                    "length": item.length,
+                }
+                for item in occurrences
+            ],
+        }
+    except Exception as exc:  # noqa: BLE001
+        payload = {"ok": False, "references": [], "diagnostics": [_diagnostic(exc)]}
+    return json.dumps(payload)
+
+
 def list_examples_json(root: str = WORK_ROOT) -> str:
     """Return the example files available under *root*/examples."""
 

@@ -9,13 +9,16 @@ from pathlib import Path
 from niblick.web import (
     compile_source_json,
     completions_json,
+    definition_json,
     emulator_alt_json,
     emulator_key_json,
     list_examples_json,
     emulator_load_json,
     emulator_state_json,
     emulator_step_json,
+    hover_json,
     read_example_json,
+    references_json,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,3 +137,46 @@ def test_example_fallbacks(tmp_path: Path) -> None:
     read = json.loads(read_example_json("hello.nbl", str(tmp_path)))
     assert read["ok"] is True
     assert "fn main" in read["source"]
+
+
+def test_definition_hover_and_references(tmp_path: Path) -> None:
+    source = (ROOT / "examples" / "hello.nbl").read_text()
+    filename = str(tmp_path / "hello.nbl")
+    definition = json.loads(
+        definition_json(
+            source,
+            filename=filename,
+            line=7,
+            column=5,
+            search_paths=[str(ROOT)],
+        )
+    )
+    assert definition["ok"] is True
+    assert definition["definition"]["file"].endswith("lib/uart.nbl")
+
+    hover = json.loads(
+        hover_json(
+            source,
+            filename=filename,
+            line=7,
+            column=5,
+            search_paths=[str(ROOT)],
+        )
+    )
+    assert hover["ok"] is True
+    assert "uart_puts" in hover["hover"]
+
+    references = json.loads(
+        references_json(
+            source,
+            filename=filename,
+            line=7,
+            column=5,
+            search_paths=[str(ROOT)],
+        )
+    )
+    assert references["ok"] is True
+    assert any(
+        item["file"].endswith("lib/uart.nbl")
+        for item in references["references"]
+    )

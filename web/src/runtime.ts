@@ -67,6 +67,16 @@ export type CompletionSymbol = {
   type: string;
 };
 
+export type DefinitionLocation = {
+  file: string;
+  line: number;
+  column: number;
+};
+
+export type ReferenceLocation = DefinitionLocation & {
+  length: number;
+};
+
 export type RuntimeProgress = (message: string) => void;
 
 function assetUrl(path: string): string {
@@ -216,6 +226,45 @@ import niblick.web
       "niblick.web.emulator_input_json(__niblick_data)",
       { data: bytesToBase64(bytes) },
     )) as EmulatorResult;
+  }
+
+  async definition(
+    source: string,
+    filename: string,
+    line: number,
+    column: number,
+  ): Promise<DefinitionLocation | null> {
+    const result = (await this.jsonCall(
+      "niblick.web.definition_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
+      { source, filename, line, column },
+    )) as { ok: boolean; definition: DefinitionLocation | null };
+    return result.ok ? result.definition : null;
+  }
+
+  async hover(
+    source: string,
+    filename: string,
+    line: number,
+    column: number,
+  ): Promise<string | null> {
+    const result = (await this.jsonCall(
+      "niblick.web.hover_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
+      { source, filename, line, column },
+    )) as { ok: boolean; hover: string | null };
+    return result.ok ? result.hover : null;
+  }
+
+  async references(
+    source: string,
+    filename: string,
+    line: number,
+    column: number,
+  ): Promise<ReferenceLocation[]> {
+    const result = (await this.jsonCall(
+      "niblick.web.references_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
+      { source, filename, line, column },
+    )) as { ok: boolean; references: ReferenceLocation[] };
+    return result.ok ? result.references : [];
   }
 
   async completions(

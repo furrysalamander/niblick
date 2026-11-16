@@ -1,4 +1,4 @@
-import * as monaco from "monaco-editor/editor/editor.api";
+import * as monaco from "monaco-editor/editor/editor.main";
 import type { AsmMapping, CompileResult } from "./runtime";
 import { colorClassFor } from "./colors";
 

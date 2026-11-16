@@ -6,6 +6,8 @@ code runs under Pyodide; Monaco provides the source editor.
 ## Features
 
 - Compile `.nbl` sources with `lib/` imports and Monaco diagnostics
+- Standard Monaco editor features: find, folding, hover, Ctrl+click/F12 go to
+  definition, references, and the context menu
 - Read-only assembly view with Voja4 highlighting
 - Source ↔ assembly cursor and hover highlighting; clicking either pane jumps
   the other pane's scroll position

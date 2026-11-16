@@ -15,6 +15,21 @@ import {
   Flasher,
   serialSupported,
 } from "./flasher";
+import {
+  NEW_ASM_SOURCE,
+  NEW_PROJECT_SOURCE,
+  buildProjectZip,
+  clearStoredProject,
+  joinProjectPath,
+  languageForPath,
+  loadStoredProject,
+  projectDownloadName,
+  readProjectZip,
+  relativeProjectPath,
+  saveProject,
+  validateSourcePath,
+  type ProjectSnapshot,
+} from "./project";
 import { HELLO_SOURCE } from "./samples";
 
 (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
@@ -27,13 +42,13 @@ registerVoja4Asm(monaco);
 
 registerNiblick(monaco, {
   complete: (source, line, column) =>
-    runtime.completions(source, activePath, line, column),
+    runtime.completions(source, activePath, line, column, projectOverrides()),
   definition: (source, line, column) =>
-    runtime.definition(source, activePath, line, column),
+    runtime.definition(source, activePath, line, column, projectOverrides()),
   hover: (source, line, column) =>
-    runtime.hover(source, activePath, line, column),
+    runtime.hover(source, activePath, line, column, projectOverrides()),
   references: (source, line, column) =>
-    runtime.references(source, activePath, line, column),
+    runtime.references(source, activePath, line, column, projectOverrides()),
 });
 
 const runtimeStatus = document.getElementById("runtime-status")!;
@@ -46,6 +61,39 @@ const compileButton = document.getElementById("compile") as HTMLButtonElement;
 const downloadButton = document.getElementById("download") as HTMLButtonElement;
 const exampleSelect = document.getElementById("example") as HTMLSelectElement;
 const sourceTabs = document.getElementById("source-tabs")!;
+const projectAdd = document.getElementById("project-add") as HTMLButtonElement;
+const projectMenuButton = document.getElementById(
+  "project-menu-button",
+) as HTMLButtonElement;
+const projectMenu = document.getElementById("project-menu")!;
+const projectTitle = document.getElementById("project-title")!;
+const projectStatus = document.getElementById("project-status")!;
+const projectImport = document.getElementById(
+  "project-import",
+) as HTMLInputElement;
+const projectDialog = document.getElementById(
+  "project-dialog",
+) as HTMLDialogElement;
+const projectForm = document.getElementById("project-form") as HTMLFormElement;
+const projectDialogTitle = document.getElementById("project-dialog-title")!;
+const projectDialogDescription = document.getElementById(
+  "project-dialog-description",
+)!;
+const projectDialogError = document.getElementById("project-dialog-error")!;
+const projectNameLabel = document.getElementById("project-name-label")!;
+const projectNameInput = document.getElementById(
+  "project-name",
+) as HTMLInputElement;
+const projectPathLabel = document.getElementById("project-path-label")!;
+const projectPathInput = document.getElementById(
+  "project-path",
+) as HTMLInputElement;
+const projectDialogConfirm = document.getElementById(
+  "project-dialog-confirm",
+) as HTMLButtonElement;
+const projectDialogCancel = document.getElementById(
+  "project-dialog-cancel",
+) as HTMLButtonElement;
 const problems = document.getElementById("problems")!;
 const asmStatus = document.getElementById("asm-status")!;
 const asmFollow = document.getElementById("asm-follow") as HTMLInputElement;
@@ -83,13 +131,15 @@ const registerRows = Array.from(
 );
 let previousRegisters: number[] = [];
 
-const mainModel = monaco.editor.createModel(
+const initialRoot = "/work/project";
+const initialEntryPath = joinProjectPath(initialRoot, "main.nbl");
+const initialModel = monaco.editor.createModel(
   HELLO_SOURCE,
   "niblick",
-  monaco.Uri.parse("file:///work/main.nbl"),
+  monaco.Uri.file(initialEntryPath),
 );
 const editor = monaco.editor.create(document.getElementById("editor")!, {
-  model: mainModel,
+  model: initialModel,
   language: "niblick",
   theme: "vs-dark",
   automaticLayout: false,
@@ -106,11 +156,22 @@ const editor = monaco.editor.create(document.getElementById("editor")!, {
   snippetSuggestions: "inline",
 });
 
-let mainPath = "/work/main.nbl";
-let activePath = mainPath;
+let projectRoot = initialRoot;
+let projectName = "untitled";
+let entryPath = initialEntryPath;
+let activePath = entryPath;
+let projectDirty = false;
+let lastExamplePath = "";
+let saveTimer: number | null = null;
+let suppressSave = false;
 const models = new Map<string, monaco.editor.ITextModel>([
-  [mainPath, mainModel],
+  [entryPath, initialModel],
 ]);
+const projectFiles = new Set<string>([entryPath]);
+const trackedModels = new Set<string>([entryPath]);
+initialModel.onDidChangeContent(() => {
+  markDirty();
+});
 const viewStates = new Map<
   string,
   monaco.editor.ICodeEditorViewState | null
@@ -180,8 +241,9 @@ function updateFlashAvailability(): void {
 }
 
 function sourceName(path: string): string {
-  if (path === mainPath) {
-    return path.split("/").pop() ?? path;
+  const relative = relativeProjectPath(projectRoot, path);
+  if (relative !== null) {
+    return relative;
   }
   const work = path.indexOf("/work/");
   if (work >= 0) {
@@ -204,31 +266,179 @@ function resolveSourcePath(file: string): string | null {
   return null;
 }
 
+function setProjectStatus(message: string, error = false): void {
+  projectStatus.textContent = message;
+  projectStatus.classList.toggle("error", error);
+  if (statusTimer !== null) {
+    window.clearTimeout(statusTimer);
+    statusTimer = null;
+  }
+  if (message !== "") {
+    statusTimer = window.setTimeout(() => {
+      projectStatus.textContent = "";
+      projectStatus.classList.remove("error");
+      statusTimer = null;
+    }, 4000);
+  }
+}
+
+let statusTimer: number | null = null;
+
+function trackProjectModel(
+  path: string,
+  model: monaco.editor.ITextModel,
+): void {
+  projectFiles.add(path);
+  if (trackedModels.has(path)) {
+    return;
+  }
+  trackedModels.add(path);
+  model.onDidChangeContent(() => {
+    if (projectFiles.has(path)) {
+      markDirty();
+    }
+  });
+}
+
+function markDirty(): void {
+  projectDirty = true;
+  scheduleSave();
+}
+
+function scheduleSave(): void {
+  if (suppressSave) {
+    return;
+  }
+  if (saveTimer !== null) {
+    window.clearTimeout(saveTimer);
+  }
+  saveTimer = window.setTimeout(() => {
+    saveTimer = null;
+    persistProject();
+  }, 300);
+}
+
+function projectSnapshot(): ProjectSnapshot {
+  const files: Record<string, string> = {};
+  for (const path of projectFiles) {
+    const relative = relativeProjectPath(projectRoot, path);
+    const model = models.get(path);
+    if (relative !== null && model !== undefined) {
+      files[relative] = model.getValue();
+    }
+  }
+  const entry = relativeProjectPath(projectRoot, entryPath) ?? "";
+  const active = relativeProjectPath(projectRoot, activePath) ?? entry;
+  return { name: projectName, entry, active, files };
+}
+
+function projectOverrides(): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  for (const path of projectFiles) {
+    const model = models.get(path);
+    if (model !== undefined) {
+      overrides[path] = model.getValue();
+    }
+  }
+  return overrides;
+}
+
+function persistProject(): void {
+  if (suppressSave || projectFiles.size === 0) {
+    return;
+  }
+  const snapshot = projectSnapshot();
+  if (snapshot.entry === "" || !(snapshot.entry in snapshot.files)) {
+    return;
+  }
+  const error = saveProject(snapshot);
+  if (error !== null) {
+    setProjectStatus("auto-save failed; export the project", true);
+  }
+}
+
+function disposeModel(path: string): void {
+  const model = models.get(path);
+  if (model === undefined) {
+    return;
+  }
+  if (path === activePath) {
+    const fallback = models.get(entryPath);
+    if (fallback !== undefined && fallback !== model) {
+      activePath = entryPath;
+      editor.setModel(fallback);
+    }
+  }
+  models.delete(path);
+  viewStates.delete(path);
+  sourceColorIds.delete(path);
+  projectFiles.delete(path);
+  trackedModels.delete(path);
+  model.dispose();
+}
+
+function updateProjectMenu(): void {
+  const activeIsProject = projectFiles.has(activePath);
+  const activeIsEntry = activePath === entryPath;
+  for (const button of projectMenu.querySelectorAll<HTMLButtonElement>(
+    "[data-project-action]",
+  )) {
+    const action = button.dataset.projectAction;
+    if (action === "rename" || action === "delete") {
+      button.disabled = !activeIsProject;
+    } else if (action === "entry") {
+      button.disabled =
+        !activeIsProject ||
+        activeIsEntry ||
+        !activePath.toLowerCase().endsWith(".nbl");
+    } else if (action === "export") {
+      button.disabled = projectFiles.size === 0;
+    }
+  }
+}
+
 function renderSourceTabs(): void {
   sourceTabs.replaceChildren();
-  const paths = [
-    mainPath,
-    ...Array.from(models.keys())
-      .filter((path) => path !== mainPath)
-      .sort(),
-  ];
-  for (const path of paths) {
+  const projectPaths = Array.from(projectFiles).sort((left, right) => {
+    if (left === entryPath) {
+      return -1;
+    }
+    if (right === entryPath) {
+      return 1;
+    }
+    return sourceName(left).localeCompare(sourceName(right));
+  });
+  const imported = Array.from(models.keys())
+    .filter((path) => !projectFiles.has(path))
+    .sort((left, right) => sourceName(left).localeCompare(sourceName(right)));
+  for (const path of [...projectPaths, ...imported]) {
     const button = document.createElement("button");
     button.className = "source-tab";
     if (path === activePath) {
       button.classList.add("active");
     }
-    if (path !== mainPath) {
+    if (!projectFiles.has(path)) {
       button.classList.add("readonly");
     }
+    if (path === entryPath) {
+      button.classList.add("entry");
+    }
+    if (path.toLowerCase().endsWith(".asm")) {
+      button.classList.add("asm");
+    }
     button.textContent = sourceName(path);
-    button.title = path;
+    button.title =
+      path === entryPath
+        ? `${sourceName(path)} (entry point)`
+        : sourceName(path);
     button.dataset.path = path;
     button.addEventListener("click", () => {
       setActiveSource(path);
     });
     sourceTabs.append(button);
   }
+  projectTitle.textContent = projectName;
+  updateProjectMenu();
 }
 
 function setActiveSource(path: string): void {
@@ -242,48 +452,40 @@ function setActiveSource(path: string): void {
   viewStates.set(activePath, editor.saveViewState());
   activePath = path;
   editor.setModel(next);
-  editor.updateOptions({ readOnly: path !== mainPath });
+  editor.updateOptions({ readOnly: !projectFiles.has(path) });
   const state = viewStates.get(path);
   if (state !== undefined && state !== null) {
     editor.restoreViewState(state);
   }
   sourceHoverDecorations.clear();
   renderSourceTabs();
+  scheduleSave();
   const line = editor.getPosition()?.lineNumber ?? 1;
   asmView.updateFromSource(activePath, line);
 }
 
 function updateSourceModels(result: CompileResult): void {
-  const previousMain = mainPath;
-  mainPath = result.filename;
-  if (previousMain !== mainPath) {
-    models.delete(previousMain);
-    sourceColorIds.delete(previousMain);
-    models.set(mainPath, mainModel);
-  }
   const wanted = new Set<string>(Object.keys(result.sources));
-  wanted.add(mainPath);
-  for (const path of Array.from(models.keys())) {
-    if (wanted.has(path)) {
-      continue;
-    }
-    const model = models.get(path);
-    if (model !== undefined && model !== mainModel) {
-      model.dispose();
-    }
-    models.delete(path);
-    viewStates.delete(path);
-    sourceColorIds.delete(path);
-  }
   for (const [path, text] of Object.entries(result.sources)) {
-    if (path === mainPath) {
+    const relative = relativeProjectPath(projectRoot, path);
+    if (relative !== null) {
+      let model = models.get(path);
+      if (model === undefined) {
+        model = monaco.editor.createModel(
+          text,
+          languageForPath(path),
+          monaco.Uri.file(path),
+        );
+        models.set(path, model);
+      }
+      trackProjectModel(path, model);
       continue;
     }
     let model = models.get(path);
     if (model === undefined) {
       model = monaco.editor.createModel(
         text,
-        "niblick",
+        languageForPath(path),
         monaco.Uri.file(path),
       );
       models.set(path, model);
@@ -291,13 +493,23 @@ function updateSourceModels(result: CompileResult): void {
       model.setValue(text);
     }
   }
+  for (const path of Array.from(models.keys())) {
+    if (wanted.has(path) || projectFiles.has(path)) {
+      continue;
+    }
+    disposeModel(path);
+  }
   if (!models.has(activePath)) {
-    activePath = mainPath;
-    editor.setModel(mainModel);
-    editor.updateOptions({ readOnly: false });
+    activePath = entryPath;
+    const model = models.get(entryPath);
+    if (model !== undefined) {
+      editor.setModel(model);
+      editor.updateOptions({ readOnly: false });
+    }
   }
   renderSourceTabs();
   applySourceColors(result);
+  scheduleSave();
 }
 
 function applySourceColors(result: CompileResult | null): void {
@@ -593,28 +805,48 @@ function setProblems(items: string[]): void {
   }
 }
 
+function clearMarkers(): void {
+  for (const model of models.values()) {
+    monaco.editor.setModelMarkers(model, "niblick", []);
+  }
+}
+
 function setMarkers(result: CompileResult): void {
+  clearMarkers();
   if (result.ok) {
-    monaco.editor.setModelMarkers(mainModel, "niblick", []);
     return;
   }
-  const basename = mainPath.split("/").pop() ?? mainPath;
-  const markers: monaco.editor.IMarkerData[] = result.diagnostics
-    .filter(
-      (diagnostic) =>
-        !diagnostic.file ||
-        diagnostic.file === mainPath ||
-        diagnostic.file.endsWith(basename),
-    )
-    .map((diagnostic) => ({
-      severity: monaco.MarkerSeverity.Error,
+  const byModel = new Map<
+    monaco.editor.ITextModel,
+    monaco.editor.IMarkerData[]
+  >();
+  for (const diagnostic of result.diagnostics) {
+    const resolved =
+      diagnostic.file === ""
+        ? entryPath
+        : resolveSourcePath(diagnostic.file);
+    const model =
+      (resolved === null ? undefined : models.get(resolved)) ??
+      models.get(entryPath);
+    if (model === undefined) {
+      continue;
+    }
+    const markers = byModel.get(model) ?? [];
+    markers.push({
+      severity: diagnostic.severity.toLowerCase().startsWith("warn")
+        ? monaco.MarkerSeverity.Warning
+        : monaco.MarkerSeverity.Error,
       message: diagnostic.message,
       startLineNumber: Math.max(1, diagnostic.line),
       startColumn: Math.max(1, diagnostic.column),
       endLineNumber: Math.max(1, diagnostic.line),
       endColumn: Math.max(1, diagnostic.column) + 1,
-    }));
-  monaco.editor.setModelMarkers(mainModel, "niblick", markers);
+    });
+    byModel.set(model, markers);
+  }
+  for (const [model, markers] of byModel) {
+    monaco.editor.setModelMarkers(model, "niblick", markers);
+  }
 }
 
 function hexBytes(result: CompileResult): Uint8Array {
@@ -669,13 +901,23 @@ async function compile(): Promise<void> {
   if (!runtime.ready) {
     return;
   }
+  const model = models.get(entryPath);
+  if (model === undefined) {
+    compileStatus.textContent = "no entry";
+    compileButton.disabled = true;
+    return;
+  }
   compileButton.disabled = true;
   compileStatus.textContent = "compiling";
   emulatorRunning = false;
   emuRun.textContent = "Run";
   const started = performance.now();
   try {
-    const result = await runtime.compile(mainModel.getValue(), mainPath);
+    const result = await runtime.compile(
+      model.getValue(),
+      entryPath,
+      projectOverrides(),
+    );
     showResult(result);
     timingStatus.textContent = `compile ${Math.round(performance.now() - started)} ms; runtime ${Math.round(runtime.startupMs)} ms`;
   } catch (error) {
@@ -684,31 +926,479 @@ async function compile(): Promise<void> {
     setProblems([message]);
     timingStatus.textContent = "";
   } finally {
-    compileButton.disabled = false;
+    compileButton.disabled = !runtime.ready || !models.has(entryPath);
+  }
+}
+
+type DialogValues = { name: string; path: string };
+
+type DialogConfig = {
+  title: string;
+  description: string;
+  confirm: string;
+  name?: { value: string; placeholder?: string };
+  path?: { value: string; placeholder?: string };
+  hideCancel?: boolean;
+  validate?: (values: DialogValues) => string | null;
+};
+
+let dialogResolve: ((values: DialogValues | null) => void) | null = null;
+let dialogValidate: ((values: DialogValues) => string | null) | null = null;
+
+function openProjectDialog(
+  config: DialogConfig,
+): Promise<DialogValues | null> {
+  if (projectDialog.open) {
+    projectDialog.close("cancel");
+  }
+  projectDialogTitle.textContent = config.title;
+  projectDialogDescription.textContent = config.description;
+  projectDialogError.textContent = "";
+  projectDialogConfirm.textContent = config.confirm;
+  projectDialogCancel.hidden = config.hideCancel ?? false;
+  projectNameLabel.classList.toggle("hidden", config.name === undefined);
+  projectPathLabel.classList.toggle("hidden", config.path === undefined);
+  projectNameInput.value = config.name?.value ?? "";
+  projectNameInput.placeholder = config.name?.placeholder ?? "";
+  projectPathInput.value = config.path?.value ?? "";
+  projectPathInput.placeholder = config.path?.placeholder ?? "";
+  dialogValidate = config.validate ?? null;
+  projectDialog.returnValue = "";
+  const promise = new Promise<DialogValues | null>((resolve) => {
+    dialogResolve = resolve;
+  });
+  projectDialog.showModal();
+  const focus =
+    config.name !== undefined
+      ? projectNameInput
+      : config.path !== undefined
+        ? projectPathInput
+        : projectDialogConfirm;
+  window.setTimeout(() => {
+    focus.focus();
+    if ("select" in focus) {
+      focus.select();
+    }
+  }, 0);
+  return promise;
+}
+
+async function showMessageDialog(
+  title: string,
+  description: string,
+): Promise<void> {
+  await openProjectDialog({
+    title,
+    description,
+    confirm: "Close",
+    hideCancel: true,
+  });
+}
+
+async function confirmReplace(description: string): Promise<boolean> {
+  const values = await openProjectDialog({
+    title: "Replace project?",
+    description,
+    confirm: "Replace",
+  });
+  return values !== null;
+}
+
+function resetCompileOutput(): void {
+  lastResult = null;
+  asmView.clear();
+  clearSourceColors();
+  hexDump.textContent = "";
+  hexInfo.textContent = "";
+  compileStatus.textContent = "not compiled";
+  sizeStatus.textContent = "";
+  downloadButton.disabled = true;
+  setProblems([]);
+  clearMarkers();
+  updateFlashAvailability();
+  void loadEmulator();
+}
+
+function validateProjectSnapshot(snapshot: ProjectSnapshot): void {
+  if (!snapshot.entry.toLowerCase().endsWith(".nbl")) {
+    throw new Error("A project needs a .nbl entry file.");
+  }
+  if (!(snapshot.entry in snapshot.files)) {
+    throw new Error("The project entry file is missing.");
+  }
+  for (const [path, text] of Object.entries(snapshot.files)) {
+    validateSourcePath(path);
+    if (typeof text !== "string") {
+      throw new Error(`Invalid content for ${path}.`);
+    }
+  }
+}
+
+async function replaceProject(
+  snapshot: ProjectSnapshot,
+  root: string,
+): Promise<void> {
+  validateProjectSnapshot(snapshot);
+  if (saveTimer !== null) {
+    window.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  suppressSave = true;
+  try {
+    editor.setModel(null);
+    for (const model of models.values()) {
+      model.dispose();
+    }
+    models.clear();
+    projectFiles.clear();
+    trackedModels.clear();
+    viewStates.clear();
+    sourceColorIds.clear();
+    sourceHoverDecorations.clear();
+
+    projectRoot = root;
+    projectName = snapshot.name.trim() || "untitled";
+    entryPath = joinProjectPath(root, snapshot.entry);
+    for (const [relative, text] of Object.entries(snapshot.files)) {
+      const path = joinProjectPath(root, relative);
+      const model = monaco.editor.createModel(
+        text,
+        languageForPath(path),
+        monaco.Uri.file(path),
+      );
+      models.set(path, model);
+      trackProjectModel(path, model);
+    }
+    activePath =
+      snapshot.active === ""
+        ? entryPath
+        : joinProjectPath(root, snapshot.active);
+    if (!models.has(activePath)) {
+      activePath = entryPath;
+    }
+    const activeModel = models.get(activePath);
+    if (activeModel === undefined) {
+      throw new Error("The project entry model could not be created.");
+    }
+    editor.setModel(activeModel);
+    editor.updateOptions({ readOnly: false });
+    projectDirty = false;
+    renderSourceTabs();
+    resetCompileOutput();
+  } finally {
+    suppressSave = false;
+  }
+  persistProject();
+  await compile();
+}
+
+function fileTemplate(relative: string): string {
+  return relative.toLowerCase().endsWith(".asm")
+    ? NEW_ASM_SOURCE
+    : `// ${relative}\n`;
+}
+
+async function newProject(): Promise<void> {
+  const values = await openProjectDialog({
+    title: "New project",
+    description:
+      "Creates a fresh project and replaces the current files. Export first if you need a copy.",
+    confirm: "Create",
+    name: { value: "untitled" },
+    path: { value: "main.nbl", placeholder: "main.nbl" },
+    validate: ({ name, path }) => {
+      if (name.trim() === "") {
+        return "Enter a project name.";
+      }
+      try {
+        const entry = validateSourcePath(path);
+        if (!entry.toLowerCase().endsWith(".nbl")) {
+          return "The entry file must use the .nbl extension.";
+        }
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+      return null;
+    },
+  });
+  if (values === null) {
+    return;
+  }
+  const entry = validateSourcePath(values.path);
+  const snapshot: ProjectSnapshot = {
+    name: values.name.trim(),
+    entry,
+    active: entry,
+    files: { [entry]: NEW_PROJECT_SOURCE },
+  };
+  exampleSelect.value = "";
+  lastExamplePath = "";
+  await replaceProject(snapshot, "/work/project");
+  setProjectStatus("new project created");
+}
+
+async function addProjectFile(): Promise<void> {
+  const values = await openProjectDialog({
+    title: "Add file",
+    description: "Add a Niblick source or an imported assembly module.",
+    confirm: "Add",
+    path: { value: "", placeholder: "src/input.nbl or drivers/display.asm" },
+    validate: ({ path }) => {
+      try {
+        const relative = validateSourcePath(path);
+        if (models.has(joinProjectPath(projectRoot, relative))) {
+          return "That file already exists.";
+        }
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+      return null;
+    },
+  });
+  if (values === null) {
+    return;
+  }
+  const relative = validateSourcePath(values.path);
+  const path = joinProjectPath(projectRoot, relative);
+  const model = monaco.editor.createModel(
+    fileTemplate(relative),
+    languageForPath(path),
+    monaco.Uri.file(path),
+  );
+  models.set(path, model);
+  trackProjectModel(path, model);
+  activePath = path;
+  editor.setModel(model);
+  editor.updateOptions({ readOnly: false });
+  sourceHoverDecorations.clear();
+  markDirty();
+  persistProject();
+  renderSourceTabs();
+  setProjectStatus(`added ${relative}`);
+  asmView.updateFromSource(activePath, 1);
+  editor.focus();
+}
+
+async function renameActiveFile(): Promise<void> {
+  if (!projectFiles.has(activePath)) {
+    return;
+  }
+  const oldRelative = relativeProjectPath(projectRoot, activePath);
+  if (oldRelative === null) {
+    return;
+  }
+  const oldPath = activePath;
+  const values = await openProjectDialog({
+    title: "Rename file",
+    description:
+      "The entry path is updated automatically. Import statements are not rewritten.",
+    confirm: "Rename",
+    path: { value: oldRelative },
+    validate: ({ path }) => {
+      try {
+        const relative = validateSourcePath(path);
+        const next = joinProjectPath(projectRoot, relative);
+        if (next !== oldPath && models.has(next)) {
+          return "That file already exists.";
+        }
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+      return null;
+    },
+  });
+  if (values === null) {
+    return;
+  }
+  const newRelative = validateSourcePath(values.path);
+  const newPath = joinProjectPath(projectRoot, newRelative);
+  if (newPath === oldPath) {
+    return;
+  }
+  const oldModel = models.get(oldPath);
+  if (oldModel === undefined) {
+    return;
+  }
+  const viewState = editor.saveViewState();
+  const model = monaco.editor.createModel(
+    oldModel.getValue(),
+    languageForPath(newPath),
+    monaco.Uri.file(newPath),
+  );
+  models.delete(oldPath);
+  projectFiles.delete(oldPath);
+  trackedModels.delete(oldPath);
+  viewStates.delete(oldPath);
+  sourceColorIds.delete(oldPath);
+  models.set(newPath, model);
+  trackProjectModel(newPath, model);
+  if (entryPath === oldPath) {
+    entryPath = newPath;
+  }
+  activePath = newPath;
+  editor.setModel(model);
+  editor.updateOptions({ readOnly: false });
+  if (viewState !== null) {
+    editor.restoreViewState(viewState);
+  }
+  sourceHoverDecorations.clear();
+  oldModel.dispose();
+  markDirty();
+  persistProject();
+  renderSourceTabs();
+  setProjectStatus(`renamed to ${newRelative}`);
+  void compile();
+}
+
+function chooseEntry(exclude: string): string {
+  const candidates = Array.from(projectFiles)
+    .filter(
+      (path) =>
+        path !== exclude && path.toLowerCase().endsWith(".nbl"),
+    )
+    .sort((left, right) => {
+      const main = joinProjectPath(projectRoot, "main.nbl");
+      if (left === main) {
+        return -1;
+      }
+      if (right === main) {
+        return 1;
+      }
+      return sourceName(left).localeCompare(sourceName(right));
+    });
+  return candidates[0] ?? "";
+}
+
+async function deleteActiveFile(): Promise<void> {
+  if (!projectFiles.has(activePath)) {
+    return;
+  }
+  const path = activePath;
+  const relative = relativeProjectPath(projectRoot, path) ?? sourceName(path);
+  const deletingEntry = path === entryPath;
+  const nextEntry = deletingEntry ? chooseEntry(path) : entryPath;
+  if (deletingEntry && nextEntry === "") {
+    await showMessageDialog(
+      "Cannot delete entry",
+      "A project needs at least one .nbl entry file.",
+    );
+    return;
+  }
+  const values = await openProjectDialog({
+    title: "Delete file?",
+    description: `${relative} will be removed from the project.`,
+    confirm: "Delete",
+  });
+  if (values === null) {
+    return;
+  }
+  entryPath = nextEntry;
+  disposeModel(path);
+  if (!models.has(activePath)) {
+    activePath = entryPath;
+    const model = models.get(entryPath);
+    if (model !== undefined) {
+      editor.setModel(model);
+      editor.updateOptions({ readOnly: false });
+    }
+  }
+  renderSourceTabs();
+  markDirty();
+  persistProject();
+  setProjectStatus(`deleted ${relative}`);
+  await compile();
+}
+
+function setActiveAsEntry(): void {
+  if (
+    !projectFiles.has(activePath) ||
+    !activePath.toLowerCase().endsWith(".nbl")
+  ) {
+    return;
+  }
+  entryPath = activePath;
+  markDirty();
+  persistProject();
+  renderSourceTabs();
+  setProjectStatus(`entry set to ${sourceName(activePath)}`);
+  void compile();
+}
+
+async function importProjectZip(file: File): Promise<void> {
+  try {
+    const data = new Uint8Array(await file.arrayBuffer());
+    const snapshot = readProjectZip(
+      data,
+      file.name.replace(/\.zip$/i, ""),
+    );
+    if (
+      projectDirty &&
+      !(await confirmReplace(
+        "Importing this zip replaces the current project. Export it first if you need a copy.",
+      ))
+    ) {
+      return;
+    }
+    exampleSelect.value = "";
+    lastExamplePath = "";
+    await replaceProject(snapshot, "/work/project");
+    setProjectStatus(
+      `imported ${Object.keys(snapshot.files).length} files`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await showMessageDialog("Import failed", message);
+  }
+}
+
+function exportProject(): void {
+  try {
+    const snapshot = projectSnapshot();
+    const bytes = buildProjectZip(snapshot);
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    const blob = new Blob([buffer], { type: "application/zip" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = projectDownloadName(snapshot.name);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    projectDirty = false;
+    setProjectStatus(
+      `exported ${Object.keys(snapshot.files).length} files`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setProjectStatus(`export failed: ${message}`, true);
   }
 }
 
 async function loadExample(path: string): Promise<void> {
   try {
-    const source = await runtime.loadExample(path);
-    mainModel.setValue(source);
-    const nextPath = `/work/examples/${path}`;
-    if (mainPath !== nextPath) {
-      models.delete(mainPath);
-      mainPath = nextPath;
-      models.set(mainPath, mainModel);
+    if (
+      projectDirty &&
+      !(await confirmReplace(
+        `Loading ${path} replaces the current project.`,
+      ))
+    ) {
+      exampleSelect.value = lastExamplePath;
+      return;
     }
-    activePath = mainPath;
-    editor.setModel(mainModel);
-    editor.updateOptions({ readOnly: false });
-    viewStates.clear();
-    renderSourceTabs();
-    monaco.editor.setModelMarkers(mainModel, "niblick", []);
-    setProblems([]);
-    await compile();
+    const source = await runtime.loadExample(path);
+    const snapshot: ProjectSnapshot = {
+      name: path.replace(/\.nbl$/i, ""),
+      entry: path,
+      active: path,
+      files: { [path]: source },
+    };
+    await replaceProject(snapshot, "/work/examples");
+    exampleSelect.value = path;
+    lastExamplePath = path;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setProblems([message]);
+    exampleSelect.value = lastExamplePath;
   }
 }
 
@@ -724,18 +1414,41 @@ async function boot(): Promise<void> {
 
     const examples = await runtime.listExamples();
     exampleSelect.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Load example…";
+    placeholder.disabled = true;
+    exampleSelect.append(placeholder);
     for (const item of examples) {
       const option = document.createElement("option");
       option.value = item.path;
       option.textContent = item.name;
       exampleSelect.append(option);
     }
-    const hello = examples.find((item) => item.name === "hello");
-    if (hello !== undefined) {
-      exampleSelect.value = hello.path;
-      await loadExample(hello.path);
+
+    const stored = loadStoredProject();
+    if (stored !== null) {
+      try {
+        exampleSelect.value = "";
+        lastExamplePath = "";
+        await replaceProject(stored, "/work/project");
+        setProjectStatus("restored saved project");
+      } catch {
+        clearStoredProject();
+        const hello = examples.find((item) => item.name === "hello");
+        if (hello !== undefined) {
+          await loadExample(hello.path);
+        } else {
+          await compile();
+        }
+      }
     } else {
-      await compile();
+      const hello = examples.find((item) => item.name === "hello");
+      if (hello !== undefined) {
+        await loadExample(hello.path);
+      } else {
+        await compile();
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -808,6 +1521,10 @@ window.addEventListener("resize", () => {
   editor.layout();
   asmView.layout();
 });
+
+window.addEventListener("beforeunload", () => {
+  persistProject();
+});
 renderSourceTabs();
 
 monaco.editor.registerEditorOpener({
@@ -838,6 +1555,126 @@ monaco.editor.registerEditorOpener({
 
 compileButton.addEventListener("click", () => {
   void compile();
+});
+
+projectForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const values = {
+    name: projectNameInput.value.trim(),
+    path: projectPathInput.value.trim(),
+  };
+  const error = dialogValidate?.(values) ?? null;
+  if (error !== null) {
+    projectDialogError.textContent = error;
+    return;
+  }
+  projectDialog.close("confirm");
+});
+
+projectDialogCancel.addEventListener("click", () => {
+  projectDialog.close("cancel");
+});
+
+for (const input of [projectNameInput, projectPathInput]) {
+  input.addEventListener("input", () => {
+    projectDialogError.textContent = "";
+  });
+}
+
+projectDialog.addEventListener("close", () => {
+  const confirmed = projectDialog.returnValue === "confirm";
+  const values = confirmed
+    ? {
+        name: projectNameInput.value.trim(),
+        path: projectPathInput.value.trim(),
+      }
+    : null;
+  const resolve = dialogResolve;
+  dialogResolve = null;
+  dialogValidate = null;
+  resolve?.(values);
+});
+
+function closeProjectMenu(): void {
+  projectMenu.classList.add("hidden");
+  projectMenuButton.setAttribute("aria-expanded", "false");
+}
+
+function toggleProjectMenu(): void {
+  const opening = projectMenu.classList.contains("hidden");
+  if (opening) {
+    updateProjectMenu();
+    projectMenu.classList.remove("hidden");
+    projectMenuButton.setAttribute("aria-expanded", "true");
+  } else {
+    closeProjectMenu();
+  }
+}
+
+projectMenuButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleProjectMenu();
+});
+
+projectAdd.addEventListener("click", () => {
+  closeProjectMenu();
+  void addProjectFile();
+});
+
+projectMenu.addEventListener("click", (event) => {
+  const target = (event.target as HTMLElement).closest<HTMLButtonElement>(
+    "[data-project-action]",
+  );
+  if (target === null || target.disabled) {
+    return;
+  }
+  closeProjectMenu();
+  switch (target.dataset.projectAction) {
+    case "new":
+      void newProject();
+      break;
+    case "add":
+      void addProjectFile();
+      break;
+    case "rename":
+      void renameActiveFile();
+      break;
+    case "delete":
+      void deleteActiveFile();
+      break;
+    case "entry":
+      setActiveAsEntry();
+      break;
+    case "import":
+      projectImport.click();
+      break;
+    case "export":
+      exportProject();
+      break;
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (
+    !projectMenu.contains(event.target as Node) &&
+    event.target !== projectMenuButton
+  ) {
+    closeProjectMenu();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeProjectMenu();
+  }
+});
+
+projectImport.addEventListener("change", () => {
+  const file = projectImport.files?.[0];
+  projectImport.value = "";
+  if (file !== undefined) {
+    void importProjectZip(file);
+  }
 });
 
 downloadButton.addEventListener("click", () => {

@@ -111,7 +111,25 @@
 
       <main class="workspace">
         <section class="pane editor-pane">
-          <div id="source-tabs" class="source-tabs"></div>
+          <div class="source-bar">
+            <div id="source-tabs" class="source-tabs"></div>
+            <div class="source-actions">
+              <span id="project-title" class="project-title"></span>
+              <span id="project-status" class="project-status" role="status" aria-live="polite"></span>
+              <button id="project-add" class="source-action" title="Add a project file">+ File</button>
+              <button id="project-menu-button" class="source-action" aria-haspopup="menu" aria-expanded="false">Project ▾</button>
+              <div id="project-menu" class="project-menu hidden" role="menu">
+                <button data-project-action="new" role="menuitem">New project…</button>
+                <button data-project-action="add" role="menuitem">Add file…</button>
+                <button data-project-action="rename" role="menuitem">Rename active file…</button>
+                <button data-project-action="delete" role="menuitem">Delete active file</button>
+                <button data-project-action="entry" role="menuitem">Set active file as entry</button>
+                <hr />
+                <button data-project-action="import" role="menuitem">Import .zip…</button>
+                <button data-project-action="export" role="menuitem">Export .zip</button>
+              </div>
+            </div>
+          </div>
           <div id="editor"></div>
         </section>
         <section class="pane output-pane">
@@ -335,6 +353,27 @@
         </div>
       </div>
     </div>
+
+    <input id="project-import" type="file" accept=".zip,application/zip" hidden />
+
+    <dialog id="project-dialog" class="project-dialog">
+      <form method="dialog" id="project-form">
+        <h2 id="project-dialog-title"></h2>
+        <p id="project-dialog-description" class="dialog-description"></p>
+        <label id="project-name-label" class="dialog-field">Project name
+          <input id="project-name" autocomplete="off" spellcheck="false" />
+        </label>
+        <label id="project-path-label" class="dialog-field">File path
+          <input id="project-path" autocomplete="off" spellcheck="false" />
+        </label>
+        <p id="project-dialog-error" class="dialog-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" id="project-dialog-cancel">Cancel</button>
+          <button type="submit" value="confirm" id="project-dialog-confirm">Create</button>
+        </div>
+      </form>
+    </dialog>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

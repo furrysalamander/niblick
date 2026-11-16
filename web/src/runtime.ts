@@ -161,7 +161,11 @@ import niblick.web
     progress(`Ready in ${Math.round(this.initMs)} ms`);
   }
 
-  async compile(source: string, filename: string): Promise<CompileResult> {
+  async compile(
+    source: string,
+    filename: string,
+    overrides: Record<string, string> = {},
+  ): Promise<CompileResult> {
     const pyodide = this.pyodide;
     if (pyodide === null) {
       throw new Error("the Python runtime is not ready");
@@ -169,8 +173,9 @@ import niblick.web
     const started = performance.now();
     pyodide.globals.set("__niblick_source", source);
     pyodide.globals.set("__niblick_filename", filename);
+    pyodide.globals.set("__niblick_overrides", JSON.stringify(overrides));
     const result = await pyodide.runPythonAsync(
-      "niblick.web.compile_source_json(__niblick_source, __niblick_filename)",
+      "niblick.web.compile_source_json(__niblick_source, __niblick_filename, overrides_json=__niblick_overrides)",
     );
     return {
       ...(JSON.parse(result) as CompileResult),
@@ -233,10 +238,11 @@ import niblick.web
     filename: string,
     line: number,
     column: number,
+    overrides: Record<string, string> = {},
   ): Promise<DefinitionLocation | null> {
     const result = (await this.jsonCall(
-      "niblick.web.definition_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
-      { source, filename, line, column },
+      "niblick.web.definition_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column, overrides_json=__niblick_overrides)",
+      { source, filename, line, column, overrides: JSON.stringify(overrides) },
     )) as { ok: boolean; definition: DefinitionLocation | null };
     return result.ok ? result.definition : null;
   }
@@ -246,10 +252,11 @@ import niblick.web
     filename: string,
     line: number,
     column: number,
+    overrides: Record<string, string> = {},
   ): Promise<string | null> {
     const result = (await this.jsonCall(
-      "niblick.web.hover_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
-      { source, filename, line, column },
+      "niblick.web.hover_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column, overrides_json=__niblick_overrides)",
+      { source, filename, line, column, overrides: JSON.stringify(overrides) },
     )) as { ok: boolean; hover: string | null };
     return result.ok ? result.hover : null;
   }
@@ -259,10 +266,11 @@ import niblick.web
     filename: string,
     line: number,
     column: number,
+    overrides: Record<string, string> = {},
   ): Promise<ReferenceLocation[]> {
     const result = (await this.jsonCall(
-      "niblick.web.references_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
-      { source, filename, line, column },
+      "niblick.web.references_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column, overrides_json=__niblick_overrides)",
+      { source, filename, line, column, overrides: JSON.stringify(overrides) },
     )) as { ok: boolean; references: ReferenceLocation[] };
     return result.ok ? result.references : [];
   }
@@ -272,10 +280,11 @@ import niblick.web
     filename: string,
     line: number,
     column: number,
+    overrides: Record<string, string> = {},
   ): Promise<CompletionSymbol[]> {
     const result = (await this.jsonCall(
-      "niblick.web.completions_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
-      { source, filename, line, column },
+      "niblick.web.completions_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column, overrides_json=__niblick_overrides)",
+      { source, filename, line, column, overrides: JSON.stringify(overrides) },
     )) as { ok: boolean; items: CompletionSymbol[] };
     return result.ok ? result.items : [];
   }

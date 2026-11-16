@@ -7,11 +7,12 @@ JavaScript without keeping Python proxies alive.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 from .analysis import Analysis
 from .asm_opt import asm_word_count
@@ -49,23 +50,38 @@ def _asm_map(asm: str) -> list[dict]:
     return mapping
 
 
-def _source_files(program, filename: str, source: str) -> dict[str, str]:
-    """Collect the main source and imported Niblick source files."""
+def _source_files(
+    program,
+    filename: str,
+    source: str,
+    overrides: Mapping[str | Path, str] | None = None,
+) -> dict[str, str]:
+    """Collect the main source and imported Niblick/assembly source files."""
 
     files: dict[str, str] = {filename: source}
 
-    def add(path: str) -> None:
-        if not path or path in files or not path.lower().endswith(".nbl"):
+    def add(path: str, text: str | None = None) -> None:
+        if not path or path in files:
             return
-        try:
-            files[path] = Path(path).read_text()
-        except OSError:
+        if not path.lower().endswith((".nbl", ".asm")):
             return
+        if text is None and overrides:
+            text = overrides.get(str(Path(path).expanduser().resolve()))
+        if text is None:
+            try:
+                text = Path(path).read_text()
+            except OSError:
+                return
+        files[path] = text
 
     for decl in program.globals:
         add(decl.file)
     for fn in program.functions:
         add(fn.file)
+    for module in program.asm_sources:
+        add(module.path, module.text)
+    for path, text in (overrides or {}).items():
+        add(str(path), text)
     return files
 
 
@@ -99,7 +115,7 @@ def compile_source_json(
 
     try:
         overrides: dict[str | Path, str] = {
-            str(key): str(value)
+            str(Path(key).expanduser().resolve()): str(value)
             for key, value in json.loads(overrides_json or "{}").items()
         }
         program = load_source(
@@ -125,7 +141,7 @@ def compile_source_json(
             "words": asm_word_count(asm),
             "ram": compiler.mem.used(),
             "asm_map": _asm_map(asm),
-            "sources": _source_files(program, filename, source),
+            "sources": _source_files(program, filename, source, overrides or None),
             "diagnostics": [],
         }
     except Exception as exc:  # noqa: BLE001 - the browser needs a JSON error
@@ -142,22 +158,37 @@ def compile_source_json(
     return json.dumps(payload)
 
 
-_analysis_cache: dict[tuple[str, tuple[str, ...], str], Analysis] = {}
+_analysis_cache: dict[tuple[str, tuple[str, ...], str, str], Analysis] = {}
+
+
+def _parse_overrides(overrides_json: str) -> dict[str, str]:
+    return {
+        str(Path(key).expanduser().resolve()): str(value)
+        for key, value in json.loads(overrides_json or "{}").items()
+    }
 
 
 def _analysis_for_completion(
     filename: str,
     source: str,
     search_paths: tuple[str, ...],
+    overrides_json: str = "{}",
 ) -> Analysis:
-    key = (filename, search_paths, source)
+    overrides = _parse_overrides(overrides_json)
+    overrides[str(Path(filename).expanduser().resolve())] = source
+    key = (
+        filename,
+        search_paths,
+        source,
+        hashlib.sha1(overrides_json.encode()).hexdigest(),
+    )
     analysis = _analysis_cache.get(key)
     if analysis is None:
         if len(_analysis_cache) >= 4:
             _analysis_cache.pop(next(iter(_analysis_cache)))
         analysis = Analysis(
             filename,
-            source_overrides={filename: source},
+            source_overrides=overrides,
             search_paths=list(search_paths),
         )
         _analysis_cache[key] = analysis
@@ -170,12 +201,13 @@ def definition_json(
     line: int = 1,
     column: int = 1,
     search_paths: Optional[list[str | Path]] = None,
+    overrides_json: str = "{}",
 ) -> str:
     """Return the definition at a source position."""
 
     try:
         paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
-        analysis = _analysis_for_completion(filename, source, paths)
+        analysis = _analysis_for_completion(filename, source, paths, overrides_json)
         target = analysis.definition(filename, int(line), int(column))
         payload: dict[str, object] = {
             "ok": True,
@@ -198,12 +230,13 @@ def hover_json(
     line: int = 1,
     column: int = 1,
     search_paths: Optional[list[str | Path]] = None,
+    overrides_json: str = "{}",
 ) -> str:
     """Return hover text for a source position."""
 
     try:
         paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
-        analysis = _analysis_for_completion(filename, source, paths)
+        analysis = _analysis_for_completion(filename, source, paths, overrides_json)
         text = analysis.hover(filename, int(line), int(column))
         payload = {"ok": True, "hover": text}
     except Exception as exc:  # noqa: BLE001
@@ -217,12 +250,13 @@ def references_json(
     line: int = 1,
     column: int = 1,
     search_paths: Optional[list[str | Path]] = None,
+    overrides_json: str = "{}",
 ) -> str:
     """Return references for the symbol at a source position."""
 
     try:
         paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
-        analysis = _analysis_for_completion(filename, source, paths)
+        analysis = _analysis_for_completion(filename, source, paths, overrides_json)
         occurrences = analysis.references(filename, int(line), int(column))
         payload = {
             "ok": True,
@@ -274,12 +308,13 @@ def completions_json(
     line: int = 1,
     column: int = 1,
     search_paths: Optional[list[str | Path]] = None,
+    overrides_json: str = "{}",
 ) -> str:
     """Return editor completion symbols for *source* at *line*:*column*."""
 
     try:
         paths = tuple(str(item) for item in (search_paths or [WORK_ROOT]))
-        analysis = _analysis_for_completion(filename, source, paths)
+        analysis = _analysis_for_completion(filename, source, paths, overrides_json)
         items = analysis.completions(filename, int(line), int(column))
         payload = {
             "ok": True,

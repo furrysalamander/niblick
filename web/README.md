@@ -6,6 +6,8 @@ code runs under Pyodide; Monaco provides the source editor.
 ## Features
 
 - Compile `.nbl` sources with `lib/` imports and Monaco diagnostics
+- Editable multi-file projects with `.nbl` and imported `.asm` modules
+- Project zip import/export with browser auto-save
 - Standard Monaco editor features: find, folding, hover, Ctrl+click/F12 go to
   definition, references, and the context menu
 - Read-only assembly view with Voja4 highlighting
@@ -42,6 +44,59 @@ are omitted because the emulator does not model the badge's front-panel
 controller. The `UART` panel has a clear button; input is sent to the
 emulated serial port. See [`docs/keys.md`](../docs/keys.md) for the hardware
 mapping.
+
+## Projects
+
+The editor keeps one project in the browser. A project has a `.nbl` entry
+file and any number of editable `.nbl` and `.asm` files. Imports resolve
+relative to the importing file, then against the bundled runtime roots, as in
+the command-line compiler. Files outside the project root, such as `lib/`
+imports, open as read-only tabs.
+
+Use the **Project** menu beside the source tabs to create a project, add,
+rename, or delete files, change the entry point, and import or export a zip.
+The entry tab is marked with a dot. `.asm` files are assembly modules imported
+from a `.nbl` file:
+
+```c
+import "drivers/display.asm";
+
+extern fn void display_init();
+```
+
+See [`docs/asm-imports.md`](../docs/asm-imports.md) for the module ABI and
+placeholder syntax.
+
+The project is auto-saved to `localStorage` under `niblick.project.v1` and
+restored on reload. Export clears the dirty flag; auto-save does not replace a
+zip export as a backup.
+
+### Zip format
+
+Exported archives contain the project files plus `niblick.json`:
+
+```text
+niblick.json
+main.nbl
+src/input.nbl
+drivers/display.asm
+```
+
+```json
+{
+  "format": "niblick-project",
+  "version": 1,
+  "name": "my-project",
+  "entry": "main.nbl"
+}
+```
+
+`lib/` is not copied into the archive; imports resolve against the runtime
+that loads the project. Import strips one common top-level directory, ignores
+unsupported files such as `README.md` and `__MACOSX`, and infers the entry from
+`main.nbl` or the first `.nbl` file when no manifest is present. Limits are
+200 files, 1 MiB per file, and 4 MiB total. Absolute paths, `..` segments, and
+binary files are rejected.
 
 ## Build assets
 
@@ -92,8 +147,10 @@ npm run build
 npm run test:e2e
 ```
 
-The Playwright test uses the system Chrome channel and waits for Pyodide to
-install the local wheels and compile `hello.nbl`.
+The Playwright tests use the system Chrome channel and wait for Pyodide to
+install the local wheels and compile `hello.nbl`. Project tests cover creating
+files, zip import/export, path validation, auto-save, and editing imported
+assembly.
 
 ## GitHub Pages
 
@@ -114,4 +171,4 @@ and deploys `web/dist` with GitHub Actions. Set the repository Pages source to
 GPL-3.0-only. See `../LICENSE`.
 
 Monaco is MIT-licensed. Pyodide is MPL-2.0. `supercon6-assembler` is
-MIT-licensed. See `../THIRD_PARTY_NOTICES.md`.
+MIT-licensed. `fflate` is MIT-licensed. See `../THIRD_PARTY_NOTICES.md`.

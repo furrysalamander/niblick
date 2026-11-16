@@ -362,3 +362,43 @@ def test_rename_function_updates_asm_entry_point(tmp_path: Path) -> None:
         edit.new_text == "fn_plus3" and edit.file == str(asm.resolve())
         for edit in edits
     )
+
+
+def test_load_program_resolves_override_only_niblick_import(
+    tmp_path: Path,
+) -> None:
+    entry = tmp_path / "main.nbl"
+    entry.write_text(
+        'import "extra.nbl";\n'
+        "fn main() {\n"
+        "    helper();\n"
+        "}\n"
+    )
+    extra = tmp_path / "extra.nbl"
+    program = load_program(
+        entry,
+        source_overrides={extra: "fn void helper() { }\n"},
+    )
+    assert any(fn.name == "helper" for fn in program.functions)
+
+
+def test_load_program_resolves_override_only_asm_import(
+    tmp_path: Path,
+) -> None:
+    entry = tmp_path / "main.nbl"
+    entry.write_text(
+        'import "add.asm";\n'
+        "extern fn void add();\n"
+        "fn main() {\n"
+        "    add();\n"
+        "}\n"
+    )
+    module = tmp_path / "add.asm"
+    text = "fn_add:\n    RET R0, 0\n"
+    program = load_program(
+        entry,
+        source_overrides={module: text},
+    )
+    assert len(program.asm_sources) == 1
+    assert program.asm_sources[0].text == text
+    assert program.asm_sources[0].path == str(module.resolve())

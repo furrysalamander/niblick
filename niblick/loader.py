@@ -38,7 +38,10 @@ def _search_roots(extra: list[str | Path] | None) -> list[Path]:
 
 
 def _resolve_import(
-    importer: Path, import_path: str, roots: list[Path]
+    importer: Path,
+    import_path: str,
+    roots: list[Path],
+    source_overrides: dict[Path, str] | None = None,
 ) -> Path:
     requested = Path(import_path)
     candidates: list[Path] = []
@@ -49,6 +52,8 @@ def _resolve_import(
         candidates.extend(root / requested for root in roots)
     for candidate in candidates:
         if candidate.is_file():
+            return candidate.resolve()
+        if source_overrides and candidate.resolve() in source_overrides:
             return candidate.resolve()
     raise NiblickCompileError(
         f"{importer}: cannot find import {import_path!r} "
@@ -81,7 +86,7 @@ def _load(
 
     merged = ast.Program()
     for declaration in parsed.imports:
-        target = _resolve_import(path, declaration.path, roots)
+        target = _resolve_import(path, declaration.path, roots, source_overrides)
         if target.suffix.lower() == ".asm":
             if target not in loaded_asm:
                 loaded_asm.add(target)
@@ -113,7 +118,9 @@ def _append_wide_if_needed(
 
     if not _uses_qword(program):
         return
-    wide_path = _resolve_import(REPO_ROOT / "__implicit__.nbl", "lib/wide.nbl", roots)
+    wide_path = _resolve_import(
+        REPO_ROOT / "__implicit__.nbl", "lib/wide.nbl", roots, overrides
+    )
     wide = _load(wide_path, [], loaded, loaded_asm, roots, overrides)
     program.globals.extend(wide.globals)
     program.functions.extend(wide.functions)
@@ -136,7 +143,9 @@ def _append_float_modules_if_needed(
         modules.append("lib/float16.nbl")
     for name in modules:
         try:
-            path = _resolve_import(REPO_ROOT / "__implicit__.nbl", name, roots)
+            path = _resolve_import(
+                REPO_ROOT / "__implicit__.nbl", name, roots, overrides
+            )
         except NiblickCompileError:
             # Optional float modules may be absent on some targets.
             continue
@@ -196,7 +205,7 @@ def load_source(
         }
     merged = ast.Program()
     for declaration in parsed.imports:
-        target = _resolve_import(base, declaration.path, roots)
+        target = _resolve_import(base, declaration.path, roots, overrides)
         if target.suffix.lower() == ".asm":
             if target not in loaded_asm:
                 loaded_asm.add(target)

@@ -6,7 +6,7 @@ test("falls back to examples in the runtime archive", async ({ page }) => {
   );
 
   await page.goto("/");
-  await expect(page.locator("#example option")).toHaveCount(28, {
+  await expect(page.locator("#example option")).toHaveCount(29, {
     timeout: 180_000,
   });
   await expect(page.locator("#compile-status")).toContainText("words", {

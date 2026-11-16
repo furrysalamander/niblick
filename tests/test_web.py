@@ -180,3 +180,65 @@ def test_definition_hover_and_references(tmp_path: Path) -> None:
         item["file"].endswith("lib/uart.nbl")
         for item in references["references"]
     )
+
+
+def test_compile_source_json_uses_project_overrides(tmp_path: Path) -> None:
+    source = (
+        'import "extra.nbl";\n'
+        'import "add.asm";\n'
+        "extern fn nibble add3(nibble x);\n"
+        "nibble result;\n"
+        "fn main() {\n"
+        "    result = helper();\n"
+        "    result = add3(result);\n"
+        "    while (1) { }\n"
+        "}\n"
+    )
+    extra = tmp_path / "extra.nbl"
+    module = tmp_path / "add.asm"
+    payload = json.loads(
+        compile_source_json(
+            source,
+            filename=str(tmp_path / "main.nbl"),
+            search_paths=[str(ROOT)],
+            overrides_json=json.dumps(
+                {
+                    str(extra): "fn nibble helper() { return 1; }\n",
+                    str(module): (
+                        "fn_add3:\n"
+                        "    MOV R0, [${x}]\n"
+                        "    ADD R0, 2\n"
+                        "    MOV R1, R0\n"
+                        "    RET R0, 0\n"
+                    ),
+                }
+            ),
+        )
+    )
+    assert payload["ok"] is True
+    assert payload["sources"][str(extra)] == "fn nibble helper() { return 1; }\n"
+    assert "fn_add3:" in payload["sources"][str(module)]
+
+
+def test_completions_use_project_overrides(tmp_path: Path) -> None:
+    extra = tmp_path / "extra.nbl"
+    source = (
+        'import "extra.nbl";\n'
+        "fn main() {\n"
+        "    helper();\n"
+        "}\n"
+    )
+    payload = json.loads(
+        completions_json(
+            source,
+            filename=str(tmp_path / "main.nbl"),
+            line=3,
+            column=5,
+            search_paths=[str(ROOT)],
+            overrides_json=json.dumps(
+                {str(extra): "fn nibble helper() { return 1; }\n"}
+            ),
+        )
+    )
+    assert payload["ok"] is True
+    assert "helper" in {item["name"] for item in payload["items"]}

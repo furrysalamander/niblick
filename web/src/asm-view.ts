@@ -42,7 +42,7 @@ export class AsmView {
       language: "voja4-asm",
       theme: "vs-dark",
       readOnly: true,
-      automaticLayout: true,
+      automaticLayout: false,
       fontSize: 12,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,

@@ -75,7 +75,7 @@ const editor = monaco.editor.create(document.getElementById("editor")!, {
   model: mainModel,
   language: "niblick",
   theme: "vs-dark",
-  automaticLayout: true,
+  automaticLayout: false,
   fontSize: 13,
   tabSize: 4,
   minimap: { enabled: false },
@@ -720,6 +720,11 @@ hexCopy.addEventListener("click", async () => {
 asmView.setFollow(asmFollow.checked);
 asmView.setColorEnabled(asmColor.checked);
 sourceColorEnabled = asmColor.checked;
+
+window.addEventListener("resize", () => {
+  editor.layout();
+  asmView.layout();
+});
 renderSourceTabs();
 
 compileButton.addEventListener("click", () => {

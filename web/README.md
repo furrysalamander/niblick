@@ -7,7 +7,9 @@ code runs under Pyodide; Monaco provides the source editor.
 
 - Compile `.nbl` sources with `lib/` imports and Monaco diagnostics
 - Read-only assembly view with Voja4 highlighting
-- Source ↔ assembly cursor and hover linking, with source-line colors
+- Source ↔ assembly cursor and hover highlighting; clicking either pane jumps
+  the other pane's scroll position
+- Source-line colors in both panes, with a toggle
 - Read-only tabs for imported library sources
 - `xxd`-style hexdump with copy and `.hex` download
 - Example selector for the checked-in programs

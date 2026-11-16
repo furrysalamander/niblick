@@ -124,33 +124,44 @@ export class AsmView {
 
   setFollow(enabled: boolean): void {
     this.follow = enabled;
+    if (!enabled) {
+      this.cursorDecorations.set([]);
+      this.hoverDecorations.set([]);
+    }
   }
 
   layout(): void {
     this.editor.layout();
   }
 
-  updateFromSource(file: string, line: number, reveal: boolean): void {
+  updateFromSource(file: string, line: number): void {
+    if (!this.follow) {
+      this.cursorDecorations.set([]);
+      return;
+    }
     const lines = this.linesFor(file, line);
     this.cursorDecorations.set(this.decorationsFor(lines, "asm-cursor-line"));
-    if (lines.length > 0) {
-      this.callbacks.status(`${displayPath(file)}:${line}`);
-      if (reveal && this.follow) {
-        this.editor.revealLineInCenterIfOutsideViewport(lines[0]);
-      }
-    } else {
-      this.callbacks.status("");
-    }
+    this.callbacks.status(
+      lines.length > 0 ? `${displayPath(file)}:${line}` : "",
+    );
   }
 
   updateHoverFromSource(file: string, line: number): void {
+    if (!this.follow) {
+      this.hoverDecorations.set([]);
+      return;
+    }
     const lines = this.linesFor(file, line);
     this.hoverDecorations.set(this.decorationsFor(lines, "asm-hover-line"));
     if (lines.length > 0) {
       this.callbacks.status(`${displayPath(file)}:${line}`);
-      if (this.follow) {
-        this.editor.revealLineInCenterIfOutsideViewport(lines[0]);
-      }
+    }
+  }
+
+  revealSource(file: string, line: number): void {
+    const lines = this.linesFor(file, line);
+    if (lines.length > 0) {
+      this.editor.revealLineInCenterIfOutsideViewport(lines[0]);
     }
   }
 

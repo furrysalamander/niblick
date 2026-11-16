@@ -54,6 +54,7 @@ test("links source lines to assembly and opens library tabs", async ({
     .first();
   await sourceLine.hover();
   await expect(page.locator("#asm-status")).toContainText("hello.nbl:7");
+  await sourceLine.click();
   await expect(page.locator("#asm-editor .view-lines")).toContainText(
     "while5",
   );

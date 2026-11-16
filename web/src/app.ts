@@ -135,7 +135,6 @@ function selectTab(name: string): void {
       asmView.updateFromSource(
         activePath,
         editor.getPosition()?.lineNumber ?? 1,
-        false,
       );
     });
   }
@@ -234,7 +233,7 @@ function setActiveSource(path: string): void {
   sourceHoverDecorations.clear();
   renderSourceTabs();
   const line = editor.getPosition()?.lineNumber ?? 1;
-  asmView.updateFromSource(activePath, line, false);
+  asmView.updateFromSource(activePath, line);
 }
 
 function updateSourceModels(result: CompileResult): void {
@@ -330,7 +329,7 @@ function openSource(file: string, line: number): void {
   const target = Math.max(1, Math.min(line, model.getLineCount()));
   editor.setPosition({ lineNumber: target, column: 1 });
   editor.revealLineInCenterIfOutsideViewport(target);
-  asmView.updateFromSource(path, target, false);
+  asmView.updateFromSource(path, target);
 }
 
 function hoverSource(file: string | null, line: number | null): void {
@@ -356,6 +355,10 @@ function hoverSource(file: string | null, line: number | null): void {
     asmStatus.textContent = `${sourceName(file)}:${line}`;
     return;
   }
+  if (!asmFollow.checked) {
+    asmStatus.textContent = `${sourceName(file)}:${line}`;
+    return;
+  }
   const model = models.get(path)!;
   const target = Math.max(1, Math.min(line, model.getLineCount()));
   sourceHoverDecorations.set([
@@ -364,9 +367,6 @@ function hoverSource(file: string | null, line: number | null): void {
       options: { isWholeLine: true, className: "source-hover-line" },
     },
   ]);
-  if (asmFollow.checked) {
-    editor.revealLineInCenterIfOutsideViewport(target);
-  }
   asmStatus.textContent = `${sourceName(file)}:${line}`;
 }
 
@@ -587,7 +587,6 @@ function showResult(result: CompileResult): void {
   asmView.updateFromSource(
     activePath,
     editor.getPosition()?.lineNumber ?? 1,
-    false,
   );
   void loadEmulator();
 }
@@ -674,7 +673,14 @@ async function boot(): Promise<void> {
 }
 
 editor.onDidChangeCursorPosition((event) => {
-  asmView.updateFromSource(activePath, event.position.lineNumber, true);
+  asmView.updateFromSource(activePath, event.position.lineNumber);
+});
+
+editor.onMouseDown((event) => {
+  const line = event.target.position?.lineNumber;
+  if (line !== undefined) {
+    asmView.revealSource(activePath, line);
+  }
 });
 
 editor.onMouseMove((event) => {
@@ -690,6 +696,9 @@ editor.onMouseLeave(() => {
 
 asmFollow.addEventListener("change", () => {
   asmView.setFollow(asmFollow.checked);
+  if (!asmFollow.checked) {
+    sourceHoverDecorations.clear();
+  }
 });
 
 asmColor.addEventListener("change", () => {

@@ -75,6 +75,38 @@ jobs:
         working-directory: editors/vscode
         run: npm run compile
 
+  web:
+    name: Web editor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build Python assets
+        run: |
+          python -m pip install --upgrade pip build
+          python tools/build_web_assets.py
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+      - name: Build web app
+        working-directory: web
+        run: npm run build
+      - name: Install Playwright browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Browser tests
+        working-directory: web
+        run: npm run test:e2e
+        env:
+          PLAYWRIGHT_CHANNEL: chromium
+
   package:
     name: Build wheel
     runs-on: ubuntu-latest

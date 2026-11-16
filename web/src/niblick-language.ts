@@ -101,8 +101,17 @@ const OPERATORS = [
   ":",
 ];
 
+import type * as Monaco from "monaco-editor/editor/editor.api";
+
+export type SemanticCompletion = (
+  source: string,
+  line: number,
+  column: number,
+) => Promise<Array<{ name: string; kind: string; detail: string }>>;
+
 export function registerNiblick(
   monaco: typeof import("monaco-editor/editor/editor.api"),
+  semantic?: SemanticCompletion,
 ): void {
   monaco.languages.register({ id: "niblick", extensions: [".nbl"] });
 
@@ -185,7 +194,8 @@ export function registerNiblick(
   });
 
   monaco.languages.registerCompletionItemProvider("niblick", {
-    provideCompletionItems: (model, position) => {
+    triggerCharacters: [".", '"'],
+    provideCompletionItems: async (model, position) => {
       const word = model.getWordUntilPosition(position);
       const range = {
         startLineNumber: position.lineNumber,
@@ -193,12 +203,134 @@ export function registerNiblick(
         startColumn: word.startColumn,
         endColumn: word.endColumn,
       };
-      const suggestions = [...KEYWORDS, ...TYPES].map((label) => ({
+
+      const snippets = [
+        {
+          label: "main",
+          detail: "fn main() { ... }",
+          insertText: "fn main() {\n\t$0\n}",
+        },
+        {
+          label: "fn",
+          detail: "function definition",
+          insertText: "fn ${1:void} ${2:name}(${3}) {\n\t$0\n}",
+        },
+        {
+          label: "if",
+          detail: "if statement",
+          insertText: "if (${1:condition}) {\n\t$0\n}",
+        },
+        {
+          label: "while",
+          detail: "while loop",
+          insertText: "while (${1:condition}) {\n\t$0\n}",
+        },
+        {
+          label: "for",
+          detail: "for loop",
+          insertText: "for (${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n\t$0\n}",
+        },
+        {
+          label: "import",
+          detail: "import a library module",
+          insertText: 'import "lib/${1:uart}.nbl";',
+        },
+        {
+          label: "asm",
+          detail: "inline assembly block",
+          insertText: "asm {\n\t$0\n}",
+        },
+        {
+          label: "struct",
+          detail: "struct declaration",
+          insertText: "struct ${1:Name} {\n\t${2:nibble} ${3:field};\n};",
+        },
+      ].map((snippet) => ({
+        ...snippet,
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        insertTextRules:
+          monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        range,
+      }));
+
+      const keywordSuggestions = KEYWORDS.map((label) => ({
         label,
         kind: monaco.languages.CompletionItemKind.Keyword,
         insertText: label,
         range,
       }));
+      const typeSuggestions = TYPES.map((label) => ({
+        label,
+        kind: monaco.languages.CompletionItemKind.TypeParameter,
+        insertText: label,
+        range,
+      }));
+
+      let semanticSuggestions: Array<{
+        label: string;
+        kind: Monaco.languages.CompletionItemKind;
+        detail: string;
+        insertText: string;
+        insertTextRules?: Monaco.languages.CompletionItemInsertTextRule;
+        range: typeof range;
+      }> = [];
+      if (semantic !== undefined) {
+        try {
+          const items = await semantic(
+            model.getValue(),
+            position.lineNumber,
+            position.column,
+          );
+          semanticSuggestions = items.map((item) => {
+            const callable =
+              item.kind === "function" ||
+              item.kind === "builtin" ||
+              item.kind === "runtime" ||
+              item.kind === "asm_function";
+            let kind = monaco.languages.CompletionItemKind.Text;
+            if (callable) {
+              kind = monaco.languages.CompletionItemKind.Function;
+            } else if (item.kind === "constant") {
+              kind = monaco.languages.CompletionItemKind.Constant;
+            } else if (
+              item.kind === "global" ||
+              item.kind === "local" ||
+              item.kind === "param"
+            ) {
+              kind = monaco.languages.CompletionItemKind.Variable;
+            } else if (item.kind === "asm_label") {
+              kind = monaco.languages.CompletionItemKind.Reference;
+            }
+            return {
+              label: item.name,
+              kind,
+              detail: item.detail,
+              insertText: callable ? `${item.name}($0)` : item.name,
+              insertTextRules: callable
+                ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+                : undefined,
+              range,
+            };
+          });
+        } catch (error) {
+          console.warn("Niblick completion provider failed", error);
+          semanticSuggestions = [];
+        }
+      }
+
+      const seen = new Set<string>();
+      const suggestions = [
+        ...semanticSuggestions,
+        ...snippets,
+        ...keywordSuggestions,
+        ...typeSuggestions,
+      ].filter((item) => {
+        if (seen.has(item.label)) {
+          return false;
+        }
+        seen.add(item.label);
+        return true;
+      });
       return { suggestions };
     },
   });

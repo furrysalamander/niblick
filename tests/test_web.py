@@ -8,6 +8,9 @@ from pathlib import Path
 
 from niblick.web import (
     compile_source_json,
+    completions_json,
+    emulator_alt_json,
+    emulator_key_json,
     emulator_load_json,
     emulator_state_json,
     emulator_step_json,
@@ -48,6 +51,30 @@ def test_compile_source_json_reports_diagnostics(tmp_path: Path) -> None:
     assert "expected" in diagnostic["message"]
 
 
+def test_completions_include_imported_functions(tmp_path: Path) -> None:
+    source = (
+        'import "lib/uart.nbl";\n'
+        "fn main() {\n"
+        "    uart_init(0);\n"
+        "}\n"
+    )
+    payload = json.loads(
+        completions_json(
+            source,
+            filename=str(tmp_path / "main.nbl"),
+            line=3,
+            column=5,
+            search_paths=[str(ROOT)],
+        )
+    )
+    assert payload["ok"] is True
+    names = {item["name"] for item in payload["items"]}
+    assert "uart_init" in names
+    assert "uart_puts" in names
+    assert "main" in names
+    assert "peek" in names
+
+
 def test_emulator_load_and_step(tmp_path: Path) -> None:
     source = (ROOT / "examples" / "hello.nbl").read_text()
     compiled = json.loads(
@@ -72,3 +99,13 @@ def test_emulator_load_and_step(tmp_path: Path) -> None:
     current = json.loads(emulator_state_json())
     assert current["ok"] is True
     assert current["state"]["pc"] == stepped["state"]["pc"]
+
+    keyed = json.loads(emulator_key_json(1, True))
+    assert keyed["ok"] is True
+    assert 1 in keyed["state"]["keys_down"]
+    released = json.loads(emulator_key_json(1, False))
+    assert 1 not in released["state"]["keys_down"]
+    alt = json.loads(emulator_alt_json(True))
+    assert alt["state"]["alt_down"] is True
+    alt = json.loads(emulator_alt_json(False))
+    assert alt["state"]["alt_down"] is False

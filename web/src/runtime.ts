@@ -24,10 +24,53 @@ export type CompileResult = {
   compileMs?: number;
 };
 
+export type EmulatorState = {
+  pc: number;
+  sp: number;
+  C: number;
+  Z: number;
+  V: number;
+  registers: number[];
+  ram: number[];
+  halted: boolean;
+  instructions: number;
+  cycles: number;
+  clock_hz: number;
+  uart_tx: number[];
+  uart_rx: number[];
+  keys_down: number[];
+  alt_down: boolean;
+  last_key: number | null;
+  display_left: number[];
+  display_right: number[];
+  executed?: number;
+};
+
+export type EmulatorResult = {
+  ok: boolean;
+  state?: EmulatorState;
+  diagnostics?: Diagnostic[];
+};
+
+export type CompletionSymbol = {
+  name: string;
+  kind: string;
+  detail: string;
+  type: string;
+};
+
 export type RuntimeProgress = (message: string) => void;
 
 function assetUrl(path: string): string {
   return new URL(`${import.meta.env.BASE_URL}${path}`, window.location.href).href;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
 }
 
 export class NiblickRuntime {
@@ -115,6 +158,69 @@ import niblick.web
       ...(JSON.parse(result) as CompileResult),
       compileMs: performance.now() - started,
     };
+  }
+
+  private async jsonCall(
+    expression: string,
+    args: Record<string, string | number | boolean>,
+  ): Promise<unknown> {
+    const pyodide = this.pyodide;
+    if (pyodide === null) {
+      throw new Error("the Python runtime is not ready");
+    }
+    for (const [key, value] of Object.entries(args)) {
+      pyodide.globals.set(`__niblick_${key}`, value);
+    }
+    const result = await pyodide.runPythonAsync(expression);
+    return JSON.parse(result);
+  }
+
+  async emulatorLoad(hexBase64: string): Promise<EmulatorResult> {
+    return (await this.jsonCall(
+      "niblick.web.emulator_load_json(__niblick_hex)",
+      { hex: hexBase64 },
+    )) as EmulatorResult;
+  }
+
+  async emulatorStep(count: number): Promise<EmulatorResult> {
+    return (await this.jsonCall(
+      "niblick.web.emulator_step_json(__niblick_count)",
+      { count },
+    )) as EmulatorResult;
+  }
+
+  async emulatorKey(key: number, down: boolean): Promise<EmulatorResult> {
+    return (await this.jsonCall(
+      "niblick.web.emulator_key_json(__niblick_key, __niblick_down)",
+      { key, down },
+    )) as EmulatorResult;
+  }
+
+  async emulatorAlt(down: boolean): Promise<EmulatorResult> {
+    return (await this.jsonCall(
+      "niblick.web.emulator_alt_json(__niblick_down)",
+      { down },
+    )) as EmulatorResult;
+  }
+
+  async emulatorInput(bytes: Uint8Array): Promise<EmulatorResult> {
+    return (await this.jsonCall(
+      "niblick.web.emulator_input_json(__niblick_data)",
+      { data: bytesToBase64(bytes) },
+    )) as EmulatorResult;
+  }
+
+  async completions(
+    source: string,
+    filename: string,
+    line: number,
+    column: number,
+  ): Promise<CompletionSymbol[]> {
+    const result = (await this.jsonCall(
+      "niblick.web.completions_json(__niblick_source, __niblick_filename, __niblick_line, __niblick_column)",
+      { source, filename, line, column },
+    )) as { ok: boolean; items: CompletionSymbol[] };
+    return result.ok ? result.items : [];
   }
 
   async listExamples(): Promise<Array<{ name: string; path: string }>> {

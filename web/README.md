@@ -1,7 +1,16 @@
 # Niblick web editor
 
-Browser build of the Niblick compiler and assembler. The Python compiler runs
-under Pyodide; Monaco provides the source editor.
+Browser build of the Niblick compiler, assembler, and emulator. The Python
+code runs under Pyodide; Monaco provides the source editor.
+
+## Features
+
+- Compile `.nbl` sources with `lib/` imports and Monaco diagnostics
+- Assembly, hex, and problem output
+- Example selector for the checked-in programs
+- `.hex` download
+- WebSerial flashing at 9600 8N1 in Chromium/Edge, with a download fallback
+- Emulator with run, pause, step, reset, LED matrix, UART, and front-panel keys
 
 ## Build assets
 
@@ -47,6 +56,14 @@ npm run test:e2e
 
 The Playwright test uses the system Chrome channel and waits for Pyodide to
 install the local wheels and compile `hello.nbl`.
+
+## GitHub Pages
+
+`.github/workflows/pages.yml` builds the Python assets, runs the Vite build,
+and deploys `web/dist` with GitHub Actions. Set the repository Pages source to
+**GitHub Actions**. The workflow reads the Pages base path from
+`actions/configure-pages`, so it works for both project sites
+(`/niblick/`) and user sites (`/`).
 
 ## Runtime
 

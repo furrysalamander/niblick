@@ -21,6 +21,7 @@
         <select id="example"></select>
         <button id="compile" disabled>Compile</button>
         <button id="download" disabled>Download .hex</button>
+        <button id="flash" disabled>Flash badge</button>
         <span class="spacer"></span>
         <span id="compile-status">not compiled</span>
       </div>
@@ -34,6 +35,8 @@
             <button class="tab active" data-tab="assembly">Assembly</button>
             <button class="tab" data-tab="problems">Problems</button>
             <button class="tab" data-tab="hex">Hex</button>
+            <button class="tab" data-tab="flash">Flash</button>
+            <button class="tab" data-tab="emulator">Emulator</button>
           </nav>
           <div class="tab-body" id="tab-assembly">
             <pre id="assembly"></pre>
@@ -43,6 +46,60 @@
           </div>
           <div class="tab-body hidden" id="tab-hex">
             <pre id="hex-summary"></pre>
+          </div>
+          <div class="tab-body hidden" id="tab-flash">
+            <div class="flash-panel">
+              <div class="flash-row">
+                <span id="serial-status">checking WebSerial</span>
+                <span class="spacer"></span>
+                <label>Padding
+                  <input id="serial-padding" type="number" value="1024" min="0" step="128" />
+                </label>
+                <button id="serial-connect">Connect</button>
+                <button id="serial-send" disabled>Send .hex</button>
+              </div>
+              <p class="hint">
+                Set the badge to DIR mode, press LOAD, then click Send. The
+                badge serial protocol is 9600 8N1.
+              </p>
+              <pre id="flash-log"></pre>
+            </div>
+          </div>
+          <div class="tab-body hidden" id="tab-emulator">
+            <div class="emulator-panel">
+              <div class="emulator-main">
+                <canvas id="emu-matrix" width="160" height="320"></canvas>
+                <div class="emulator-side">
+                  <div class="flash-row">
+                    <button id="emu-run">Run</button>
+                    <button id="emu-step">Step</button>
+                    <button id="emu-reset">Reset</button>
+                  </div>
+                  <label class="emu-speed">Speed
+                    <select id="emu-speed">
+                      <option value="50">slow</option>
+                      <option value="200" selected>normal</option>
+                      <option value="1000">fast</option>
+                    </select>
+                  </label>
+                  <div id="emu-state" class="emu-state">not loaded</div>
+                  <div class="keypad">
+                    <button data-key="1">OPCODE 8</button>
+                    <button data-key="2">OPCODE 4</button>
+                    <button data-key="3">OPCODE 2</button>
+                    <button data-key="4">OPCODE 1</button>
+                    <button data-key="0">DEP / CLOCK</button>
+                    <button data-alt="true">ALT</button>
+                  </div>
+                  <div class="flash-row">
+                    <input id="emu-uart-input" placeholder="UART input" />
+                    <label><input id="emu-uart-newline" type="checkbox" checked /> newline</label>
+                    <button id="emu-uart-send">Send</button>
+                  </div>
+                </div>
+              </div>
+              <pre id="emu-uart"></pre>
+            </div>
           </div>
         </section>
       </main>

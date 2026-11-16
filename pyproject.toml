@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "niblick"
-version = "0.1.0"
+version = "1.0.0"
 description = "A C-like compiler for the Hackaday Supercon.6 (Voja4) 4-bit badge"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -2,7 +2,7 @@
   "name": "niblick-vscode",
   "displayName": "Niblick",
   "description": "Niblick language support for the Hackaday Supercon.6 badge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "niblick",
   "license": "MIT",
   "engines": {

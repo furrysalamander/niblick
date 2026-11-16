@@ -54,7 +54,7 @@ npm run package
 Then install it:
 
 ```bash
-code --install-extension niblick-vscode-0.1.0.vsix
+code --install-extension niblick-vscode-1.0.0.vsix
 ```
 
 Or use **Extensions: Install from VSIX...** in the command palette.

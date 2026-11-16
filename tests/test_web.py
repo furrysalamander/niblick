@@ -11,9 +11,11 @@ from niblick.web import (
     completions_json,
     emulator_alt_json,
     emulator_key_json,
+    list_examples_json,
     emulator_load_json,
     emulator_state_json,
     emulator_step_json,
+    read_example_json,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,6 +37,17 @@ def test_compile_source_json_returns_asm_and_hex(tmp_path: Path) -> None:
     data = base64.b64decode(payload["hex"])
     assert data[:6] == bytes((0x00, 0xFF, 0x00, 0xFF, 0xA5, 0xC3))
     assert payload["hex_size"] == len(data)
+    assert payload["asm_map"]
+    assert any(
+        item["file"].endswith("hello.nbl") and item["source_line"] == 7
+        for item in payload["asm_map"]
+    )
+    assert any(
+        item["file"].endswith("lib/uart.nbl")
+        for item in payload["asm_map"]
+    )
+    assert any(path.endswith("hello.nbl") for path in payload["sources"])
+    assert any(path.endswith("lib/uart.nbl") for path in payload["sources"])
 
 
 def test_compile_source_json_reports_diagnostics(tmp_path: Path) -> None:
@@ -109,3 +122,15 @@ def test_emulator_load_and_step(tmp_path: Path) -> None:
     assert alt["state"]["alt_down"] is True
     alt = json.loads(emulator_alt_json(False))
     assert alt["state"]["alt_down"] is False
+
+
+def test_example_fallbacks(tmp_path: Path) -> None:
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    (examples / "hello.nbl").write_text("fn main() { }\n")
+    listed = json.loads(list_examples_json(str(tmp_path)))
+    assert listed["ok"] is True
+    assert listed["items"] == [{"name": "hello", "path": "hello.nbl"}]
+    read = json.loads(read_example_json("hello.nbl", str(tmp_path)))
+    assert read["ok"] is True
+    assert "fn main" in read["source"]

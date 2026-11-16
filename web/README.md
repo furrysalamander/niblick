@@ -6,9 +6,11 @@ code runs under Pyodide; Monaco provides the source editor.
 ## Features
 
 - Compile `.nbl` sources with `lib/` imports and Monaco diagnostics
-- Assembly, hex, and problem output
+- Read-only assembly view with Voja4 highlighting
+- Source ↔ assembly cursor and hover linking, with source-line colors
+- Read-only tabs for imported library sources
+- `xxd`-style hexdump with copy and `.hex` download
 - Example selector for the checked-in programs
-- `.hex` download
 - WebSerial flashing at 9600 8N1 in Chromium/Edge, with a download fallback
 - Emulator with run, pause, step, reset, LED matrix, UART, and front-panel keys
 
@@ -30,6 +32,13 @@ Generated assets are written to `public/wheels/`, `public/runtime.zip`, and
 npm install
 npm run dev
 ```
+
+## Load order
+
+`index.html` contains the shell styles inline. `src/main.ts` is a small
+bootstrap that paints the shell and then dynamically imports `src/app.ts`.
+The Monaco and Pyodide app chunk loads after the first paint, so the header,
+toolbar, and loading state are styled immediately.
 
 ## Production build
 

@@ -168,8 +168,9 @@ entries and there is no stack-relative addressing.
 ## Web editor
 
 `web/` contains a browser editor: Monaco for source, Pyodide for the compiler,
-assembler, and emulator, and WebSerial for flashing in Chromium/Edge. Build the
-runtime assets before starting Vite:
+assembler, and emulator, and WebSerial for flashing in Chromium/Edge. The
+assembly view links source and generated assembly by cursor and mouse, and the
+hex view is an `xxd`-style dump. Build the runtime assets before starting Vite:
 
 ```bash
 .venv/bin/python tools/build_web_assets.py

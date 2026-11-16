@@ -12,6 +12,12 @@ export type Diagnostic = {
   code: string;
 };
 
+export type AsmMapping = {
+  line: number;
+  file: string;
+  source_line: number;
+};
+
 export type CompileResult = {
   ok: boolean;
   filename: string;
@@ -20,6 +26,8 @@ export type CompileResult = {
   hex_size: number;
   words: number;
   ram: number;
+  asm_map: AsmMapping[];
+  sources: Record<string, string>;
   diagnostics: Diagnostic[];
   compileMs?: number;
 };
@@ -224,18 +232,43 @@ import niblick.web
   }
 
   async listExamples(): Promise<Array<{ name: string; path: string }>> {
-    const response = await fetch(assetUrl("examples/manifest.json"));
-    if (!response.ok) {
-      return [];
+    try {
+      const response = await fetch(assetUrl("examples/manifest.json"));
+      if (response.ok) {
+        const items = (await response.json()) as Array<{
+          name: string;
+          path: string;
+        }>;
+        if (items.length > 0) {
+          return items;
+        }
+      }
+    } catch {
+      // Fall through to the runtime archive.
     }
-    return (await response.json()) as Array<{ name: string; path: string }>;
+    const result = (await this.jsonCall(
+      "niblick.web.list_examples_json()",
+      {},
+    )) as { ok: boolean; items: Array<{ name: string; path: string }> };
+    return result.ok ? result.items : [];
   }
 
   async loadExample(path: string): Promise<string> {
-    const response = await fetch(assetUrl(`examples/${path}`));
-    if (!response.ok) {
-      throw new Error(`examples/${path}: HTTP ${response.status}`);
+    try {
+      const response = await fetch(assetUrl(`examples/${path}`));
+      if (response.ok) {
+        return await response.text();
+      }
+    } catch {
+      // Fall through to the runtime archive.
     }
-    return await response.text();
+    const result = (await this.jsonCall(
+      "niblick.web.read_example_json(__niblick_path)",
+      { path },
+    )) as { ok: boolean; source: string };
+    if (!result.ok) {
+      throw new Error(`example ${path} is not available`);
+    }
+    return result.source;
   }
 }

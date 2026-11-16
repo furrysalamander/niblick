@@ -5,6 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <title>Niblick</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+        --bg: #111318;
+        --panel: #171a21;
+        --panel-2: #1e222b;
+        --border: #2b303b;
+        --text: #e6e9ef;
+        --muted: #9aa3b2;
+        --accent: #d8a657;
+        --error: #e06c75;
+        --ok: #98c379;
+      }
+      * { box-sizing: border-box; }
+      html, body, #app { width: 100%; height: 100%; margin: 0; }
+      body { background: var(--bg); color: var(--text); }
+      #app {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+      .title { font-size: 16px; font-weight: 700; letter-spacing: 0.02em; }
+      .subtitle { color: var(--muted); font-size: 12px; }
+      .runtime {
+        color: var(--muted);
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel-2);
+        font-size: 13px;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 1px;
+        min-height: 0;
+        background: var(--border);
+      }
+      .pane { min-width: 0; min-height: 0; background: var(--panel); }
+      .statusbar {
+        display: flex;
+        gap: 18px;
+        padding: 5px 14px;
+        border-top: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+      }
+      .loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 12, 16, 0.82);
+        z-index: 20;
+      }
+      .loading.hidden { display: none; }
+      .loading-box {
+        min-width: 300px;
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      .loading-title { font-weight: 700; margin-bottom: 6px; }
+      #loading-message { color: var(--muted); font-size: 13px; }
+    </style>
   </head>
   <body>
     <div id="app">
@@ -28,6 +111,7 @@
 
       <main class="workspace">
         <section class="pane editor-pane">
+          <div id="source-tabs" class="source-tabs"></div>
           <div id="editor"></div>
         </section>
         <section class="pane output-pane">
@@ -39,13 +123,27 @@
             <button class="tab" data-tab="emulator">Emulator</button>
           </nav>
           <div class="tab-body" id="tab-assembly">
-            <pre id="assembly"></pre>
+            <div class="asm-panel">
+              <div class="asm-toolbar">
+                <label><input id="asm-follow" type="checkbox" checked /> Follow cursor</label>
+                <label><input id="asm-color" type="checkbox" checked /> Color by source</label>
+                <span id="asm-status"></span>
+              </div>
+              <div id="asm-editor"></div>
+            </div>
           </div>
           <div class="tab-body hidden" id="tab-problems">
             <div id="problems"></div>
           </div>
           <div class="tab-body hidden" id="tab-hex">
-            <pre id="hex-summary"></pre>
+            <div class="hex-panel">
+              <div class="hex-toolbar">
+                <span id="hex-info"></span>
+                <span class="spacer"></span>
+                <button id="hex-copy">Copy hexdump</button>
+              </div>
+              <pre id="hex-dump"></pre>
+            </div>
           </div>
           <div class="tab-body hidden" id="tab-flash">
             <div class="flash-panel">

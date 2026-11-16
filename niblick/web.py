@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,51 @@ from .errors import NiblickError
 from .loader import load_source
 
 WORK_ROOT = "/work"
+_SOURCE_MARKER_RE = re.compile(
+    r";\s*@niblick-src\s+(?P<file>.+):(?P<line>\d+)\s*$"
+)
+
+
+def _asm_map(asm: str) -> list[dict]:
+    """Return assembly-line to source-line mappings from compiler markers."""
+
+    mapping: list[dict] = []
+    current: Optional[tuple[str, int]] = None
+    for line_number, text in enumerate(asm.splitlines(), 1):
+        marker = _SOURCE_MARKER_RE.search(text)
+        if marker is not None:
+            current = (marker.group("file").strip(), int(marker.group("line")))
+        elif text.strip() == "; @niblick-src-end":
+            current = None
+        if current is not None:
+            mapping.append(
+                {
+                    "line": line_number,
+                    "file": current[0],
+                    "source_line": current[1],
+                }
+            )
+    return mapping
+
+
+def _source_files(program, filename: str, source: str) -> dict[str, str]:
+    """Collect the main source and imported Niblick source files."""
+
+    files: dict[str, str] = {filename: source}
+
+    def add(path: str) -> None:
+        if not path or path in files or not path.lower().endswith(".nbl"):
+            return
+        try:
+            files[path] = Path(path).read_text()
+        except OSError:
+            return
+
+    for decl in program.globals:
+        add(decl.file)
+    for fn in program.functions:
+        add(fn.file)
+    return files
 
 
 def _diagnostic(exc: Exception) -> dict:
@@ -78,6 +124,8 @@ def compile_source_json(
             "hex_size": len(hex_data),
             "words": asm_word_count(asm),
             "ram": compiler.mem.used(),
+            "asm_map": _asm_map(asm),
+            "sources": _source_files(program, filename, source),
             "diagnostics": [],
         }
     except Exception as exc:  # noqa: BLE001 - the browser needs a JSON error
@@ -114,6 +162,33 @@ def _analysis_for_completion(
         )
         _analysis_cache[key] = analysis
     return analysis
+
+
+def list_examples_json(root: str = WORK_ROOT) -> str:
+    """Return the example files available under *root*/examples."""
+
+    try:
+        directory = Path(root) / "examples"
+        items = [
+            {"name": path.stem, "path": path.name}
+            for path in sorted(directory.glob("*.nbl"))
+        ]
+        return json.dumps({"ok": True, "items": items})
+    except Exception as exc:  # noqa: BLE001
+        return json.dumps({"ok": False, "items": [], "diagnostics": [_diagnostic(exc)]})
+
+
+def read_example_json(path: str, root: str = WORK_ROOT) -> str:
+    """Return one example source by file name."""
+
+    try:
+        directory = (Path(root) / "examples").resolve()
+        target = (directory / Path(path).name).resolve()
+        if directory not in target.parents:
+            raise ValueError(f"invalid example path {path!r}")
+        return json.dumps({"ok": True, "source": target.read_text()})
+    except Exception as exc:  # noqa: BLE001
+        return json.dumps({"ok": False, "source": "", "diagnostics": [_diagnostic(exc)]})
 
 
 def completions_json(

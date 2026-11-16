@@ -51,6 +51,11 @@ fidelity = [
 niblick = "niblick.cli:main"
 niblick-lsp = "niblick.lsp:main"
 
+[project.urls]
+Homepage = "https://furrysalamander.github.io/niblick/"
+Repository = "https://github.com/furrysalamander/niblick"
+Issues = "https://github.com/furrysalamander/niblick/issues"
+
 [tool.setuptools]
 packages = ["niblick", "niblick.runtime"]
 

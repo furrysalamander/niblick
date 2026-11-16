@@ -3,6 +3,8 @@
 Browser build of the Niblick compiler, assembler, and emulator. The Python
 code runs under Pyodide; Monaco provides the source editor.
 
+Hosted build: <https://furrysalamander.github.io/niblick/>
+
 ## Features
 
 - Compile `.nbl` sources with `lib/` imports and Monaco diagnostics
@@ -131,7 +133,7 @@ npm run build
 ```
 
 Set `VITE_BASE` when serving from a subpath. For GitHub Pages at
-`https://<user>.github.io/niblick/`:
+`https://furrysalamander.github.io/niblick/`:
 
 ```bash
 VITE_BASE=/niblick/ npm run build
@@ -154,6 +156,7 @@ assembly.
 
 ## GitHub Pages
 
+The site is deployed at <https://furrysalamander.github.io/niblick/>.
 `.github/workflows/pages.yml` builds the Python assets, runs the Vite build,
 and deploys `web/dist` with GitHub Actions. Set the repository Pages source to
 **GitHub Actions**. The workflow reads the Pages base path from

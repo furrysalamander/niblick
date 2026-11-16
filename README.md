@@ -4,6 +4,8 @@ Niblick compiles a C-like language to the 12-bit assembly of the Hackaday
 Supercon.6 2022 (Voja4) badge, assembles it to a `.hex` file with
 `supercon6-assembler`, and includes a headless emulator for tests.
 
+**Web editor:** <https://furrysalamander.github.io/niblick/>
+
 ## Target
 
 | Item | Value |
@@ -180,8 +182,9 @@ npm run dev
 ```
 
 The production build is `npm run build`; set `VITE_BASE` when serving from a
-GitHub Pages subpath. See `web/README.md` for the asset layout and Playwright
-test.
+GitHub Pages subpath. The hosted editor is at
+<https://furrysalamander.github.io/niblick/>. See `web/README.md` for the
+asset layout and Playwright test.
 
 ## Testing
 

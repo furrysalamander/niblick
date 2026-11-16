@@ -205,13 +205,14 @@ If the badge does not run the program:
 ## Tooling
 
 The development extras include `ruff`, `mypy`, `pytest-cov`, `hypothesis`,
-`z3-solver`, and `pre-commit`.
+`z3-solver`, `pre-commit`, and `pip-audit`.
 
 ```bash
 python3 -m pip install -e ".[dev]"
 ruff check .
 mypy niblick/compiler.py niblick/format.py niblick/inline.py niblick/asm_opt.py niblick/loader.py niblick/emulator.py niblick/parser.py niblick/types.py
 python3 -m pytest --cov=niblick
+python3 -m pip_audit
 pre-commit install
 ```
 
@@ -221,4 +222,7 @@ pre-commit install
   compiled emulator results with a Python reference.
 - `tests/test_overlay.py` checks the frame-interference rules.
 - The CI workflow runs the full matrix, Ruff/mypy, coverage, the extension
-  build, and the wheel smoke test.
+  build and package, the wheel smoke test, and dependency audits for Python,
+  the web editor, and the extension.
+- `.github/dependabot.yml` checks the Python, web, extension, and GitHub Actions
+  dependencies weekly.

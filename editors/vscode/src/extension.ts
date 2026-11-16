@@ -10,7 +10,7 @@ import {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.LogOutputChannel;
 
 function workspaceRoot(): string {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -158,7 +158,9 @@ async function fixBadgeLanguageMode(
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  outputChannel = vscode.window.createOutputChannel("Niblick");
+  outputChannel = vscode.window.createOutputChannel("Niblick", {
+    log: true,
+  });
   context.subscriptions.push(outputChannel);
 
   for (const document of vscode.workspace.textDocuments) {

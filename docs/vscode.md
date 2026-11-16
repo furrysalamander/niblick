@@ -26,8 +26,8 @@ The `lsp` extra installs `pygls`.
 
 For building the extension:
 
-- Node.js 20 or newer
-- VS Code 1.85 or newer
+- Node.js 22 or newer
+- VS Code 1.146 or newer
 
 ## Run from source
 

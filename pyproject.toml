@@ -41,6 +41,7 @@ dev = [
     "mypy>=1.10",
     "z3-solver>=4.13",
     "pre-commit>=3.7",
+    "pip-audit>=2.9",
 ]
 lsp = ["pygls>=2.0"]
 fidelity = [

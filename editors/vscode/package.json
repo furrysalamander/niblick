@@ -6,7 +6,7 @@
   "publisher": "niblick",
   "license": "GPL-3.0-only",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.146.0"
   },
   "categories": [
     "Languages",
@@ -170,12 +170,20 @@
   },
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^11.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.0.0",
-    "typescript": "^5.4.0"
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.146.0",
+    "@vscode/vsce": "^4.1.1",
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "minimatch": "11.0.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/furrysalamander/niblick.git",
+    "directory": "editors/vscode"
   }
 }

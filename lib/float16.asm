@@ -3,7 +3,7 @@
 ; Scratch: 0x20..0x25 A, 0x28..0x2D B, 0x30..0x35 result,
 ; 0x36 sticky, 0x37 subtraction, 0x38..0x3A exp A, 0x3B..0x3D exp B.
 
-fn___bc_f16_add:
+fn___nib_f16_add:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -22,9 +22,9 @@ fn___bc_f16_add:
     MOV [0x2B], R0
     MOV R0, 0
     MOV [0x3F], R0
-    GOTO fn___bc_f16_core
+    GOTO fn___nib_f16_core
 
-fn___bc_f16_mul:
+fn___nib_f16_mul:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -43,9 +43,9 @@ fn___bc_f16_mul:
     MOV [0x2B], R0
     MOV R0, 1
     MOV [0x3F], R0
-    GOTO fn___bc_f16_core
+    GOTO fn___nib_f16_core
 
-fn___bc_f16_div:
+fn___nib_f16_div:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -64,9 +64,9 @@ fn___bc_f16_div:
     MOV [0x2B], R0
     MOV R0, 2
     MOV [0x3F], R0
-    GOTO fn___bc_f16_core
+    GOTO fn___nib_f16_core
 
-fn___bc_f16_sub:
+fn___nib_f16_sub:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -88,9 +88,9 @@ fn___bc_f16_sub:
     MOV [0x2B], R0
     MOV R0, 0
     MOV [0x3F], R0
-    GOTO fn___bc_f16_core
+    GOTO fn___nib_f16_core
 
-fn___bc_f16_core:
+fn___nib_f16_core:
     MOV R0, [0x23]
     AND R0, 8
     MOV R8, R0
@@ -838,7 +838,7 @@ fn___bc_f16_core:
     MOV R5, 0
     MOV R6, 2
     MOV R7, 8
-    GOSUB __bc_divmod32
+    GOSUB __nib_divmod32
     MOV R0, [0x3E]
     MOV R8, R0
     MOV R0, [0x20]
@@ -2194,7 +2194,7 @@ fn___bc_f16_core:
     RET R0, 0
 
 
-fn___bc_f16_to_f32:
+fn___nib_f16_to_f32:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -2484,7 +2484,7 @@ fn___bc_f16_to_f32:
     MOV R0, [0x37]
     MOV R8, R0
     RET R0, 0
-fn___bc_f32_to_f16:
+fn___nib_f32_to_f16:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]

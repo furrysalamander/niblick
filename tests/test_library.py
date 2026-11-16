@@ -1,17 +1,17 @@
-"""End-to-end tests for the BadgeC library modules in ``lib/``."""
+"""End-to-end tests for the Niblick library modules in ``lib/``."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_source
 
 
 def compile_source(tmp_path: Path, source: str, name: str = "libtest", rx: list[int] | None = None, trace: bool = False):
-    filename = tmp_path / f"{name}.badge"
+    filename = tmp_path / f"{name}.nbl"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
     asm = compiler.compile()
@@ -42,7 +42,7 @@ def test_uart_formatting(tmp_path: Path) -> None:
     _, emu = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         fn main() {
             uart_route(1);
             uart_init(3);
@@ -62,7 +62,7 @@ def test_uart_16bit_formatting(tmp_path: Path) -> None:
     _, emu = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         fn main() {
             uart_route(1);
             uart_init(3);
@@ -80,7 +80,7 @@ def test_uart_32bit_formatting(tmp_path: Path) -> None:
     _, emu = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         fn main() {
             uart_route(1);
             uart_init(3);
@@ -98,8 +98,8 @@ def test_string_module(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/string.badge";
-        import "lib/uart.badge";
+        import "lib/string.nbl";
+        import "lib/uart.nbl";
         char a[24];
         char b[12];
         char len;
@@ -135,7 +135,7 @@ def test_math_module(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/math.badge";
+        import "lib/math.nbl";
         char product;
         char quotient;
         nibble remainder;
@@ -164,7 +164,7 @@ def test_mem_module(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/mem.badge";
+        import "lib/mem.nbl";
         char a[16];
         char b[16];
         nibble same;
@@ -200,7 +200,7 @@ def test_display_module(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/display.badge";
+        import "lib/display.nbl";
         nibble screen[32];
         nibble corner;
         nibble empty;
@@ -238,9 +238,9 @@ def test_key_names_and_clock(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/key.badge";
-        import "lib/time.badge";
-        import "lib/uart.badge";
+        import "lib/key.nbl";
+        import "lib/time.nbl";
+        import "lib/uart.nbl";
         nibble clock;
         fn main() {
             uart_route(1);
@@ -260,7 +260,7 @@ def test_uart_read_line(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         char buf[8];
         nibble count;
         fn main() {
@@ -282,11 +282,11 @@ def test_system_power_and_time_helpers(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/display.badge";
-        import "lib/power.badge";
-        import "lib/system.badge";
-        import "lib/time.badge";
-        import "lib/uart.badge";
+        import "lib/display.nbl";
+        import "lib/power.nbl";
+        import "lib/system.nbl";
+        import "lib/time.nbl";
+        import "lib/uart.nbl";
         nibble power80;
         nibble power150;
         nibble power255;
@@ -331,7 +331,7 @@ def test_math_extensions(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/math.badge";
+        import "lib/math.nbl";
         char mapped;
         char root;
         char gcd;
@@ -363,7 +363,7 @@ def test_trig_table(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/trig.badge";
+        import "lib/trig.nbl";
         char s0;
         char s8;
         char s16;
@@ -389,7 +389,7 @@ def test_font_and_text_glyph(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/font.badge";
+        import "lib/font.nbl";
         nibble screen[32];
         nibble top;
         nibble gap;
@@ -415,7 +415,7 @@ def test_display_shift_and_column(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/display.badge";
+        import "lib/display.nbl";
         nibble screen[32];
         nibble left;
         nibble right;
@@ -440,7 +440,7 @@ def test_audio_tone_and_melody(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/audio.badge";
+        import "lib/audio.nbl";
         nibble out0;
         fn main() {
             audio_init();
@@ -465,7 +465,7 @@ def test_audio_note_table(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/audio.badge";
+        import "lib/audio.nbl";
         nibble first;
         nibble last;
         fn main() {
@@ -482,7 +482,7 @@ def test_pdm_encoder(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/pdm.badge";
+        import "lib/pdm.nbl";
         nibble first;
         nibble second;
         nibble error;
@@ -506,7 +506,7 @@ def test_mem_byte_endian_and_search(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/mem.badge";
+        import "lib/mem.nbl";
         char buf[8];
         char le_lo;
         char le_hi;
@@ -543,7 +543,7 @@ def test_string_convert_search_and_trim(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/string.badge";
+        import "lib/string.nbl";
         char buf[16];
         char other[16];
         char trimmed;
@@ -578,7 +578,7 @@ def test_power_sleep_halts_emulator(tmp_path: Path) -> None:
     _, emu = compile_source(
         tmp_path,
         """
-        import "lib/power.badge";
+        import "lib/power.nbl";
         fn main() {
             power_sleep();
         }
@@ -592,7 +592,7 @@ def test_audio_rest_code_is_silent(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/audio.badge";
+        import "lib/audio.nbl";
         nibble out;
         fn main() {
             audio_init();
@@ -616,7 +616,7 @@ def test_string_16_32_conversion(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/string.badge";
+        import "lib/string.nbl";
         char buf[11];
         char round[11];
         nibble ok_dec16;

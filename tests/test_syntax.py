@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.errors import BadgeCompileError, BadgeSyntaxError, BadgeTypeError
-from badgec.loader import load_source
-from badgec.parser import parse
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.errors import NiblickCompileError, NiblickSyntaxError, NiblickTypeError
+from niblick.loader import load_source
+from niblick.parser import parse
 
 
 def build(tmp_path: Path, source: str, *, steps: int = 500_000):
-    filename = str(tmp_path / "syntax.badge")
+    filename = str(tmp_path / "syntax.nbl")
     compiler = Compiler(load_source(source, filename=filename), filename)
     asm_path = tmp_path / "syntax.asm"
     asm_path.write_text(compiler.compile())
@@ -115,7 +115,7 @@ def test_ternary_in_print_argument(tmp_path: Path) -> None:
     _, emu = build(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         fn main() {
             uart_route(1);
@@ -159,7 +159,7 @@ def test_ternary_constant_folds_in_array_length(tmp_path: Path) -> None:
 
 
 def test_ternary_rejects_void_and_struct_branches(tmp_path: Path) -> None:
-    with pytest.raises(BadgeTypeError, match="must produce a value"):
+    with pytest.raises(NiblickTypeError, match="must produce a value"):
         Compiler(
             load_source(
                 """
@@ -168,12 +168,12 @@ def test_ternary_rejects_void_and_struct_branches(tmp_path: Path) -> None:
                     nibble x = 1 ? f() : 2;
                 }
                 """,
-                filename=str(tmp_path / "ternary.badge"),
+                filename=str(tmp_path / "ternary.nbl"),
             ),
-            str(tmp_path / "ternary.badge"),
+            str(tmp_path / "ternary.nbl"),
         ).compile()
 
-    with pytest.raises(BadgeTypeError, match="struct values"):
+    with pytest.raises(NiblickTypeError, match="struct values"):
         Compiler(
             load_source(
                 """
@@ -185,9 +185,9 @@ def test_ternary_rejects_void_and_struct_branches(tmp_path: Path) -> None:
                     c = 1 ? a : b;
                 }
                 """,
-                filename=str(tmp_path / "ternary.badge"),
+                filename=str(tmp_path / "ternary.nbl"),
             ),
-            str(tmp_path / "ternary.badge"),
+            str(tmp_path / "ternary.nbl"),
         ).compile()
 
 
@@ -384,14 +384,14 @@ def test_rejected_literals_and_identifiers(tmp_path: Path) -> None:
         "nibble int;",
         "nibble café;",
     ):
-        with pytest.raises(BadgeSyntaxError):
-            parse(source + "\nfn main() { }\n", "bad.badge")
+        with pytest.raises(NiblickSyntaxError):
+            parse(source + "\nfn main() { }\n", "bad.nbl")
 
-    with pytest.raises(BadgeSyntaxError, match="newline in string literal"):
-        parse('const char s[] = "a\nb";\nfn main() { }\n', "bad.badge")
+    with pytest.raises(NiblickSyntaxError, match="newline in string literal"):
+        parse('const char s[] = "a\nb";\nfn main() { }\n', "bad.nbl")
 
-    with pytest.raises(BadgeSyntaxError, match="NUL is not allowed"):
-        parse('const char s[] = "a\\0b";\nfn main() { }\n', "bad.badge")
+    with pytest.raises(NiblickSyntaxError, match="NUL is not allowed"):
+        parse('const char s[] = "a\\0b";\nfn main() { }\n', "bad.nbl")
 
 
 def test_byte_alias_and_trailing_commas(tmp_path: Path) -> None:
@@ -423,7 +423,7 @@ def test_inline_asm_comment_with_brace(tmp_path: Path) -> None:
             }
         }
         """,
-        "asm.badge",
+        "asm.nbl",
     )
     inline = program.functions[0].body.statements[1]
     assert "a comment with }" in inline.text
@@ -448,7 +448,7 @@ def test_unary_plus(tmp_path: Path) -> None:
 
 
 def test_rejects_local_const_arrays(tmp_path: Path) -> None:
-    with pytest.raises(BadgeTypeError, match="local const array"):
+    with pytest.raises(NiblickTypeError, match="local const array"):
         Compiler(
             load_source(
                 """
@@ -456,14 +456,14 @@ def test_rejects_local_const_arrays(tmp_path: Path) -> None:
                     const nibble values[2] = {1, 2};
                 }
                 """,
-                filename=str(tmp_path / "const.badge"),
+                filename=str(tmp_path / "const.nbl"),
             ),
-            str(tmp_path / "const.badge"),
+            str(tmp_path / "const.nbl"),
         ).compile()
 
 
 def test_rejects_nonconstant_array_length(tmp_path: Path) -> None:
-    with pytest.raises(BadgeCompileError, match="compile-time integer constant"):
+    with pytest.raises(NiblickCompileError, match="compile-time integer constant"):
         Compiler(
             load_source(
                 """
@@ -474,14 +474,14 @@ def test_rejects_nonconstant_array_length(tmp_path: Path) -> None:
                     sink = values[0];
                 }
                 """,
-                filename=str(tmp_path / "len.badge"),
+                filename=str(tmp_path / "len.nbl"),
             ),
-            str(tmp_path / "len.badge"),
+            str(tmp_path / "len.nbl"),
         ).compile()
 
 
 def test_rejects_oversized_string_initializer(tmp_path: Path) -> None:
-    with pytest.raises(BadgeCompileError, match="does not fit"):
+    with pytest.raises(NiblickCompileError, match="does not fit"):
         Compiler(
             load_source(
                 """
@@ -489,7 +489,7 @@ def test_rejects_oversized_string_initializer(tmp_path: Path) -> None:
                     char text[2] = "hi";
                 }
                 """,
-                filename=str(tmp_path / "str.badge"),
+                filename=str(tmp_path / "str.nbl"),
             ),
-            str(tmp_path / "str.badge"),
+            str(tmp_path / "str.nbl"),
         ).compile()

@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_program
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_program
 
 EXPECTED = b"pi = 3.14159265358979323846264338327950288419716939\r\n"
 
 
 def test_pi_example(tmp_path: Path) -> None:
-    example = Path(__file__).resolve().parent.parent / "examples" / "pi.badge"
+    example = Path(__file__).resolve().parent.parent / "examples" / "pi.nbl"
     compiler = Compiler(load_program(example), str(example))
     asm_path = tmp_path / "pi.asm"
     asm_path.write_text(compiler.compile())
@@ -33,7 +33,7 @@ def test_pi_example(tmp_path: Path) -> None:
 
 def test_pi_matrix_banner(tmp_path: Path) -> None:
     """After the UART line, the result scrolls on the LED matrix."""
-    example = Path(__file__).resolve().parent.parent / "examples" / "pi.badge"
+    example = Path(__file__).resolve().parent.parent / "examples" / "pi.nbl"
     compiler = Compiler(load_program(example), str(example))
     asm_path = tmp_path / "pi.asm"
     asm_path.write_text(compiler.compile())

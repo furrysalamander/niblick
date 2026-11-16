@@ -1,4 +1,4 @@
-"""Tests for the BadgeC type system: aliases, signed types, bool, and target typing."""
+"""Tests for the Niblick type system: aliases, signed types, bool, and target typing."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.errors import BadgeError
-from badgec.loader import load_source
-from badgec.parser import parse
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.errors import NiblickError
+from niblick.loader import load_source
+from niblick.parser import parse
 
 
 def build(tmp_path: Path, source: str):
-    filename = str(tmp_path / "types.badge")
+    filename = str(tmp_path / "types.nbl")
     compiler = Compiler(load_source(source, filename=filename), filename)
     asm_path = tmp_path / "types.asm"
     asm_path.write_text(compiler.compile())
@@ -84,8 +84,8 @@ def test_cstdint_and_c_alias_spellings(tmp_path: Path) -> None:
 
 def test_word_and_dword_type_spellings_are_gone(tmp_path: Path) -> None:
     for source in ("word x;", "dword x;"):
-        with pytest.raises((BadgeError, ValueError)):
-            compiler = Compiler(parse(source, "gone.badge"), "gone.badge")
+        with pytest.raises((NiblickError, ValueError)):
+            compiler = Compiler(parse(source, "gone.nbl"), "gone.nbl")
             compiler.compile()
 
 

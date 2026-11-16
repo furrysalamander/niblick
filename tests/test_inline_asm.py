@@ -1,4 +1,4 @@
-"""Tests for inline asm blocks in BadgeC functions."""
+"""Tests for inline asm blocks in Niblick functions."""
 
 from __future__ import annotations
 
@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.errors import BadgeCompileError
-from badgec.loader import load_program
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.errors import NiblickCompileError
+from niblick.loader import load_program
 
 
 def build(tmp_path: Path, source: str):
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(source)
     compiler = Compiler(load_program(entry), str(entry))
     asm = compiler.compile()
@@ -83,13 +83,13 @@ def test_inline_asm_calls_runtime(tmp_path: Path) -> None:
     _, _, hex_path = build(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         fn main() {
             uart_init(3);
             asm {
                 MOV R1, 1
                 MOV R2, 4
-                GOSUB __bc_uart_putc
+                GOSUB __nib_uart_putc
             }
             while (1) { }
         }
@@ -158,7 +158,7 @@ def test_inline_asm_is_opaque_to_optimizer(tmp_path: Path) -> None:
 
 
 def test_inline_asm_rejects_ret(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         fn main() {
@@ -169,12 +169,12 @@ def test_inline_asm_rejects_ret(tmp_path: Path) -> None:
         """
     )
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match="RET is not allowed"):
+    with pytest.raises(NiblickCompileError, match="RET is not allowed"):
         compiler.compile()
 
 
 def test_inline_asm_rejects_global_labels(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         fn main() {
@@ -188,5 +188,5 @@ def test_inline_asm_rejects_global_labels(tmp_path: Path) -> None:
         """
     )
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match="labels must start with"):
+    with pytest.raises(NiblickCompileError, match="labels must start with"):
         compiler.compile()

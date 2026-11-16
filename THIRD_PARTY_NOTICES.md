@@ -1,6 +1,6 @@
 # Third-party notices
 
-BadgeC is licensed under the GNU General Public License, version 3. It depends
+Niblick is licensed under the GNU General Public License, version 3. It depends
 on the following third-party packages.
 
 ## supercon6-assembler
@@ -11,7 +11,7 @@ on the following third-party packages.
 - Copyright: 2022 Mike Szczys
 
 The assembler is installed as a Python dependency rather than vendored into
-this repository. The packaged version includes two small fixes: unexpected
+this repository. The packaged version includes two fixes: unexpected
 parser exceptions are reported with line information, and `BYTE` pseudo-ops
 advance the symbol address by two words.
 
@@ -23,7 +23,7 @@ advance the symbol address by two words.
 - Copyright: 2022 Adam Zeloof
 
 This package is used only by the optional `fidelity` test extra. It is not a
-runtime dependency of BadgeC.
+runtime dependency of Niblick.
 
 ## 5x8 font glyph data
 
@@ -32,9 +32,9 @@ runtime dependency of BadgeC.
   repository
 - Author: Voja Antonic
 - License: no explicit license was found in the upstream example
-- Used by: `lib/font.badge`
+- Used by: `lib/font.nbl`
 
-The scroller algorithm is a new BadgeC implementation. The glyph table is
+The scroller algorithm is a new Niblick implementation. The glyph table is
 adapted from the upstream demo. Before a public release, confirm that
 redistribution is acceptable or replace the table with a new or public-domain
 5x8 font.

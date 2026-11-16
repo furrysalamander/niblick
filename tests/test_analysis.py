@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec import ast_nodes as ast
-from badgec.analysis import Analysis
-from badgec.loader import load_program
-from badgec.parser import parse
+from niblick import ast_nodes as ast
+from niblick.analysis import Analysis
+from niblick.loader import load_program
+from niblick.parser import parse
 
 
 def position(source: str, needle: str, occurrence: int = 1) -> tuple[int, int]:
@@ -28,25 +28,25 @@ def test_parser_records_positions_and_files() -> None:
         "fn main() {\n"
         "    x = PIN + 1;\n"
         "}\n",
-        "test.badge",
+        "test.nbl",
     )
     pin, x = program.globals
     main = program.functions[0]
 
-    assert pin.file == "test.badge"
+    assert pin.file == "test.nbl"
     assert pin.line == 1
     assert pin.column == 14
-    assert x.file == "test.badge"
+    assert x.file == "test.nbl"
     assert x.line == 2
     assert x.column == 8
-    assert main.file == "test.badge"
+    assert main.file == "test.nbl"
     assert main.line == 3
     assert main.name_line == 3
     assert main.name_column == 4
 
     assign = main.body.statements[0]
     assert isinstance(assign, ast.Assign)
-    assert assign.file == "test.badge"
+    assert assign.file == "test.nbl"
     assert assign.line == 4
     assert isinstance(assign.target, ast.Var)
     assert assign.target.column == 5
@@ -57,7 +57,7 @@ def test_parser_records_positions_and_files() -> None:
 
 
 def test_load_program_honours_source_overrides(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text("fn main() { this is not valid }\n")
     program = load_program(
         entry,
@@ -69,7 +69,7 @@ def test_load_program_honours_source_overrides(tmp_path: Path) -> None:
 
 
 def test_analysis_reports_syntax_error_with_position(tmp_path: Path) -> None:
-    entry = tmp_path / "bad.badge"
+    entry = tmp_path / "bad.nbl"
     entry.write_text("fn main() { nibble x = ; }\n")
     diagnostics = Analysis(entry).diagnostics()
     assert len(diagnostics) == 1
@@ -80,7 +80,7 @@ def test_analysis_reports_syntax_error_with_position(tmp_path: Path) -> None:
 
 
 def test_analysis_reports_type_error(tmp_path: Path) -> None:
-    entry = tmp_path / "types.badge"
+    entry = tmp_path / "types.nbl"
     entry.write_text("nibble x;\nfn main() { x = 300; }\n")
     diagnostics = Analysis(entry).diagnostics()
     assert len(diagnostics) == 1
@@ -89,7 +89,7 @@ def test_analysis_reports_type_error(tmp_path: Path) -> None:
 
 
 def test_analysis_checks_library_without_main(tmp_path: Path) -> None:
-    entry = tmp_path / "lib.badge"
+    entry = tmp_path / "lib.nbl"
     entry.write_text(
         "fn nibble add(nibble a, nibble b) { return a + b; }\n"
     )
@@ -97,7 +97,7 @@ def test_analysis_checks_library_without_main(tmp_path: Path) -> None:
 
 
 def test_analysis_reports_imported_asm_error(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         'import "bad.asm";\n'
         "extern fn void bad();\n"
@@ -113,7 +113,7 @@ def test_analysis_reports_imported_asm_error(tmp_path: Path) -> None:
 
 
 def test_analysis_reports_missing_asm_entry_point(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         'import "empty.asm";\n'
         "extern fn void missing();\n"
@@ -127,14 +127,14 @@ def test_analysis_reports_missing_asm_entry_point(tmp_path: Path) -> None:
 
 
 def test_document_symbols_filters_by_file(tmp_path: Path) -> None:
-    lib = tmp_path / "lib.badge"
+    lib = tmp_path / "lib.nbl"
     lib.write_text(
         "const nibble ANSWER = 7;\n"
         "fn nibble twice(nibble n) { return n + n; }\n"
     )
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
-        'import "lib.badge";\n'
+        'import "lib.nbl";\n'
         "nibble result;\n"
         "fn main() { result = twice(ANSWER); }\n"
     )
@@ -158,7 +158,7 @@ def test_document_symbols_for_asm_file(tmp_path: Path) -> None:
         "table:\n"
         "    NIBBLE 1\n"
     )
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text("fn main() { while (1) { } }\n")
     symbols = Analysis(entry).document_symbols(asm)
     assert [(symbol.name, symbol.kind) for symbol in symbols] == [
@@ -167,7 +167,7 @@ def test_document_symbols_for_asm_file(tmp_path: Path) -> None:
     ]
 
 
-def test_navigation_and_hover_for_badgec_symbols(tmp_path: Path) -> None:
+def test_navigation_and_hover_for_niblick_symbols(tmp_path: Path) -> None:
     source_text = (
         "nibble g;\n"
         "fn nibble add(nibble a, nibble b) {\n"
@@ -180,7 +180,7 @@ def test_navigation_and_hover_for_badgec_symbols(tmp_path: Path) -> None:
         "    x = add(g, 2);\n"
         "}\n"
     )
-    entry = tmp_path / "nav.badge"
+    entry = tmp_path / "nav.nbl"
     entry.write_text(source_text)
     analysis = Analysis(entry)
 
@@ -228,7 +228,7 @@ def test_navigation_into_imported_asm(tmp_path: Path) -> None:
         "    result = add3(4);\n"
         "}\n"
     )
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(source_text)
     asm_text = (
         "fn_add3:\n"
@@ -265,7 +265,7 @@ def test_navigation_into_imported_asm(tmp_path: Path) -> None:
 
 
 def test_asm_completions_include_instructions_and_labels(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text("fn main() { while (1) { } }\n")
     asm = tmp_path / "impl.asm"
     asm.write_text("fn_impl:\n    RET R0, 0\n")
@@ -286,7 +286,7 @@ def test_inline_asm_placeholder_navigation(tmp_path: Path) -> None:
         "    while (1) { }\n"
         "}\n"
     )
-    entry = tmp_path / "inline.badge"
+    entry = tmp_path / "inline.nbl"
     entry.write_text(text)
     analysis = Analysis(entry)
     line, column = position(text, "${x}")
@@ -300,7 +300,7 @@ def test_inline_asm_placeholder_navigation(tmp_path: Path) -> None:
     assert "nibble x" in hover
 
 
-def test_references_across_badgec_and_inline_asm(tmp_path: Path) -> None:
+def test_references_across_niblick_and_inline_asm(tmp_path: Path) -> None:
     text = (
         "nibble g;\n"
         "fn main() {\n"
@@ -310,7 +310,7 @@ def test_references_across_badgec_and_inline_asm(tmp_path: Path) -> None:
         "    }\n"
         "}\n"
     )
-    entry = tmp_path / "refs.badge"
+    entry = tmp_path / "refs.nbl"
     entry.write_text(text)
     analysis = Analysis(entry)
     line, column = position(text, "g = 1")
@@ -330,7 +330,7 @@ def test_rename_local_updates_inline_asm_placeholder(tmp_path: Path) -> None:
         "    }\n"
         "}\n"
     )
-    entry = tmp_path / "rename.badge"
+    entry = tmp_path / "rename.nbl"
     entry.write_text(text)
     analysis = Analysis(entry)
     line, column = position(text, "x = 1")
@@ -346,7 +346,7 @@ def test_rename_function_updates_asm_entry_point(tmp_path: Path) -> None:
         "extern fn nibble add3(nibble x);\n"
         "fn main() { nibble r; r = add3(4); }\n"
     )
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(source_text)
     asm = tmp_path / "impl.asm"
     asm.write_text(

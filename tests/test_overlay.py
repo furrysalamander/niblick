@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.compiler import Compiler
-from badgec.loader import load_source
+from niblick.compiler import Compiler
+from niblick.loader import load_source
 
 
 def compile_source(tmp_path: Path, source: str) -> Compiler:
-    path = tmp_path / "overlay.badge"
+    path = tmp_path / "overlay.nbl"
     path.write_text(source)
     compiler = Compiler(load_source(source, filename=str(path)), str(path))
     compiler.compile()

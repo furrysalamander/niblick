@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
+from niblick.assembler import assemble_file
 
 
 def assemble(tmp_path: Path, name: str, source: str) -> bytes:

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Niblick",
+  "scopeName": "source.niblick",
+  "patterns": [
+    { "include": "#asm-blocks" },
+    { "include": "#comments" },
+    { "include": "#imports" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#function-definitions" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#function-calls" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "asm-blocks": {
+      "patterns": [
+        {
+          "begin": "\\b(asm)\\s*\\{",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.asm.niblick" }
+          },
+          "end": "\\}",
+          "contentName": "meta.embedded.block.voja4-asm",
+          "patterns": [
+            {
+              "name": "variable.parameter.placeholder.niblick",
+              "match": "\\$\\{[^}]*\\}"
+            },
+            { "include": "source.voja4-asm" }
+          ]
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.niblick",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.niblick",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "imports": {
+      "patterns": [
+        {
+          "match": "\\b(import)\\s+(\"(?:[^\"\\\\]|\\\\.)*\")",
+          "captures": {
+            "1": { "name": "keyword.other.import.niblick" },
+            "2": { "name": "string.quoted.double.import.niblick" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.niblick",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.niblick",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.niblick",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.niblick",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.hexadecimal.niblick",
+          "match": "\\b0[xX][0-9A-Fa-f]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.binary.niblick",
+          "match": "\\b0[bB][01]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.decimal.niblick",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "function-definitions": {
+      "patterns": [
+        {
+          "match": "\\b(fn)\\s+(?:(nibble|u4|i4|char|uint8_t|int8_t|int_least8_t|int_fast8_t|uint_least8_t|uint_fast8_t|u8|i8|uint16_t|int16_t|int_least16_t|int_fast16_t|uint_least16_t|uint_fast16_t|u16|i16|short|int|uint32_t|int32_t|int_least32_t|int_fast32_t|uint_least32_t|uint_fast32_t|intmax_t|uintmax_t|u32|i32|long|uint64_t|int64_t|uint_least64_t|int_least64_t|uint_fast64_t|int_fast64_t|u64|i64|bool|flashptr|void)\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "keyword.other.fn.niblick" },
+            "2": { "name": "storage.type.niblick" },
+            "3": { "name": "entity.name.function.niblick" }
+          }
+        },
+        {
+          "match": "\\b(nibble|u4|i4|char|uint8_t|int8_t|int_least8_t|int_fast8_t|uint_least8_t|uint_fast8_t|u8|i8|uint16_t|int16_t|int_least16_t|int_fast16_t|uint_least16_t|uint_fast16_t|u16|i16|short|int|uint32_t|int32_t|int_least32_t|int_fast32_t|uint_least32_t|uint_fast32_t|intmax_t|uintmax_t|u32|i32|long|uint64_t|int64_t|uint_least64_t|int_least64_t|uint_fast64_t|int_fast64_t|u64|i64|bool|flashptr|void)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "storage.type.niblick" },
+            "2": { "name": "entity.name.function.niblick" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.niblick",
+          "match": "\\b(if|else|while|for|return|break|continue)\\b"
+        },
+        {
+          "name": "storage.modifier.niblick",
+          "match": "\\b(const|extern)\\b"
+        },
+        {
+          "name": "constant.language.niblick",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.niblick",
+          "match": "\\b(nibble|u4|i4|char|uint8_t|int8_t|int_least8_t|int_fast8_t|uint_least8_t|uint_fast8_t|u8|i8|uint16_t|int16_t|int_least16_t|int_fast16_t|uint_least16_t|uint_fast16_t|u16|i16|short|int|uint32_t|int32_t|int_least32_t|int_fast32_t|uint_least32_t|uint_fast32_t|intmax_t|uintmax_t|u32|i32|long|uint64_t|int64_t|uint_least64_t|int_least64_t|uint_fast64_t|int_fast64_t|u64|i64|bool|flashptr|void)\\b"
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "name": "entity.name.function.call.niblick",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.niblick",
+          "match": "<<|>>|<=|>=|==|!=|&&|\\|\\||[+\\-*/%&|^~!<>=]"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.niblick",
+          "match": "[(){}\\[\\],;]"
+        }
+      ]
+    }
+  }
+}

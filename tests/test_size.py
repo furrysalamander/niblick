@@ -4,33 +4,33 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
 BUDGETS = {
-    "hello.badge": 180,
-    "serial_echo.badge": 210,
-    "flash_walk.badge": 180,
-    "gpio_blink.badge": 70,
-    "inline_asm.badge": 60,
-    "tetris.badge": 2650,
-    "stdlib_demo.badge": 2150,
-    "u16_math.badge": 1400,
-    "u32_math.badge": 2400,
-    "math32_test.badge": 2900,
-    "cube.badge": 2100,
-    "wave.badge": 1100,
-    "water.badge": 2100,
-    "w5500_probe.badge": 600,
-    "w5500_udp.badge": 2200,
-    "w5500_http.badge": 2700,
-    "w5500_dashboard.badge": 4096,
-    "mc_void.badge": 4096,
-    "text_scroll.badge": 2050,
-    "audio_demo.badge": 550,
-    "pdm_demo.badge": 200,
+    "hello.nbl": 180,
+    "serial_echo.nbl": 210,
+    "flash_walk.nbl": 180,
+    "gpio_blink.nbl": 70,
+    "inline_asm.nbl": 60,
+    "tetris.nbl": 2650,
+    "stdlib_demo.nbl": 2150,
+    "u16_math.nbl": 1400,
+    "u32_math.nbl": 2400,
+    "math32_test.nbl": 2900,
+    "cube.nbl": 2100,
+    "wave.nbl": 1100,
+    "water.nbl": 2100,
+    "w5500_probe.nbl": 600,
+    "w5500_udp.nbl": 2200,
+    "w5500_http.nbl": 2700,
+    "w5500_dashboard.nbl": 4096,
+    "mc_void.nbl": 4096,
+    "text_scroll.nbl": 2050,
+    "audio_demo.nbl": 550,
+    "pdm_demo.nbl": 200,
 }
 
 
@@ -55,7 +55,7 @@ def test_example_size_budgets(tmp_path: Path) -> None:
 
 
 def test_runtime_stripping_removes_unused_helpers(tmp_path: Path) -> None:
-    example = ROOT / "examples" / "hello.badge"
+    example = ROOT / "examples" / "hello.nbl"
     stripped_dir = tmp_path / "stripped"
     full_dir = tmp_path / "full"
     stripped_dir.mkdir()
@@ -64,7 +64,7 @@ def test_runtime_stripping_removes_unused_helpers(tmp_path: Path) -> None:
     _, stripped_asm, stripped_hex = compile_example(example, stripped_dir, True)
     _, full_asm, full_hex = compile_example(example, full_dir, False)
 
-    assert "__bc_uart_putc" in stripped_asm
-    assert "__bc_gpio_set" not in stripped_asm
-    assert "__bc_gpio_set" in full_asm
+    assert "__nib_uart_putc" in stripped_asm
+    assert "__nib_gpio_set" not in stripped_asm
+    assert "__nib_gpio_set" in full_asm
     assert code_words(stripped_hex) < code_words(full_hex)

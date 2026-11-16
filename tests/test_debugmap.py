@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.loader import load_program
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.loader import load_program
 
 
 def build(tmp_path: Path, source: str):
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(source)
     compiler = Compiler(load_program(entry), str(entry))
     asm = compiler.compile()

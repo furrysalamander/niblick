@@ -1,7 +1,7 @@
-# BadgeC runtime ABI
+# Niblick runtime ABI
 
 Status: **implemented v0**. This describes the contract used by
-`badgec/compiler.py` and `badgec/runtime/runtime.asm`.
+`niblick/compiler.py` and `niblick/runtime/runtime.asm`.
 
 The design is shaped by the Voja4's limits: 4-bit data, `R0` is the only
 data-memory gateway, there is no stack-relative addressing, and the
@@ -40,7 +40,7 @@ An expression result is left in fixed registers:
 
 ## User function calls
 
-BadgeC uses **static parameter slots**, not register argument passing:
+Niblick uses **static parameter slots**, not register argument passing:
 
 1. The compiler allocates a fixed RAM slot for every parameter and local.
 2. At a call site, each argument expression is evaluated and stored directly
@@ -52,12 +52,12 @@ BadgeC uses **static parameter slots**, not register argument passing:
    a call live in the caller's frame while the call is in progress, so no
    callee-saved register convention is needed.
 
-Static slots avoid software frame pointers and keep the code small. The
+Static slots avoid software frame pointers. The
 trade-off is that functions are non-reentrant. Parameter and local slots are
 overlaid across functions that cannot be active at the same time, and a
-function that keeps an expression temporary live across a call gets a small
-private temporary area in its own frame. The inliner removes tiny `return`
-helpers and small single-statement `void` wrappers entirely, which also
+function that keeps an expression temporary live across a call gets a
+private temporary area in its own frame. The inliner removes single-statement `return`
+helpers and single-statement `void` wrappers entirely, which also
 removes their parameter slots.
 
 ### Tail calls
@@ -85,28 +85,28 @@ the same expression-result registers:
 
 | Routine | Input | Output |
 |---|---|---|
-| `__bc_uart_putc` | `R1` = low, `R2` = high | none |
-| `__bc_uart_getc` | none | `R1` = low, `R2` = high |
-| `__bc_gpio_set/clear/toggle` | `R1` = mask | none |
-| `__bc_gpio_test` | `R1` = mask | `R1` = 0/1 |
-| `__bc_gpio_read` | none | `R1` = input nibble |
-| `__bc_gpio_write` | `R1` = output nibble | none |
-| `__bc_delay` | `R1` = units | none |
-| `__bc_w5500_spi_tx_fast` | `R1:R2` = char | none |
-| `__bc_w5500_spi_xfer_fast` | `R1:R2` = char | `R1:R2` = char |
-| `__bc_flash_read_char` | `R1/R2/R3` = flash pointer | `R1/R2` = char |
-| `__bc_flash_read_nibble` | `R1/R2/R3` = flash pointer | `R1` = nibble |
-| `__bc_flash_read_word` | `R1/R2/R3` = flash pointer | `R1..R4` = 16-bit value |
-| `__bc_flash_read_dword` | `R1/R2/R3` = flash pointer | `R1..R8` = 32-bit value |
-| `__bc_mul4` | `R1` = a, `R2` = b | `R1:R2` = product |
-| `__bc_mul8` | `R1:R2`, `R3:R4` | `R1..R4` = 16-bit product |
-| `__bc_mul16` | `R1..R4`, `R5..R8` | `R1..R4` = low 16 bits |
-| `__bc_divmod8` | `R1:R2`, `R3:R4` | quotient `R1:R2`, remainder `R3:R4` |
-| `__bc_divmod16` | `R1..R4`, `R5..R8` | quotient `R1..R4`, remainder `R5..R8` |
-| `__bc_sdivmod8` | `R1:R2`, `R3:R4` (signed) | signed quotient `R1:R2`, remainder `R3:R4` |
-| `__bc_sdivmod16` | `R1..R4`, `R5..R8` (signed) | signed quotient `R1..R4`, remainder `R5..R8` |
-| `__bc_mul32` | `R4:R5`, `R6:R7` = operand pointers | `R1..R8` = low 32-bit product |
-| `__bc_divmod32` | `R4:R5`, `R6:R7` = operand pointers | quotient/remainder written to the buffers |
+| `__nib_uart_putc` | `R1` = low, `R2` = high | none |
+| `__nib_uart_getc` | none | `R1` = low, `R2` = high |
+| `__nib_gpio_set/clear/toggle` | `R1` = mask | none |
+| `__nib_gpio_test` | `R1` = mask | `R1` = 0/1 |
+| `__nib_gpio_read` | none | `R1` = input nibble |
+| `__nib_gpio_write` | `R1` = output nibble | none |
+| `__nib_delay` | `R1` = units | none |
+| `__nib_w5500_spi_tx_fast` | `R1:R2` = char | none |
+| `__nib_w5500_spi_xfer_fast` | `R1:R2` = char | `R1:R2` = char |
+| `__nib_flash_read_char` | `R1/R2/R3` = flash pointer | `R1/R2` = char |
+| `__nib_flash_read_nibble` | `R1/R2/R3` = flash pointer | `R1` = nibble |
+| `__nib_flash_read_word` | `R1/R2/R3` = flash pointer | `R1..R4` = 16-bit value |
+| `__nib_flash_read_dword` | `R1/R2/R3` = flash pointer | `R1..R8` = 32-bit value |
+| `__nib_mul4` | `R1` = a, `R2` = b | `R1:R2` = product |
+| `__nib_mul8` | `R1:R2`, `R3:R4` | `R1..R4` = 16-bit product |
+| `__nib_mul16` | `R1..R4`, `R5..R8` | `R1..R4` = low 16 bits |
+| `__nib_divmod8` | `R1:R2`, `R3:R4` | quotient `R1:R2`, remainder `R3:R4` |
+| `__nib_divmod16` | `R1..R4`, `R5..R8` | quotient `R1..R4`, remainder `R5..R8` |
+| `__nib_sdivmod8` | `R1:R2`, `R3:R4` (signed) | signed quotient `R1:R2`, remainder `R3:R4` |
+| `__nib_sdivmod16` | `R1..R4`, `R5..R8` (signed) | signed quotient `R1..R4`, remainder `R5..R8` |
+| `__nib_mul32` | `R4:R5`, `R6:R7` = operand pointers | `R1..R8` = low 32-bit product |
+| `__nib_divmod32` | `R4:R5`, `R6:R7` = operand pointers | quotient/remainder written to the buffers |
 
 All runtime routines may clobber `R0`–`R9`. They do not preserve flags.
 Internally, the flash reader uses `R6/R7/R8` as the 12-bit pointer and
@@ -115,7 +115,7 @@ Internally, the flash reader uses `R6/R7/R8` as the 12-bit pointer and
 ## User assembly modules
 
 Hand-written routines can live in imported `.asm` files instead of the core
-runtime. They use the same static-slot calling convention as BadgeC
+runtime. They use the same static-slot calling convention as Niblick
 functions:
 
 ```c
@@ -170,15 +170,15 @@ Other SFR helpers live in the standard library, not the runtime:
 
 | Helper | Module / SFR |
 |---|---|
-| `display_page(page)` / `display_poke` / `display_peek` | `lib/display.badge` / `Page` |
-| `random()` / `seed(n)` | `lib/random.badge` / `Random` |
-| `dimmer(n)` | `lib/display.badge` / `Dimmer` |
-| `key_status()` / `key_code()` | `lib/key.badge` / `KeyStatus`, `KeyReg` |
+| `display_page(page)` / `display_poke` / `display_peek` | `lib/display.nbl` / `Page` |
+| `random()` / `seed(n)` | `lib/random.nbl` / `Random` |
+| `dimmer(n)` | `lib/display.nbl` / `Dimmer` |
+| `key_status()` / `key_code()` | `lib/key.nbl` / `KeyStatus`, `KeyReg` |
 | `gpio_alt`, `uart_route`, `leds_enable`, `matrix_enable` | `lib/gpio`, `lib/uart`, `lib/display` |
-| `uart_write(addr, len)` | `lib/uart.badge` |
-| `mem_fill` / `mem_copy` / byte helpers | `lib/mem.badge` |
+| `uart_write(addr, len)` | `lib/uart.nbl` |
+| `mem_fill` / `mem_copy` / byte helpers | `lib/mem.nbl` |
 
-These are ordinary BadgeC calls. They use the static parameter/local slots
+These are ordinary Niblick calls. They use the static parameter/local slots
 described below; the compiler's frame overlay lets unrelated functions reuse
 the same slots.
 
@@ -198,7 +198,7 @@ the same slots.
 ## Call depth
 
 `main` is entered with `GOTO`, so it runs at depth 0. Each non-tail
-`GOSUB` consumes one hardware stack entry. BadgeC rejects programs whose
+`GOSUB` consumes one hardware stack entry. Niblick rejects programs whose
 maximum non-tail user call depth exceeds 4, leaving one entry of headroom
 for runtime helpers.
 
@@ -210,7 +210,7 @@ Runtime stack costs from user code:
 | `flash_next` | 2 |
 | `flash_read_nibble`, `flash_read_char` | 3 |
 | `gpio_set` / `gpio_clear` / `gpio_toggle` / `gpio_test` runtime fallback | 2 |
-| signed 8/16-bit `/` and `%` (`__bc_sdivmod8/16`) | 2 |
+| signed 8/16-bit `/` and `%` (`__nib_sdivmod8/16`) | 2 |
 | `delay`, `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | 1 |
 
 `uart_init`, `uart_available`, and `uart_puts` are library functions now, so
@@ -229,7 +229,7 @@ A flash `char[]` is stored as `RET R0,nibble` words: low nibble first, then
 high nibble. A flash `nibble[]` is one `RET` instruction word per element. Strings use
 `0x00` as the terminator.
 
-BadgeC emits flash bytes as pairs of `NIBBLE` directives rather than
+Niblick emits flash bytes as pairs of `NIBBLE` directives rather than
 `BYTE`, because the upstream assembler miscounts a `BYTE`/`ASCII` directive
 when resolving a later label. See [isa.md](isa.md).
 

@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_source
 
 
 def build(tmp_path: Path, source: str):
-    filename = str(tmp_path / "float16.badge")
+    filename = str(tmp_path / "float16.nbl")
     compiler = Compiler(load_source(source, filename=filename), filename)
     asm_path = tmp_path / "float16.asm"
     asm_path.write_text(compiler.compile())
@@ -156,12 +156,12 @@ def test_f16_f32_conversions(tmp_path: Path) -> None:
         float f_norm;
         float f_sub;
         fn main() {
-            h_norm = __bc_f16_from_bits(0x3C00);
-            f_norm = __bc_f16_to_f32(h_norm);
-            h_sub = __bc_f16_from_bits(0x0001);
-            f_sub = __bc_f16_to_f32(h_sub);
-            h_sub = __bc_f32_to_f16(__bc_f32_from_bits(0x33800000));
-            h_inf = __bc_f32_to_f16(__bc_f32_from_bits(0x477FF000));
+            h_norm = __nib_f16_from_bits(0x3C00);
+            f_norm = __nib_f16_to_f32(h_norm);
+            h_sub = __nib_f16_from_bits(0x0001);
+            f_sub = __nib_f16_to_f32(h_sub);
+            h_sub = __nib_f32_to_f16(__nib_f32_from_bits(0x33800000));
+            h_inf = __nib_f32_to_f16(__nib_f32_from_bits(0x477FF000));
         }
         """,
     )
@@ -198,11 +198,11 @@ def test_f16_saturation(tmp_path: Path) -> None:
         int32_t from_max;
         int32_t from_neg_inf;
         fn main() {
-            h = __bc_f16_from_bits(0x7C00);
+            h = __nib_f16_from_bits(0x7C00);
             from_inf = (int32_t)h;
-            h = __bc_f16_from_bits(0x7BFF);
+            h = __nib_f16_from_bits(0x7BFF);
             from_max = (int32_t)h;
-            h = __bc_f16_from_bits(0xFC00);
+            h = __nib_f16_from_bits(0xFC00);
             from_neg_inf = (int32_t)h;
         }
         """,

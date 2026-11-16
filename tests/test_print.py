@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.errors import BadgeCompileError, BadgeTypeError
-from badgec.emulator import Emulator
-from badgec.format import PlaceholderPart, TextPart, parse_format
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.errors import NiblickCompileError, NiblickTypeError
+from niblick.emulator import Emulator
+from niblick.format import PlaceholderPart, TextPart, parse_format
+from niblick.loader import load_source
 
 
 def compile_source(tmp_path: Path, source: str) -> tuple[Compiler, Emulator, str]:
-    filename = tmp_path / "print.badge"
+    filename = tmp_path / "print.nbl"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
     asm = compiler.compile()
@@ -31,7 +31,7 @@ def compile_source(tmp_path: Path, source: str) -> tuple[Compiler, Emulator, str
 
 
 def compile_error(tmp_path: Path, source: str, error_type) -> None:
-    filename = tmp_path / "print.badge"
+    filename = tmp_path / "print.nbl"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
     with pytest.raises(error_type):
@@ -51,11 +51,11 @@ def test_format_parser() -> None:
 
 
 def test_format_parser_errors() -> None:
-    with pytest.raises(BadgeCompileError):
+    with pytest.raises(NiblickCompileError):
         parse_format("unclosed {", "<test>", 1)
-    with pytest.raises(BadgeCompileError):
+    with pytest.raises(NiblickCompileError):
         parse_format("stray }", "<test>", 1)
-    with pytest.raises(BadgeCompileError):
+    with pytest.raises(NiblickCompileError):
         parse_format("{:q}", "<test>", 1)
 
 
@@ -63,8 +63,8 @@ def test_print_core_formats(tmp_path: Path) -> None:
     _, emu, _ = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
-        import "lib/string.badge";
+        import "lib/uart.nbl";
+        import "lib/string.nbl";
 
         nibble n;
         char c;
@@ -99,7 +99,7 @@ def test_print_decimal_widths(tmp_path: Path) -> None:
     _, emu, asm = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         nibble n;
         char c;
@@ -126,7 +126,7 @@ def test_print_links_only_used_formatters(tmp_path: Path) -> None:
     _, emu, asm = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         nibble n;
 
@@ -147,7 +147,7 @@ def test_print_literal_only(tmp_path: Path) -> None:
     _, emu, _ = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         fn main() {
             uart_route(1);
@@ -167,7 +167,7 @@ def test_print_requires_uart_import(tmp_path: Path) -> None:
             print("hello\\n");
         }
         """,
-        BadgeCompileError,
+        NiblickCompileError,
     )
 
 
@@ -175,7 +175,7 @@ def test_print_rejects_dynamic_format(tmp_path: Path) -> None:
     compile_error(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         char fmt;
 
@@ -183,7 +183,7 @@ def test_print_rejects_dynamic_format(tmp_path: Path) -> None:
             print(fmt);
         }
         """,
-        BadgeCompileError,
+        NiblickCompileError,
     )
 
 
@@ -191,24 +191,24 @@ def test_print_placeholder_count(tmp_path: Path) -> None:
     compile_error(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         fn main() {
             print("{}");
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
     compile_error(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         fn main() {
             print("x", 1);
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
 
 
@@ -216,24 +216,24 @@ def test_print_rejects_bad_types(tmp_path: Path) -> None:
     compile_error(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         fn main() {
             print("{:x}", "text");
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
     compile_error(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         fn main() {
             print("{:c}", 300);
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
 
 
@@ -241,7 +241,7 @@ def test_print_is_statement_only(tmp_path: Path) -> None:
     compile_error(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         nibble value;
 
@@ -249,7 +249,7 @@ def test_print_is_statement_only(tmp_path: Path) -> None:
             value = print("x");
         }
         """,
-        BadgeCompileError,
+        NiblickCompileError,
     )
 
 
@@ -260,7 +260,7 @@ def test_print_is_reserved(tmp_path: Path) -> None:
         fn void print() {
         }
         """,
-        BadgeCompileError,
+        NiblickCompileError,
     )
 
 
@@ -268,7 +268,7 @@ def test_print_signed_and_bool_types(tmp_path: Path) -> None:
     _, emu, _ = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         int8_t a;
         int16_t b;
         int32_t c;

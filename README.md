@@ -1,105 +1,108 @@
-# BadgeC — a compiler for the Supercon.6 (Voja4) badge
+# Niblick
 
-BadgeC is a small C-like cross-compiler for the Hackaday Supercon.6 2022
-badge. It compiles to the badge's 12-bit assembly, uses the
-[supercon6-assembler](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
-package to produce a `.hex` file, and includes a headless emulator for fast
-tests.
+Niblick compiles a C-like language to the 12-bit assembly of the Hackaday
+Supercon.6 2022 (Voja4) badge, assembles it to a `.hex` file with
+`supercon6-assembler`, and includes a headless emulator for tests.
 
-The badge CPU is extremely small: 4-bit data, 4,096 12-bit code words,
-256 nibbles of data RAM, 10 general registers, and a 5-level hardware call
-stack. BadgeC is designed around those constraints rather than pretending
-it is a normal 8-bit machine.
+## Target
 
-## Status
+| Item | Value |
+|---|---|
+| Data width | 4 bits |
+| Code space | 4096 12-bit words |
+| Data RAM | 256 nibbles |
+| General registers | 10 |
+| Hardware call stack | 5 entries |
+| Display | 8x16 LED matrix |
+| Serial | 9600 8N1 UART |
 
-Working today:
-
-- Explicit-width types: `nibble`/`u4`, `i4`, `char`/`u8`, `i8`, `uint16_t`, `i16`, `uint32_t`, `i32`, `bool`, and `flashptr` (12-bit code address)
-- C/cstdint aliases: `int8_t`, `uint8_t`, `int16_t`, `uint16_t`, `int32_t`, `uint32_t`, `short`, `int`, and `long`
-- Native signed arithmetic, signed division/modulo, arithmetic right shift, and signed comparisons
-- 64-bit integers (`int64_t`, `uint64_t`, `i64`, `u64`) with a memory-based expression convention
-- Destination-width expression typing, so a wider assignment or argument evaluates the expression at that width
-- The old `word`/`dword` type spellings were removed; use `uint16_t`/`int16_t` and `uint32_t`/`int32_t` instead
-- Globals, locals, fixed-size RAM arrays, `const` flash arrays, and scalar `const` values folded to immediates
-- Structs with scalar fields, field access, and arrays of structs
-- Functions, parameters, returns, and tail-call optimization
-- `if`/`else`, `while`, `for`, `break`, `continue`
-- Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
-- Compound assignment (`+= -= *= /= %= &= |= ^= <<= >>=`), `++`/`--` statements, unary `+`, and `?:`
-- Constant-expression array lengths and brace initializers for RAM arrays and structs
-- NUL-terminated text strings; `byte` is an alias for `char`/`u8`
-- Literals: decimal, `0x`, `0b`, `0o`, `_` separators, `.5`/`1.` floats, full escapes, and adjacent string concatenation
-- Explicit casts: `(nibble)`, `(char)`, `(uint16_t)`, `(uint32_t)`, signed types, and `(bool)`
-- `print()` compile-time formatting with typed `{}` / `{:x}` / `{:b}` / `{:c}` / `{:s}` placeholders
-- `import` for the standard modules in `lib/` and device drivers in `lib/drivers/`
-- Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
-- Inline `asm { ... }` blocks inside BadgeC functions, with lexical `${...}` placeholders, local labels, call-graph integration, and optimizer opacity
-- VS Code extension with BadgeC/Voja4 assembly highlighting, compiler diagnostics, document symbols, hover, completion, go-to-definition, references, rename, and an emulator debugger
-- Flash strings and `RET`-table iteration
-- Intrinsics: `peek`, `poke`, `peek8`, `poke8`, `in`, `out`, flash tables, constant-mask GPIO, UART bytes, `delay`
-- `lib/` modules: UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, signed/Q4.4, audio/PDM, SPI
-- Device drivers under `lib/drivers/`, including the W5500 Ethernet driver
-- Constant-address memory lowering, small-function/void inlining, frame overlay, copy propagation, dead-write elimination, branch relaxation, and tail calls
-- Rejection of non-tail recursion with a compile-time error
-- Code/RAM size reporting, per-function sizes, stack-cost reports, I/O tracing, and a headless emulator test harness
-
-Not implemented yet:
-
-- General (non-tail) recursion
-- General pointers and pointer arithmetic
-- Nested structs, struct fields that are arrays, varargs, and dynamic allocation
-- Full register allocation and a broader peephole/optimization pipeline
-- UART interrupt-driven or buffered I/O beyond the hardware FIFO
-
-32-bit `*`, `/`, and `%` are implemented but deliberately size-conscious:
-they use a 24-nibble scratch block allocated only when the program uses
-them, and a 32-bit divide takes milliseconds at 250 kHz. See
-`docs/compiler.md` and `docs/stdlib.md`.
-
-## Quick start
-
-Install the compiler and its assembler dependency:
+## Install
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 ```
 
-Then compile and run a program:
+## Usage
 
 ```bash
-.venv/bin/python -m badgec examples/hello.badge --run
+.venv/bin/python -m niblick examples/hello.nbl --run
 ```
 
-This writes `examples/hello.asm` and `examples/hello.hex`, then runs the
-program in the emulator. To emit assembly only:
+The compiler writes `<source>.asm` and `<source>.hex` next to the source.
+Options:
 
 ```bash
-python3 -m badgec examples/hello.badge --no-assemble
+python3 -m niblick examples/hello.nbl --no-assemble
+python3 -m niblick examples/serial_echo.nbl --map
+python3 -m niblick examples/hello.nbl --run --trace --trace-limit 20 --dump-uart
+python3 -m niblick examples/hello.nbl --symbols --callgraph --stack
+python3 -m niblick examples/hello.nbl --run --trace-io --io-trace-limit 200
+python3 -m niblick examples/hello.nbl --map-json hello.map.json
 ```
 
-To print the global memory map:
+## Supported
 
-```bash
-python3 -m badgec examples/serial_echo.badge --map
-```
+- Explicit-width integer types: `nibble`/`u4`, `i4`, `char`/`u8`/`byte`, `i8`,
+  `uint16_t`/`u16`, `i16`, `uint32_t`/`u32`, `i32`, `int64_t`, `uint64_t`,
+  `bool`, and `flashptr`
+- C aliases: `int8_t`, `uint8_t`, `int16_t`, `uint16_t`, `int32_t`,
+  `uint32_t`, `short`, `int`, and `long`
+- `half`/`f16` and `float`/`f32`
+- Signed arithmetic, division, modulo, arithmetic right shift, and signed
+  comparisons
+- Destination-width expression typing
+- Globals, locals, fixed-size RAM arrays, `const` flash arrays, scalar `const`
+  values, and constant-expression array lengths
+- Brace initializers for RAM arrays and single structs
+- Structs with scalar fields, field access, arrays of structs, by-value
+  parameters, and return values
+- Functions, parameters, returns, and tail-call optimization
+- `if`/`else`, `while`, `for`, `break`, and `continue`
+- Arithmetic, bitwise, shift, comparison, and logical operators
+- Compound assignment, `++`/`--` statements, unary `+`, and `?:`
+- Explicit casts to integer, `bool`, and float types
+- NUL-terminated text strings, full escapes, and adjacent string literal
+  concatenation
+- `print()` compile-time formatting with `{}`, `{:d}`, `{:x}`, `{:b}`, `{:c}`,
+  and `{:s}` placeholders
+- `import` for `lib/` modules and `lib/drivers/` device drivers
+- Imported `.asm` modules with `extern fn`, `${...}` placeholders, call-graph
+  scanning, and `no-optimize` markers
+- Inline `asm { ... }` blocks with lexical `${...}` placeholders and local
+  labels
+- Flash strings and `RET`-table iteration
+- Intrinsics: `peek`, `poke`, `peek8`, `poke8`, `in`, `out`, flash tables,
+  constant-mask GPIO, UART bytes, and `delay`
+- Constant-address lowering, single-statement function and void inlining, frame overlay,
+  copy propagation, dead-write elimination, branch relaxation, and tail calls
+- Code and RAM size reports, per-function sizes, stack-cost reports, I/O
+  tracing, and an emulator test harness
+- VS Code extension with syntax highlighting, diagnostics, document symbols,
+  hover, completion, go-to-definition, references, rename, and an emulator
+  debugger
 
-Diagnostics:
+## Not supported
 
-```bash
-python3 -m badgec examples/hello.badge --run --trace --trace-limit 20 --dump-uart
-python3 -m badgec examples/hello.badge --symbols --callgraph --stack
-python3 -m badgec examples/hello.badge --run --trace-io --io-trace-limit 200
-python3 -m badgec examples/hello.badge --map-json hello.map.json
-```
+- General (non-tail) recursion
+- General pointers and pointer arithmetic
+- Nested structs, struct fields that are arrays, nested aggregate
+  initializers, varargs, and dynamic allocation
+- Local `const` arrays
+- Preprocessor directives
+- Full register allocation and a broader peephole pipeline
+- UART interrupt-driven or buffered I/O beyond the hardware FIFO
 
-## Language sketch
+32-bit `*`, `/`, and `%` use a 24-nibble scratch block allocated only when the
+program uses them. A 32-bit divide takes milliseconds at 250 kHz. See
+`docs/compiler.md` and `docs/stdlib.md`.
+
+## Language
 
 ```c
 const char greeting[] = "Hello, Supercon!\n";
 const nibble LED_CLOCK = 1;
-const nibble LED_DATA  = 2;
+const nibble LED_DATA = 2;
 
 char rxbuf[16];
 nibble count;
@@ -112,11 +115,11 @@ fn nibble count_down(nibble n, nibble acc) {
     if (n == 0) {
         return acc;
     }
-    return count_down(n - 1, acc + 1);   // tail call -> GOTO
+    return count_down(n - 1, acc + 1);   // tail call
 }
 
 fn main() {
-    uart_init(3);                         // 3 = 9600 baud
+    uart_init(3);
     uart_puts(greeting);
     count = count_down(10, 0);
 
@@ -126,25 +129,24 @@ fn main() {
 }
 ```
 
-`char` is unsigned 8-bit. A RAM `char[]` costs two nibbles per element.
-A `const char[]` lives in program memory as a `RET` table: two code words
-per character, read with `flash_next(&p)` or `flash_read_char(ptr)`.
-Text strings use `0x00` as the terminator. `0xFF` is reserved for binary sentinel tables such as audio and PDM data.
+`char` is unsigned 8-bit. A RAM `char[]` uses two nibbles per element. A
+`const char[]` is stored in program memory as a `RET` table: two code words per
+character, read with `flash_next(&p)` or `flash_read_char(ptr)`. Text strings
+terminate with `0x00`.
 
 ## Architecture
 
 ```text
-source.badge
+source.nbl
    -> lexer -> parser -> AST
-   -> BadgeC code generator (fixed-register expression convention)
+   -> Niblick code generator (fixed-register expression convention)
    -> badge assembly
-   -> supercon6-assembler package
+   -> supercon6-assembler
    -> .hex
 ```
 
 Imported `.asm` modules are read by the loader and appended at link time;
-`extern fn` declarations give the compiler their signatures and static
-parameter slots.
+`extern fn` declarations provide their signatures and static parameter slots.
 
 Expression results use fixed registers:
 
@@ -154,13 +156,12 @@ Expression results use fixed registers:
 | `char` | `R1` (low), `R2` (high) |
 | `flashptr` | `R1` (low), `R2` (middle), `R3` (high) |
 
-Nested expression temporaries live in `0x20..0x3F`. Variables and arrays
-are allocated from `0x40..0xEF`. The hardware call stack at `0x10..0x1F`
-is used by `GOSUB`/`RET`.
+Nested expression temporaries use `0x20..0x3F`. Variables and arrays use
+`0x40..0xEF`. `GOSUB`/`RET` use the hardware call stack at `0x10..0x1F`.
 
-Tail calls compile to `GOTO`, so tail recursion does not consume a
-hardware stack level. Non-tail recursion is rejected because the hardware
-stack is only five entries deep and there is no stack-relative addressing.
+Tail calls compile to `GOTO`, so tail recursion does not consume a hardware
+stack level. Non-tail recursion is rejected because the hardware stack has five
+entries and there is no stack-relative addressing.
 
 ## Testing
 
@@ -168,197 +169,187 @@ stack is only five entries deep and there is no stack-relative addressing.
 python3 -m pytest
 ```
 
-The test suite covers the emulator's instruction semantics, end-to-end
-BadgeC programs, the standard library, frame overlay, z3-checked peephole
-identities, and Hypothesis-generated arithmetic properties.
+The test suite covers emulator instruction semantics, end-to-end programs,
+the standard library, frame overlay, z3-checked peephole identities, and
+Hypothesis-generated arithmetic properties.
 
-The optional `fidelity` extra installs the upstream headless emulator so the
-two CPU models can be cross-checked:
+The `fidelity` extra installs the upstream headless emulator for cross-checks:
 
 ```bash
 python3 -m pip install -e ".[fidelity]"
 python3 -m pytest tests/test_upstream_emulator.py
 ```
 
-The emulator lives in `badgec/emulator.py` and models the CPU plus a small
-UART FIFO so serial programs can be tested without hardware. It does not
-model real-time clock speed, LED persistence, or every SFR side effect.
+The emulator in `niblick/emulator.py` models the CPU and a UART FIFO. It does
+not model clock speed, LED persistence, or every SFR side effect.
 
 ## Hardware workflow
 
-The badge's serial load protocol is raw 9600 8N1. Put the badge in **DIR**
-mode, press **LOAD**, then send the `.hex` file:
+The badge serial load protocol is 9600 8N1. Put the badge in **DIR** mode,
+press **LOAD**, then send the `.hex` file:
 
 ```bash
 stty -F /dev/ttyUSB0 raw 9600
 cat examples/hello.hex > /dev/ttyUSB0
 ```
 
-Or use the helper:
+Helper scripts:
 
 ```bash
 python3 scripts/flash.py /dev/ttyUSB0 examples/hello.hex
-```
-
-To watch serial output:
-
-```bash
 python3 scripts/monitor.py /dev/ttyUSB0
 ```
 
 Hardware self-test:
 
 ```bash
-python3 -m badgec examples/hw_test.badge
+python3 -m niblick examples/hw_test.nbl
 # load examples/hw_test.hex, press RUN, then:
 python3 scripts/hw_test.py /dev/ttyUSB0
 ```
 
-The self-test waits for a single `0x01` byte, so it has no sync race. It
-prints a PASS/FAIL line for each check and a final `DONE pass=XX fail=YY`
-summary.
+The self-test waits for a `0x01` byte, prints a PASS/FAIL line per check, and
+ends with `DONE pass=XX fail=YY`.
 
-The badge is a 3 V device. Use a 3.3 V USB-UART adapter or Tigard; do not
-use RS-232 voltage levels. See `docs/serial.md` and `docs/toolchain.md`.
+The badge is a 3 V device. Use a 3.3 V USB-UART adapter or Tigard; do not use
+RS-232 voltage levels. See `docs/serial.md` and `docs/toolchain.md`.
 
-## LED-matrix demo: Tetris
+## Examples
 
-`examples/tetris.badge` is a playable 8×16 Tetris demo:
+Sizes are the compiler's `code+data` word count and data-RAM nibble count.
 
-- OPCODE `8` = left
-- OPCODE `1` = right
-- OPCODE `4` = rotate
-- OPCODE `2` = soft drop
+| File | Function | Size | RAM | Test |
+|---|---|---:|---:|---|
+| `hello.nbl` | UART greeting | 142 | 5 | `tests/test_examples.py` |
+| `hello_loop.nbl` | UART loop | 159 | 5 | `tests/test_examples.py` |
+| `serial_echo.nbl` | UART echo | 187 | 7 | `tests/test_examples.py` |
+| `gpio_blink.nbl` | GPIO output | 49 | 1 | `tests/test_examples.py` |
+| `inline_asm.nbl` | Inline assembly | 8 | 2 | `tests/test_inline_asm.py` |
+| `struct_demo.nbl` | Struct fields and arrays | 645 | 11 | `tests/test_structs.py` |
+| `stdlib_demo.nbl` | Standard library | 2079 | 100 | `tests/test_stdlib.py` |
+| `u16_math.nbl` | 16-bit arithmetic | 1294 | 32 | `tests/test_examples.py` |
+| `u32_math.nbl` | 32-bit arithmetic | 2289 | 97 | `tests/test_examples.py` |
+| `math32_test.nbl` | 32-bit hardware test | 2758 | 68 | `tests/test_examples.py` |
+| `audio_demo.nbl` | Square-wave audio | 514 | 25 | `tests/test_examples.py` |
+| `pdm_demo.nbl` | PDM playback | 170 | 7 | `tests/test_examples.py` |
+| `sao_hello.nbl` | SAO header output | 158 | 5 | `tests/test_examples.py` |
+| `keymap.nbl` | Key-map measurement | 240 | 5 | `docs/keys.md` |
+| `hw_test.nbl` | Hardware self-test | 3431 | 121 | `scripts/hw_test.py` |
+| `cube.nbl` | 3D wireframe cube | 1795 | 149 | `tests/test_cube.py` |
+| `tetris.nbl` | Tetris | 2573 | 134 | `tests/test_examples.py` |
+| `wave.nbl` | Signed wave field | 1054 | 156 | `tests/test_wave.py` |
+| `water.nbl` | Falling-sand water | 1894 | 132 | `tests/test_water.py` |
+| `text_scroll.nbl` | Scrolling text | 1970 | 69 | `tests/test_examples.py` |
+| `pi.nbl` | Pi digits | 2967 | 173 | `tests/test_pi.py` |
+| `flash_walk.nbl` | Flash table walk | 105 | 7 | `tests/test_examples.py` |
+| `w5500_probe.nbl` | W5500 link probe | 414 | 12 | `tests/test_examples.py` |
+| `w5500_udp.nbl` | W5500 UDP sender | 1941 | 46 | `tests/test_examples.py` |
+| `w5500_http.nbl` | W5500 TCP listener | 2561 | 60 | `tests/test_examples.py` |
+| `w5500_tcp_diag.nbl` | W5500 TCP diagnostics | 908 | 21 | `tests/test_examples.py` |
+| `w5500_dashboard.nbl` | W5500 HTTP dashboard | 3899 | 142 | `tests/test_examples.py` |
+| `mc_void.nbl` | Minecraft 1.8.9 server | 4064 | 129 | `tests/test_mc_void.py` |
 
-It starts at the slowest fall setting and speeds up every **8 cleared
-lines**. The badge's global `Dimmer` PWM is used for line-clear flashes and
-the game-over fade.
+### Tetris controls
 
-The image uses about 2577 of 4096 words and 134 of 176 usable RAM nibbles.
-Constant-address lowering, small-function inlining, condition lowering, copy
-propagation, and spill elimination leave roughly 1500 words of headroom for
-new features.
+| Key | Action |
+|---|---|
+| OPCODE `8` | Left |
+| OPCODE `1` | Right |
+| OPCODE `4` | Rotate |
+| OPCODE `2` | Soft drop |
 
-The physical `KeyReg` mapping was measured with `examples/keymap.badge`; see
-`docs/keys.md`.
+The game starts at the slowest fall setting and increments the speed every 8
+cleared lines. The global `Dimmer` PWM drives line-clear flashes and the
+game-over fade. The `KeyReg` mapping is in `docs/keys.md`.
 
-## LED-matrix demo: spinning cube
+### Cube
 
-`examples/cube.badge` draws a rotating 3D wireframe cube on the 8×16 matrix.
-It uses a fixed-point yaw sweep, a fixed 30° camera pitch, a slightly wider
-horizontal scale, and a small fixed roll. Bresenham line drawing fills a 16×16
-off-screen framebuffer with four columns of margin on each side. Copying only
-the middle eight columns gives true clipping: off-screen edges disappear
-instead of being pinned to the outermost columns.
+`cube.nbl` uses a fixed-point yaw sweep, a 30° camera pitch, a wider horizontal
+scale, and a fixed roll. A Bresenham line routine fills a 16x16 off-screen
+framebuffer with four columns of margin on each side. Copying the middle eight
+columns clips off-screen edges. The demo uses no UART or input.
 
-The demo is about 1792 words and 165 RAM nibbles; it needs no UART or input
-and starts spinning as soon as it runs.
+### Wave field
 
-## LED-matrix demo: signed wave field
-
-`examples/wave.badge` runs a 4×8 height-field wave on the 8×16 matrix. Heights
-are signed nibbles stored as raw two's complement, and the display draws each
-cell as a 2×2 block. A centre impulse is injected every 48 frames.
-
-The update uses `lib/signed.badge` for sign extension, arithmetic shifts, and
-clamping:
+`wave.nbl` runs a 4x8 height field on the 8x16 matrix. Heights are signed
+nibbles stored as two's complement, and each cell is drawn as a 2x2 block. A
+centre impulse is injected every 48 frames. The update uses
+`lib/signed.nbl`:
 
 ```c
 next_height = sum(neighbours) / 2 - previous_height
 ```
 
-It is about 1027 words and 164 RAM nibbles. It still uses the raw-bit helpers
-in `lib/signed.badge`, which remain useful for fixed-point and bit-oriented
-code even though native signed types are now available.
+### Falling water
 
-## LED-matrix demo: falling water
+`water.nbl` is a falling-sand cellular automaton on the full 8x16 matrix. Each
+cell uses two bits (water and a moved-this-frame flag) in 64 nibbles. Gravity
+cycles through down, left, up, and right every 16 simulation frames. The
+visible page updates one pixel at a time.
 
-`examples/water.badge` is a falling-sand style water cellular automaton on the
-full 8×16 matrix. Each cell is empty or water, water falls in the current
-gravity direction, slides diagonally when blocked, and spreads sideways when
-it piles up. Water is just a lit LED; the display edges are the only walls.
+### W5500 Ethernet
 
-The amount of water is fixed at startup (a centred five-row band), and
-gravity cycles through down, left, up, and right every 16 simulation frames.
-The water therefore sloshes around the box instead of settling permanently.
+`w5500_udp.nbl` bit-bangs SPI to a Wiznet W5500 and sends UDP datagrams.
 
-The 8×16 grid uses two bits per cell (water and a "moved this frame" bit) in
-64 nibbles. The visible page is updated one pixel at a time, without clearing
-the whole screen, so there is no full-frame blank. The demo is about 1910
-words and 139 RAM nibbles.
+| Setting | Value |
+|---|---|
+| Badge address | `192.168.1.50` |
+| Host address | `192.168.1.10` |
+| Badge source port | `5000` |
+| Host destination port | `5001` |
+| Payload | `hello from badge\n` |
 
-## Ethernet demo: W5500 UDP
+Default SPI wiring is in `lib/boards/voja4.nbl`: `OUT2=SCLK`, `OUT3=MOSI`,
+`OUT1=CS`, `IN0=MISO`, and `OUT0=W5500 RST`. The W5500 requires a clean 3.3 V
+supply at roughly 130 mA; a separate supply with common ground is recommended.
 
-`examples/w5500_udp.badge` bit-bangs SPI to a Wiznet W5500 and sends UDP
-datagrams to a host.
-
-- Badge: `192.168.1.50`
-- Host: `192.168.1.10`
-- Badge source port: `5000`
-- Host destination port: `5001`
-- Payload: `hello from badge\n`
-
-Default SPI wiring is defined in `lib/boards/voja4.badge`: `OUT2=SCLK`,
-`OUT3=MOSI`, `OUT1=CS`, `IN0=MISO`, and `OUT0=W5500 RST` if reset is
-controlled by the badge. The W5500 needs a clean
-3.3 V supply and roughly 130 mA; a separate 3.3 V supply with common ground is
-recommended.
-
-Use `examples/w5500_probe.badge` first to confirm `VERSIONR == 0x04` and check
-the PHY link before running the UDP demo. `examples/w5500_http.badge` adds a
-minimal TCP listener on port 80:
+Run `w5500_probe.nbl` first to confirm `VERSIONR == 0x04` and the PHY link.
+`w5500_http.nbl` adds a TCP listener on port 80:
 
 ```bash
 curl http://192.168.1.50/
 ```
 
-`examples/w5500_dashboard.badge` adds a compact interactive page with matrix
-pattern and dimmer buttons. It is deliberately minified to fit the badge's
-4096-word flash: about **4031 words**.
+`w5500_dashboard.nbl` adds matrix-pattern and dimmer controls.
 
-## Minecraft 1.8.9 void server
+### Minecraft 1.8.9
 
-`examples/mc_void.badge` turns the badge and W5500 into a minimal Minecraft
-Java Edition 1.8.9 (protocol 47) server. It answers the server-list ping and
-lets one vanilla 1.8.9 client join a small 16x16 stone platform in an
-otherwise empty void world in creative mode.
+`mc_void.nbl` implements a Minecraft Java Edition 1.8.9 (protocol 47) server.
+It answers the server-list ping and allows one vanilla 1.8.9 client to join a
+16x16 stone platform at y=64 in creative mode.
 
-- Badge: `192.168.1.50:25565`
-- Client: vanilla 1.8.9 / protocol 47, offline mode
-- One player, no encryption, no compression, no world storage
-- **4045 / 4096 words**, **133 / 208 RAM nibbles**, max call depth 4
+| Setting | Value |
+|---|---|
+| Address | `192.168.1.50:25565` |
+| Client | vanilla 1.8.9 / protocol 47, offline mode |
+| Players | one |
+| Encryption / compression | none |
+| World storage | none |
+| Login name | `Player` |
+| Limits | 4064 / 4096 words, 129 / 208 RAM nibbles, max call depth 4 |
 
-Use a 1.8.9 client; modern clients can display the MOTD but cannot join. The
-server never sends an Encryption Request, so it behaves like an offline-mode
-server. The Login Success name is fixed to `Player` to keep the packet in
-flash, and the world is one chunk section with a 16x16 stone platform at
-y=64, full light, and the void biome. Players can break blocks and place
-stone on all six faces; the server confirms changes with Block Change
-packets. The client may keep showing a different creative block locally until
-reconnect; the server's authoritative placement is always stone. There is no
-world storage, so the platform regenerates on reconnect. Run
-`examples/w5500_probe.badge` first to confirm the W5500 link, then flash
-`examples/mc_void.hex` and connect with a 1.8.9 client.
+The server sends no Encryption Request. The world is one chunk section with a
+16x16 stone platform, full block and sky light, and the void biome. Players can
+break blocks and place stone on all six faces; the server confirms changes with
+Block Change packets and treats stone as authoritative. The platform
+regenerates on reconnect.
 
-The protocol path is covered by `tests/test_mc_void.py`, which runs the
-firmware in the emulator against a localhost 1.8.9 protocol client through the
-W5500/TCP model in `tests/w5500_sim.py`. The same status/login/chunk/keepalive
-exchange has also been run against the badge hardware over Ethernet; a real
-vanilla client is the remaining check. See [docs/minecraft.md](docs/minecraft.md)
-for the packet sequence and firmware limits.
+Run `w5500_probe.nbl` first, then flash `mc_void.hex` and connect with a 1.8.9
+client. The protocol path is covered by `tests/test_mc_void.py`, which runs the
+firmware against a localhost 1.8.9 client through `tests/w5500_sim.py`. See
+`docs/minecraft.md` for the packet sequence and limits.
 
 ## Library modules
 
-`lib/` contains opt-in BadgeC modules for UART, GPIO, display/framebuffer,
-keys, clock/sync, AutoOff power, random numbers, byte/nibble memory, strings,
-math, two's-complement signed helpers, Q4.4 fixed point, a Q4.4 sine table,
-a 5x8 font and scrolling text, square-wave audio, PDM sample playback, and
-bit-banged SPI. Device drivers live under `lib/drivers/`; the W5500 Ethernet
-driver is separate from the standard library.
+`lib/` contains opt-in modules for UART, GPIO, display/framebuffer, keys,
+clock/sync, AutoOff power, random numbers, byte and nibble memory, strings,
+math, two's-complement helpers, Q4.4 fixed point, a Q4.4 sine table, a 5x8
+font with scrolling text, square-wave audio, PDM playback, and bit-banged SPI.
+Device drivers are under `lib/drivers/`.
 
 ```c
-import "lib/uart.badge";
-import "lib/string.badge";
+import "lib/uart.nbl";
+import "lib/string.nbl";
 
 char buf[16];
 
@@ -371,56 +362,45 @@ fn main() {
 }
 ```
 
-Imports resolve relative to the importing file and then the repository root.
-Unused module functions and pure globals are removed, so an import costs
-nothing until you use it. See `docs/stdlib.md`, `docs/drivers/w5500.md`, and
-`examples/stdlib_demo.badge`.
+Imports resolve relative to the importing file, then the repository root.
+Unused module functions and pure globals are removed. See `docs/stdlib.md`,
+`docs/drivers/w5500.md`, and `examples/stdlib_demo.nbl`.
 
-The compiler keeps a small intrinsic set for pointer-free memory access, flash
-tables, raw I/O, constant-mask GPIO, hot UART bytes, the delay loop, and the
-W5500 fast SPI path. `docs/stdlib.md` explains why those stay builtins.
+The compiler keeps intrinsics for pointer-free memory access, flash tables,
+raw I/O, constant-mask GPIO, hot UART bytes, the delay loop, and the W5500 fast
+SPI path. `docs/stdlib.md` documents the intrinsic set.
 
 ## Documentation
 
 - `docs/isa.md` — instruction set and code-generation notes
 - `docs/memory-map.md` — data/code memory and SFRs
-- `docs/serial.md` — UART details and load/save workflow
+- `docs/serial.md` — UART and load/save workflow
 - `docs/stdlib.md` — standard library, intrinsics, and module reference
 - `docs/pins.md` — Voja4 I/O pin map and board assignments
-- `docs/types.md` — type spellings, aliases, signed arithmetic, `bool`, and target typing
-- `docs/structs.md` — struct syntax, layout, and current limits
+- `docs/types.md` — type spellings, operators, literals, strings, and typing
+- `docs/structs.md` — struct syntax, layout, and limits
 - `docs/drivers/w5500.md` — W5500 Ethernet driver
-- `docs/runtime-abi.md` — BadgeC calling convention and runtime
-- `docs/compiler.md` — compiler internals and optimization roadmap
+- `docs/runtime-abi.md` — calling convention and runtime
+- `docs/compiler.md` — compiler internals and optimizations
 - `docs/asm-imports.md` — imported `.asm` modules, `extern fn`, placeholders, and optimizer markers
-- `docs/inline-asm.md` — raw `asm { ... }` blocks inside BadgeC functions
+- `docs/inline-asm.md` — raw `asm { ... }` blocks
 - `docs/vscode.md` — VS Code language support and language-server development
 - `docs/debugging.md` — emulator debugger, breakpoints, variables, and debug maps
 - `docs/testing.md` — test layers and hardware development loop
 - `docs/keys.md` — front-panel controls and measured key codes
-- `docs/toolchain.md` — assembler/emulator usage
-- `docs/upstream-errata.md` — contradictions found in the upstream manuals
-- `RELEASING.md` — pre-publish checklist
+- `docs/toolchain.md` — assembler and emulator usage
+- `docs/upstream-errata.md` — upstream manual contradictions
+- `RELEASING.md` — publish checklist
 
 ## Assembler dependency
 
-BadgeC uses the upstream
+Niblick uses the upstream
 [Supercon.6 assembler](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
-through the `supercon6-assembler` package. The package is installed from a
-pinned git revision of that repository by `pip`; the source is not vendored
-here.
+through the `supercon6-assembler` package. `pip` installs it from a pinned git
+revision; the source is not vendored here.
 
 ## License
 
-BadgeC is licensed under the GNU General Public License, version 3. The
-assembler is MIT-licensed and is distributed as a separate package. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
-
-## Roadmap
-
-1. Peephole optimizer and constant folding.
-2. Size-aware inlining and call-graph local overlay.
-3. Multiplication/division/shift runtime routines.
-4. General `flashptr` arithmetic and 2D const tables.
-5. Hardware validation with the Tigard and the real badge.
-6. Optional C front-end experiments on top of the existing IR/backend.
+Niblick is licensed under the GNU General Public License, version 3. The
+assembler is MIT-licensed and distributed as a separate package. See
+`THIRD_PARTY_NOTICES.md` for details.

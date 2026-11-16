@@ -41,7 +41,7 @@ jobs:
       - name: Ruff
         run: ruff check .
       - name: mypy
-        run: mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py badgec/parser.py badgec/types.py
+        run: mypy niblick/compiler.py niblick/format.py niblick/inline.py niblick/asm_opt.py niblick/loader.py niblick/emulator.py niblick/parser.py niblick/types.py
 
   coverage:
     name: Coverage
@@ -56,7 +56,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,lsp,fidelity]"
       - name: Test with coverage
-        run: python -m pytest --cov=badgec --cov-report=term-missing
+        run: python -m pytest --cov=niblick --cov-report=term-missing
 
   extension:
     name: VS Code extension
@@ -93,6 +93,6 @@ jobs:
       - name: Smoke test installed wheel
         working-directory: /tmp
         run: |
-          python -m badgec "$GITHUB_WORKSPACE/examples/hello.badge" --run
-          python -m badgec "$GITHUB_WORKSPACE/examples/struct_demo.badge" --run
-          python -m badgec "$GITHUB_WORKSPACE/examples/w5500_probe.badge" --no-assemble
+          python -m niblick "$GITHUB_WORKSPACE/examples/hello.nbl" --run
+          python -m niblick "$GITHUB_WORKSPACE/examples/struct_demo.nbl" --run
+          python -m niblick "$GITHUB_WORKSPACE/examples/w5500_probe.nbl" --no-assemble

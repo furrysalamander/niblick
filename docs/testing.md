@@ -4,12 +4,12 @@
 
 ```bash
 python3 -m pytest              # unit + integration tests
-python3 -m badgec examples/hello.badge --run
-python3 -m badgec examples/flash_walk.badge --run --map
+python3 -m niblick examples/hello.nbl --run
+python3 -m niblick examples/flash_walk.nbl --run --map
 ```
 
-The emulator is the primary development loop. It is fast, deterministic,
-and can exercise UART transmit/receive without hardware.
+The emulator is deterministic and can exercise UART transmit/receive without
+hardware.
 
 ## Test layers
 
@@ -25,7 +25,7 @@ and can exercise UART transmit/receive without hardware.
 | Debugger | `tests/test_debugmap.py`, `tests/test_debug.py` | PC-to-source maps, breakpoints, stepping, variables, stack frames |
 | W5500/Minecraft | `tests/test_mc_void.py`, `tests/test_spi_fast.py` | W5500 driver fast SPI helpers and a 1.8.9 status/login/chunk exchange through a W5500/TCP model |
 | Standard library | `tests/test_library.py`, `tests/test_stdlib.py`, `tests/test_signed_lib.py` | UART, GPIO, display/font/text, keys, time/power/system, random, memory, strings, math/trig, audio/PDM |
-| Inlining / overlay | `tests/test_compiler.py`, `tests/test_overlay.py` | Small return/void inlining, side-effect guards, frame interference and slot reuse |
+| Inlining / overlay | `tests/test_compiler.py`, `tests/test_overlay.py` | Single-statement return/void inlining, side-effect guards, frame interference and slot reuse |
 | Print formatting | `tests/test_print.py` | Literal format parsing, typed placeholders, generated UART helpers, and error cases |
 | Structs | `tests/test_structs.py` | Layout, field access, arrays of structs, and unsupported forms |
 | Board pin map | `tests/test_board.py` | Voja4 output/input masks and default SPI/W5500 assignments |
@@ -39,7 +39,7 @@ extra with `pip install -e ".[lsp]"` to run them.
 
 ## Emulator model
 
-`badgec/emulator.py` implements the CPU core and a small UART model:
+`niblick/emulator.py` implements the CPU core and a UART model:
 
 - `.ram` is 256 nibbles; registers are `ram[0..15]`.
 - `.program` is 4096 12-bit words.
@@ -49,7 +49,7 @@ extra with `pip install -e ".[lsp]"` to run them.
 - `run(max_steps)` stops only on `.halted` or the step limit; intentional
   `JR -1` loops are not auto-detected.
 
-The emulator now also models:
+The emulator models:
 
 - button state (`press_key`, `release_key`, `press_alt`) and `KeyStatus`/`KeyReg`
 - the `Random` SFR with a deterministic 16-bit LCG
@@ -64,7 +64,7 @@ The emulator now also models:
 `set_input` writes both `IN` (`0x0B`) and `INB` (`0xFB`) by default; pass
 `bank=0` or `bank=1` to target the bank selected by `WrFlags.IOPos`.
 
-It still does not model LED brightness, real-time clock accuracy, or
+It does not model LED brightness, real-time clock accuracy, or
 electrical behavior. Validate those on hardware.
 
 ## I/O tracing and fake inputs
@@ -86,10 +86,10 @@ Events are `write`, `bit`, or `read` and include the fetched PC and event
 number. `io_trace_total` keeps counting past the limit. From the CLI:
 
 ```bash
-python3 -m badgec driver.badge --run --trace-io --io-trace-limit 200
+python3 -m niblick driver.nbl --run --trace-io --io-trace-limit 200
 ```
 
-A 595 decoder is deliberately not part of the emulator; wiring choices
+A 595 decoder is not part of the emulator; wiring choices
 differ between builds.
 
 ## Adding a compiler test
@@ -111,11 +111,11 @@ addresses) plus the `.hex` path. `run()` loads and executes it.
 ## Diagnostics
 
 ```bash
-python3 -m badgec example.badge --run --trace --trace-limit 20
-python3 -m badgec example.badge --symbols --callgraph --stack
-python3 -m badgec example.badge --map-json build/example.map.json
-python3 -m badgec example.badge --run --trace-io --io-trace-limit 200
-python3 -m badgec example.badge --run --dump-ram --dump-uart --dump-sfr
+python3 -m niblick example.nbl --run --trace --trace-limit 20
+python3 -m niblick example.nbl --symbols --callgraph --stack
+python3 -m niblick example.nbl --map-json build/example.map.json
+python3 -m niblick example.nbl --run --trace-io --io-trace-limit 200
+python3 -m niblick example.nbl --run --dump-ram --dump-uart --dump-sfr
 ```
 
 `--trace` prints the PC, raw instruction word, decoded instruction, selected
@@ -127,14 +127,14 @@ current `Clock` setting.
 
 ## Hardware self-test
 
-`examples/hw_test.badge` is a hardware self-test that waits for a single
+`examples/hw_test.nbl` is a hardware self-test that waits for a single
 `0x01` UART byte. It exercises arithmetic, loops, tail recursion, RAM
 arrays, `mem_*` helpers, peek/poke, flash tables, flash iteration, UART TX/RX,
 GPIO, display paging, dimmer, random, power/status SFRs, WrFlags, key reads,
 and delay.
 
 ```bash
-python3 -m badgec examples/hw_test.badge
+python3 -m niblick examples/hw_test.nbl
 # load examples/hw_test.hex and press RUN
 python3 scripts/hw_test.py /dev/ttyUSB0
 ```
@@ -144,11 +144,11 @@ triggered repeatedly without re-uploading.
 
 ## Key mapping
 
-`examples/keymap.badge` prints the `KeyReg` and `KeyStatus` value for each
+`examples/keymap.nbl` prints the `KeyReg` and `KeyStatus` value for each
 button press:
 
 ```bash
-python3 -m badgec examples/keymap.badge
+python3 -m niblick examples/keymap.nbl
 # load examples/keymap.hex, press RUN
 python3 scripts/monitor.py /dev/ttyUSB0
 ```
@@ -158,19 +158,19 @@ are measured.
 
 ## 32-bit math test
 
-`examples/math32_test.badge` exercises 32-bit storage, shifts, casts,
+`examples/math32_test.nbl` exercises 32-bit storage, shifts, casts,
 multiply, divide, and modulo. It uses the same `0x01` start byte as the main
 self-test:
 
 ```bash
-python3 -m badgec examples/math32_test.badge
+python3 -m niblick examples/math32_test.nbl
 # load examples/math32_test.hex, press RUN, then:
 python3 scripts/hw_test.py /dev/ttyUSB0
 ```
 
 ## Tetris smoke test
 
-`examples/tetris.badge` exercises the display, keys, random pieces, PWM
+`examples/tetris.nbl` exercises the display, keys, random pieces, PWM
 flashes, and a large amount of compiled code. `tests/test_size.py` keeps it
 under a 2800-word budget, and `tests/test_examples.py` enforces the 4096-word
 hard limit.
@@ -192,7 +192,7 @@ If the badge does not run the program:
 - verify GND is common and the adapter is 3.3 V;
 - confirm the badge baud setting (default 9600);
 - try a master reset (disconnect batteries) if the serial state looks stuck;
-- keep a known-good example such as `hello.badge` for wiring checks.
+- keep a known-good example such as `hello.nbl` for wiring checks.
 
 ## CI suggestion
 
@@ -210,8 +210,8 @@ The development extras include `ruff`, `mypy`, `pytest-cov`, `hypothesis`,
 ```bash
 python3 -m pip install -e ".[dev]"
 ruff check .
-mypy badgec/compiler.py badgec/format.py badgec/inline.py badgec/asm_opt.py badgec/loader.py badgec/emulator.py badgec/parser.py badgec/types.py
-python3 -m pytest --cov=badgec
+mypy niblick/compiler.py niblick/format.py niblick/inline.py niblick/asm_opt.py niblick/loader.py niblick/emulator.py niblick/parser.py niblick/types.py
+python3 -m pytest --cov=niblick
 pre-commit install
 ```
 

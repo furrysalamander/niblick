@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.loader import load_program
 
-EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "examples").glob("*.badge"))
+EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "examples").glob("*.nbl"))
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=lambda p: p.name)

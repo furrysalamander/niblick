@@ -1,7 +1,7 @@
 # VS Code language support
 
 The repository includes a VS Code extension under `editors/vscode/`. It
-provides BadgeC and Voja4 assembly syntax highlighting plus a language server
+provides Niblick and Voja4 assembly syntax highlighting plus a language server
 for diagnostics and document symbols.
 
 ## Prerequisites
@@ -10,13 +10,13 @@ For the language server, either create a project `.venv` (the extension
 auto-detects `.venv/bin/python` and `venv/bin/python`):
 
 ```bash
-cd /path/to/badgec
+cd /path/to/niblick
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[lsp]"
 ```
 
 or install the `lsp` extra into whatever interpreter you configure through
-`badgec.pythonPath`:
+`niblick.pythonPath`:
 
 ```bash
 python3 -m pip install -e ".[lsp]"
@@ -38,9 +38,9 @@ npm run compile
 ```
 
 Open `editors/vscode/` in VS Code and press F5. This launches an Extension
-Development Host with the BadgeC extension loaded. Open a `.badge` file from
+Development Host with the Niblick extension loaded. Open a `.nbl` file from
 the main repository; the language server is started with `python3 -m
-badgec.lsp --stdio`.
+niblick.lsp --stdio`.
 
 ## Install locally
 
@@ -54,14 +54,14 @@ npm run package
 Then install it:
 
 ```bash
-code --install-extension badgec-vscode-0.1.0.vsix
+code --install-extension niblick-vscode-0.1.0.vsix
 ```
 
 Or use **Extensions: Install from VSIX...** in the command palette.
 
 ## Features
 
-- Syntax highlighting for `.badge` files.
+- Syntax highlighting for `.nbl` files.
 - Syntax highlighting for Voja4 assembly files.
 - Compiler diagnostics on change, with a short debounce.
 - Diagnostics for imported `.asm` modules.
@@ -72,10 +72,10 @@ Or use **Extensions: Install from VSIX...** in the command palette.
   assembly mnemonics, registers, and labels.
 - Go-to-definition for functions, globals, parameters, locals, and imported
   assembly entry points.
-- Find all references across BadgeC, inline asm, and imported assembly.
+- Find all references across Niblick, inline asm, and imported assembly.
 - Rename functions, globals, parameters, locals, and assembly entry points
   across files.
-- Compile current file and run it in the BadgeC emulator from the command
+- Compile current file and run it in the Niblick emulator from the command
   palette.
 - Debug launch configurations with breakpoints, stepping, registers, flags,
   globals, and UART output. See [debugging.md](debugging.md).
@@ -84,19 +84,19 @@ Or use **Extensions: Install from VSIX...** in the command palette.
 
 ## File associations
 
-The extension contributes the `badgec` language for `.badge` files. This
+The extension contributes the `niblick` language for `.nbl` files. This
 repository also pins the association in `.vscode/settings.json` so an editor
 that was opened before the extension was installed cannot stay stuck in
 `plaintext`:
 
 ```json
 "files.associations": {
-  "*.badge": "badgec",
+  "*.nbl": "niblick",
   "**/*.asm": "voja4-asm"
 }
 ```
 
-The extension deliberately does **not** claim every `.asm` file, because that
+The extension does **not** claim every `.asm` file, because that
 would override other assemblers. This repository's `.vscode/settings.json`
 associates all workspace `.asm` files with `voja4-asm`.
 
@@ -112,18 +112,18 @@ For another project, add:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `badgec.pythonPath` | auto-detect | Python interpreter used to launch the server; empty means auto-detect `.venv`/`venv`, then `python3` |
-| `badgec.includePaths` | `[]` | Extra import roots, also passed through `BADGEC_PATH` |
+| `niblick.pythonPath` | auto-detect | Python interpreter used to launch the server; empty means auto-detect `.venv`/`venv`, then `python3` |
+| `niblick.includePaths` | `[]` | Extra import roots, also passed through `NIBLICK_PATH` |
 
 ## Commands
 
-- **BadgeC: Compile Current File** — compiles the active `.badge` file into
-  `.badgec-build/` and shows compiler output.
-- **BadgeC: Run Current File in Emulator** — compiles and runs the active
-  `.badge` file with the headless emulator.
-- **BadgeC: Restart Language Server**
+- **Niblick: Compile Current File** — compiles the active `.nbl` file into
+  `.niblick-build/` and shows compiler output.
+- **Niblick: Run Current File in Emulator** — compiles and runs the active
+  `.nbl` file with the headless emulator.
+- **Niblick: Restart Language Server**
 
-Debugging uses the normal VS Code Run and Debug view with a `badgec` launch
+Debugging uses the normal VS Code Run and Debug view with a `niblick` launch
 configuration. See [debugging.md](debugging.md).
 
 ## Troubleshooting
@@ -134,14 +134,14 @@ If diagnostics do not appear:
    Trust** and trust this workspace. VS Code can keep local extensions
    inactive in Restricted Mode.
 2. Check the language mode in the bottom-right of the editor. It should say
-   **BadgeC**. If it says **Plain Text**, click it and choose **BadgeC**, or
+   **Niblick**. If it says **Plain Text**, click it and choose **Niblick**, or
    reload the window.
-3. Open the **BadgeC** output channel.
-4. Check that `python3 -m badgec.lsp --stdio` runs in the repository
+3. Open the **Niblick** output channel.
+4. Check that `python3 -m niblick.lsp --stdio` runs in the repository
    environment.
 5. Install the server extra with `pip install -e ".[lsp]"`.
-6. Set `badgec.pythonPath` to the correct virtualenv or interpreter.
-7. Run **BadgeC: Restart Language Server**.
+6. Set `niblick.pythonPath` to the correct virtualenv or interpreter.
+7. Run **Niblick: Restart Language Server**.
 
 The server logs startup errors to stderr; the extension forwards them to the
 output channel and shows a one-time error notification.
@@ -152,11 +152,11 @@ output channel and shows a one-time error notification.
 VS Code
   └─ editors/vscode TypeScript client
        └─ stdio
-            └─ python3 -m badgec.lsp
-                 ├─ badgec.analysis
-                 ├─ badgec.loader
-                 ├─ badgec.parser
-                 └─ badgec.asm_link
+            └─ python3 -m niblick.lsp
+                 ├─ niblick.analysis
+                 ├─ niblick.loader
+                 ├─ niblick.parser
+                 └─ niblick.asm_link
 ```
 
 The client only handles editor integration, grammars, snippets, and starting

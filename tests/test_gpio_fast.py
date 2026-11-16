@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_program
 
 MASKS = (0, 1, 2, 3, 4, 5, 8, 15)
 
 
 def build(tmp_path: Path, source: str, name: str):
-    path = tmp_path / f"{name}.badge"
+    path = tmp_path / f"{name}.nbl"
     path.write_text(source)
     compiler = Compiler(load_program(path), str(path))
     asm_path = tmp_path / f"{name}.asm"
@@ -37,7 +37,7 @@ def run(hex_path: Path, iopos: int = 0, input_value: int = 0):
 
 def program(mask_expr: str, init_expr: str) -> str:
     return f"""
-    import "lib/gpio.badge";
+    import "lib/gpio.nbl";
     nibble result;
     nibble mask;
     fn main() {{
@@ -69,8 +69,8 @@ def test_constant_gpio_lowering_shape(tmp_path: Path) -> None:
     assert "BCLR R3, 1" in asm
     assert "BTG R3, 2" in asm
     assert "BIT R3, 3" in asm
-    assert "GOSUB __bc_gpio_" not in asm
-    assert not any(name.startswith("__bc_gpio_") for name in compiler.used_runtime)
+    assert "GOSUB __nib_gpio_" not in asm
+    assert not any(name.startswith("__nib_gpio_") for name in compiler.used_runtime)
 
 
 @pytest.mark.parametrize("iopos", [0, 1])
@@ -121,8 +121,8 @@ def test_multi_bit_test_falls_back(tmp_path: Path) -> None:
         "nibble r; fn main(){ r = gpio_test(0b0101); }",
         "gpio_multi",
     )
-    assert "__bc_gpio_test" in compiler.used_runtime
-    assert "GOSUB __bc_gpio_test" in asm_path.read_text()
+    assert "__nib_gpio_test" in compiler.used_runtime
+    assert "GOSUB __nib_gpio_test" in asm_path.read_text()
     emu = run(hex_path, input_value=0b0100)
     assert emu.ram[compiler.globals["r"].address] == 1
 
@@ -133,7 +133,7 @@ def test_variable_mask_links_runtime(tmp_path: Path) -> None:
         "nibble m; fn main(){ m = 3; gpio_set(m); }",
         "gpio_variable",
     )
-    assert "__bc_gpio_set" in compiler.used_runtime
+    assert "__nib_gpio_set" in compiler.used_runtime
 
 
 def test_constant_gpio_is_smaller(tmp_path: Path) -> None:
@@ -169,6 +169,6 @@ def test_zero_mask_emits_no_operations(tmp_path: Path) -> None:
     assert "BCLR R3" not in asm
     assert "BTG R3" not in asm
     assert "BIT R3" not in asm
-    assert not any(name.startswith("__bc_gpio_") for name in compiler.used_runtime)
+    assert not any(name.startswith("__nib_gpio_") for name in compiler.used_runtime)
     emu = run(hex_path, input_value=0b1111)
     assert emu.ram[compiler.globals["r"].address] == 0

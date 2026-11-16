@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.errors import BadgeSyntaxError, BadgeTypeError
-from badgec.emulator import Emulator
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.errors import NiblickSyntaxError, NiblickTypeError
+from niblick.emulator import Emulator
+from niblick.loader import load_source
 
 
 def compile_source(tmp_path: Path, source: str) -> tuple[Compiler, Emulator]:
-    filename = tmp_path / "structs.badge"
+    filename = tmp_path / "structs.nbl"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
     asm = compiler.compile()
@@ -30,7 +30,7 @@ def compile_source(tmp_path: Path, source: str) -> tuple[Compiler, Emulator]:
 
 
 def compile_error(tmp_path: Path, source: str, error_type) -> None:
-    filename = tmp_path / "structs.badge"
+    filename = tmp_path / "structs.nbl"
     with pytest.raises(error_type):
         program = load_source(source, filename=str(filename))
         compiler = Compiler(program, str(filename))
@@ -41,7 +41,7 @@ def test_struct_layout_and_field_access(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         struct Point {
             nibble x;
@@ -153,7 +153,7 @@ def test_struct_error_cases(tmp_path: Path) -> None:
             p.z = 1;
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
     compile_error(
         tmp_path,
@@ -164,7 +164,7 @@ def test_struct_error_cases(tmp_path: Path) -> None:
             p.x = 1;
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
     compile_error(
         tmp_path,
@@ -175,7 +175,7 @@ def test_struct_error_cases(tmp_path: Path) -> None:
             p.x = 1;
         }
         """,
-        BadgeTypeError,
+        NiblickTypeError,
     )
     compile_error(
         tmp_path,
@@ -184,7 +184,7 @@ def test_struct_error_cases(tmp_path: Path) -> None:
         fn main() {
         }
         """,
-        BadgeSyntaxError,
+        NiblickSyntaxError,
     )
 
 

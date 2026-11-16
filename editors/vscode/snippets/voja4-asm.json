@@ -11,7 +11,7 @@
   "Call runtime routine": {
     "prefix": "gosub",
     "body": [
-      "GOSUB ${1:__bc_uart_putc}"
+      "GOSUB ${1:__nib_uart_putc}"
     ],
     "description": "Call a compiler runtime routine"
   },

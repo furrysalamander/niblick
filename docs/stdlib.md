@@ -1,17 +1,17 @@
-# BadgeC standard library
+# Niblick standard library
 
-BadgeC has three library layers:
+Niblick has three library layers:
 
 - **Intrinsics** are recognized by the compiler and lowered to inline code or
-  calls into `badgec/runtime/runtime.asm`.
-- **Standard modules** are ordinary BadgeC files under `lib/`, pulled in with
+  calls into `niblick/runtime/runtime.asm`.
+- **Standard modules** are ordinary Niblick files under `lib/`, pulled in with
   `import`.
 - **Drivers** are device-specific modules under `lib/drivers/`, also imported
   explicitly. They are not part of the standard library.
 
 ```c
-import "lib/uart.badge";
-import "lib/string.badge";
+import "lib/uart.nbl";
+import "lib/string.nbl";
 
 char buf[16];
 
@@ -25,7 +25,7 @@ fn main() {
 ```
 
 Imports resolve relative to the importing file first, then the repository
-root; `BADGEC_PATH` can add more search roots. Each file is loaded once and
+root; `NIBLICK_PATH` can add more search roots. Each file is loaded once and
 import cycles are reported. Imported declarations are compiled together with
 the main program, and the compiler removes any function or pure global that
 is still unreachable, so an unused module costs neither code nor RAM.
@@ -34,24 +34,23 @@ is still unreachable, so an unused module costs neither code nor RAM.
 two consecutive nibbles, so byte strings advance by 2 per character. String
 modules use `0x00` as the terminator, matching flash strings and `uart_puts`.
 
-## Why some helpers are builtins
+## Intrinsics
 
-BadgeC inlines tiny `return` helpers and small single-statement `void`
+Niblick inlines single-statement `return` helpers and single-statement `void`
 wrappers, and overlays parameter/local slots for functions that are not live at
-the same time. That makes ordinary wrappers cheap. A small set of helpers stays
-intrinsic because they need compiler support, a specific instruction, or a
-hand-written runtime path:
+the same time. The following helpers remain intrinsic because they require
+compiler support, a specific instruction, or a hand-written runtime path:
 
 | Intrinsic | Reason |
 |---|---|
 | `print` | Compile-time typed formatting; expands to UART helpers |
-| `peek`, `poke`, `peek8`, `poke8` | BadgeC has no pointer dereference |
+| `peek`, `poke`, `peek8`, `poke8` | Niblick has no pointer dereference |
 | `flash_read_char`, `flash_read_nibble`, `flash_next` | Code-memory access and flash iteration |
 | `in`, `out` | Raw page-0 I/O port operations |
 | `gpio_set`, `gpio_clear`, `gpio_toggle`, `gpio_test` | Constant masks lower to `BSET`/`BCLR`/`BTG`/`BIT` |
 | `uart_putc`, `uart_getc` | Hot UART handshake/FIFO byte access |
 | `delay` | Hot busy loop used by drivers at deep call sites |
-| `high_nibble`, `low_nibble` | Tiny hot formatting helpers |
+| `high_nibble`, `low_nibble` | Formatting helpers |
 | `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | W5500-specific runtime fast paths, not standard API |
 | `mul*`, `divmod*`, flash 16/32-bit reads | Compiler-generated arithmetic and data access |
 
@@ -77,12 +76,12 @@ so RAM-constrained programs should prefer the intrinsic where one exists.
 ## Print formatting
 
 `print()` is a compiler-expanded formatter. The format string must be a
-literal, and `lib/uart.badge` must be imported because the generated calls use
+literal, and `lib/uart.nbl` must be imported because the generated calls use
 its formatters:
 
 ```c
-import "lib/uart.badge";
-import "lib/string.badge";
+import "lib/uart.nbl";
+import "lib/string.nbl";
 
 nibble n;
 uint16_t w;
@@ -113,12 +112,12 @@ calls such as `uart_puts`, `uart_print_dec16`, `uart_print_dec16_signed`, and
 `uart_print_hex8`. There is no runtime
 format parser, `va_list`, or argument block, and only the formatters actually
 used by the program are linked. Dynamic format strings are rejected. As with
-the rest of `lib/uart.badge`, configure the UART with `uart_route()` and
+the rest of `lib/uart.nbl`, configure the UART with `uart_route()` and
 `uart_init()` before printing.
 
 ## UART
 
-`lib/uart.badge` provides the driver and formatting helpers.
+`lib/uart.nbl` provides the driver and formatting helpers.
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -150,7 +149,7 @@ the rest of `lib/uart.badge`, configure the UART with `uart_route()` and
 
 ## GPIO
 
-`lib/gpio.badge` provides bank-aware read/write; the optimization builtins
+`lib/gpio.nbl` provides bank-aware read/write; the optimization builtins
 remain available for output bits.
 
 | Call | Returns | Notes |
@@ -162,7 +161,7 @@ remain available for output bits.
 
 ## Display
 
-`lib/display.badge` covers pages, the 8x16 framebuffer, PWM, and matrix
+`lib/display.nbl` covers pages, the 8x16 framebuffer, PWM, and matrix
 control. A framebuffer is 32 nibbles: two nibbles per row, row-major; `base`
 is the array's nibble address (`&screen`).
 
@@ -190,7 +189,7 @@ the badge hardware.
 
 ## Keys
 
-`lib/key.badge` exposes the debounced key state. Reading `KeyStatus` clears
+`lib/key.nbl` exposes the debounced key state. Reading `KeyStatus` clears
 `JustPress`; use the `*_of(status)` helpers when testing several bits from one
 read.
 
@@ -206,12 +205,12 @@ read.
 | `key_name(code)` | `flashptr` | Flash string name |
 
 Only the five key codes measured on hardware are named. See
-[keys.md](keys.md) for the mapping and for the `examples/keymap.badge`
+[keys.md](keys.md) for the mapping and for the `examples/keymap.nbl`
 procedure to measure the rest.
 
 ## Time
 
-`lib/time.badge` provides Clock/Sync control and delays.
+`lib/time.nbl` provides Clock/Sync control and delays.
 
 | Call | Notes |
 |---|---|
@@ -232,7 +231,7 @@ Sync constants: `SYNC_1000HZ` through `SYNC_1HZ`.
 
 ## Power and status
 
-`lib/power.badge` exposes the `AutoOff` down-counter:
+`lib/power.nbl` exposes the `AutoOff` down-counter:
 
 | Call | Notes |
 |---|---|
@@ -246,7 +245,7 @@ Constants: `POWER_MAX` = 15 (150 minutes), `POWER_10_MIN` = 1,
 `POWER_150_MIN` = 15. `power_auto_off_minutes` accepts 0..255 but values above
 `POWER_150_MIN` saturate at 15 in the 4-bit SFR.
 
-`lib/system.badge` provides raw status/control access:
+`lib/system.nbl` provides raw status/control access:
 
 | Call | Notes |
 |---|---|
@@ -263,7 +262,7 @@ Constants: `WR_LEDS_OFF`, `WR_MATRIX_OFF`, `WR_IO_POS`, `WR_RX_TX_POS`,
 
 ## Random
 
-`lib/random.badge`:
+`lib/random.nbl`:
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -276,7 +275,7 @@ Constants: `WR_LEDS_OFF`, `WR_MATRIX_OFF`, `WR_IO_POS`, `WR_RX_TX_POS`,
 
 ## Memory
 
-`lib/mem.badge` starts with nibble helpers and adds byte-oriented, 16/32-bit,
+`lib/mem.nbl` starts with nibble helpers and adds byte-oriented, 16/32-bit,
 search, and checksum helpers. Addresses are nibble addresses; a byte occupies
 two consecutive nibbles.
 
@@ -295,7 +294,7 @@ two consecutive nibbles.
 
 ## Strings
 
-`lib/string.badge` handles RAM byte strings terminated by `0x00`.
+`lib/string.nbl` handles RAM byte strings terminated by `0x00`.
 
 | Call | Notes |
 |---|---|
@@ -323,7 +322,7 @@ returns the number of digits written and always terminates the buffer with
 
 ## Math
 
-`lib/math.badge`:
+`lib/math.nbl`:
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -336,7 +335,7 @@ returns the number of digits written and always terminates the buffer with
 | `math_gcd8(a, b)` / `math_lcm8(a, b)` | `char` / `uint16_t` | GCD / LCM |
 | `math_sign8(v)` / `math_wrap8(v, mod)` / `math_div_round8(a, b)` | raw sign / wrapped / rounded | Signed and rounding helpers |
 
-`lib/signed.badge` interprets raw bits as two's complement. Native signed
+`lib/signed.nbl` interprets raw bits as two's complement. Native signed
 types now cover ordinary signed arithmetic; these helpers remain useful for
 fixed-point storage, masks, and code that wants explicit sign control. The
 `4`, `8`, and `16` suffixes select the storage width:
@@ -352,7 +351,7 @@ fixed-point storage, masks, and code that wants explicit sign control. The
 | Multiply | `s_mul4`, `s_mul4_nib`, `s_mul8`, `s_mul16` |
 | Divide / modulo | `s_div4/8/16`, `s_mod4/8/16` |
 
-`lib/fixed.badge` adds signed Q4.4 fixed point (`0x10` = 1.0):
+`lib/fixed.nbl` adds signed Q4.4 fixed point (`0x10` = 1.0):
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -362,7 +361,7 @@ fixed-point storage, masks, and code that wants explicit sign control. The
 | `q4_4_from_int(v)` / `q4_4_to_int(v)` | `char` / `nibble` | Convert to / from integer |
 | `q4_4_min` / `q4_4_max` / `q4_4_clamp` | `char` | Saturating helpers |
 
-`lib/trig.badge` provides a 32-step Q4.4 sine/cosine table. `TRIG_STEPS` is
+`lib/trig.nbl` provides a 32-step Q4.4 sine/cosine table. `TRIG_STEPS` is
 32 and `TRIG_90` is 8:
 
 ```c
@@ -372,7 +371,7 @@ char c = cos_q4_4(0);   // 0x10 = 1.0
 
 ## Font and text
 
-`lib/font.badge` contains a 5x8 font covering ASCII 32..127. The glyph data
+`lib/font.nbl` contains a 5x8 font covering ASCII 32..127. The glyph data
 is adapted from the upstream Hack-a-Day 2022 Supercon.6 Hamlet scroller demo
 by Voja Antonic; see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
@@ -382,7 +381,7 @@ by Voja Antonic; see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 | `font5x8_width(c)` | `nibble` | Advance width for a character |
 | `text_draw_char(base, x, y, c)` | `void` | Draw one glyph at the top-left pixel |
 
-`lib/textscroll.badge` provides a horizontal scroller:
+`lib/textscroll.nbl` provides a horizontal scroller:
 
 ```c
 nibble screen[32];
@@ -404,7 +403,7 @@ longer strings.
 
 ## Audio and PDM
 
-`lib/audio.badge` bit-bangs a square wave on `OUT0` by default. Connect the
+`lib/audio.nbl` bit-bangs a square wave on `OUT0` by default. Connect the
 pin to a low-pass filter and an amplifier. The note table is calibrated for
 `CLOCK_100K`; the upstream Tom Keddie demos used the same clock and frequencies
 (C4 261 Hz, D4 293 Hz, E4 330 Hz, G4 392 Hz, A4 440 Hz, B4 494 Hz, C5 523 Hz).
@@ -422,7 +421,7 @@ Constants: `AUDIO_MASK` is 1 (OUT0) and `NOTE_REST` is `0xFE`. Melody bytes
 durations are `delay()` units; rest durations above 15 are split into multiple
 15-unit delay chunks.
 
-`lib/pdm.badge` implements the upstream first-order PDM encoder. It drives
+`lib/pdm.nbl` implements the upstream first-order PDM encoder. It drives
 OUT bits 1–3 (bit 0 stays 1) and expects a low-pass filter and amplifier.
 
 | Call | Notes |
@@ -438,7 +437,7 @@ instruction mix. Measure the pitch on hardware and adjust the note table or
 
 ## SPI and drivers
 
-`lib/spi.badge` is a generic bit-banged SPI mode-0 master:
+`lib/spi.nbl` is a generic bit-banged SPI mode-0 master:
 
 | Call | Returns | Notes |
 |---|---|---|
@@ -446,13 +445,13 @@ instruction mix. Measure the pitch on hardware and adjust the note table or
 | `spi_begin()` / `spi_end()` | `void` | Assert / release CS |
 | `spi_xfer(out)` | `char` | Exchange one byte |
 
-Pin constants live in [pins.md](pins.md) and `lib/boards/voja4.badge`:
+Pin constants live in [pins.md](pins.md) and `lib/boards/voja4.nbl`:
 `SPI_SCLK` = `OUT2`, `SPI_MOSI` = `OUT3`, `SPI_MISO` = `IN0`, and
 `W5500_CS` = `OUT1` (`SPI_CS` remains an alias). The W5500 Ethernet driver is
 a separate device driver under `lib/drivers/`; see
 [drivers/w5500.md](drivers/w5500.md).
 
-## Missing / planned
+## Not provided
 
 - Dynamic `print()` format strings and non-UART formatting targets
 - General pointer arithmetic, `char *` parameters, and structs

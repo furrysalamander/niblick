@@ -1,0 +1,10 @@
+import "lib/uart.nbl";
+const char msg[] = "Hello, Supercon!\n";
+
+fn main() {
+    uart_route(1);         // application UART on the main I/O header
+    uart_init(3);          // 3 = 9600 baud
+    uart_puts(msg);
+    while (1) {
+    }
+}

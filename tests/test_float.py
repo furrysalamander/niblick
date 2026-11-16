@@ -9,14 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_source
 
 
 def build(tmp_path: Path, source: str, *, steps: int = 500_000):
-    filename = str(tmp_path / "float.badge")
+    filename = str(tmp_path / "float.nbl")
     compiler = Compiler(load_source(source, filename=filename), filename)
     asm_path = tmp_path / "float.asm"
     asm_path.write_text(compiler.compile())
@@ -137,9 +137,9 @@ def test_f32_assembly_comparisons(tmp_path: Path) -> None:
 
 
 def test_double_is_not_a_type(tmp_path: Path) -> None:
-    from badgec.errors import BadgeError
+    from niblick.errors import NiblickError
 
-    with pytest.raises(BadgeError):
+    with pytest.raises(NiblickError):
         build(
             tmp_path,
             """
@@ -311,7 +311,7 @@ def test_f32_mul_div_randomized(tmp_path: Path) -> None:
         }
         """,
     )
-    from badgec.disasm import decode
+    from niblick.disasm import decode
 
     pattern = [
         "MOV R0, [0x27]",
@@ -456,17 +456,17 @@ def test_f32_integer_saturation(tmp_path: Path) -> None:
         int64_t bi;
         uint64_t bu;
         fn main() {
-            f = __bc_f32_from_bits(0x4F000000);
+            f = __nib_f32_from_bits(0x4F000000);
             ai = (int32_t)f;
-            f = __bc_f32_from_bits(0xCF000000);
+            f = __nib_f32_from_bits(0xCF000000);
             ai = (int32_t)f;
-            f = __bc_f32_from_bits(0x7FC00000);
+            f = __nib_f32_from_bits(0x7FC00000);
             ai = (int32_t)f;
-            f = __bc_f32_from_bits(0x4F000000);
+            f = __nib_f32_from_bits(0x4F000000);
             bu = (uint64_t)f;
-            f = __bc_f32_from_bits(0xDF000000);
+            f = __nib_f32_from_bits(0xDF000000);
             bi = (int64_t)f;
-            f = __bc_f32_from_bits(0x7F800000);
+            f = __nib_f32_from_bits(0x7F800000);
             au = (uint32_t)f;
         }
         """,

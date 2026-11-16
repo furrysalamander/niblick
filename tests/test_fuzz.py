@@ -7,11 +7,11 @@ import random
 import re
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator, EmulatorError
-from badgec.errors import BadgeError
-from badgec.parser import parse
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator, EmulatorError
+from niblick.errors import NiblickError
+from niblick.parser import parse
 
 
 def _nibble(value: int) -> int:
@@ -19,7 +19,7 @@ def _nibble(value: int) -> int:
 
 
 def _eval(expr: str, env: dict[str, int]) -> int:
-    """Evaluate the generated expression with BadgeC's nibble semantics."""
+    """Evaluate the generated expression with Niblick's nibble semantics."""
     py_expr = expr.replace("&&", " and ").replace("||", " or ")
     py_expr = re.sub(r"!(?!=)", " not ", py_expr)
     tree = pyast.parse(py_expr, mode="eval")
@@ -103,7 +103,7 @@ def test_arithmetic_fuzz_matches_reference(tmp_path: Path) -> None:
     lines.append("}")
     source = "\n".join(lines)
 
-    compiler = Compiler(parse(source, "fuzz.badge"), "fuzz.badge")
+    compiler = Compiler(parse(source, "fuzz.nbl"), "fuzz.nbl")
     asm_path = tmp_path / "fuzz.asm"
     asm_path.write_text(compiler.compile())
     hex_path = tmp_path / "fuzz.hex"
@@ -151,8 +151,8 @@ def test_parser_fuzz_never_raises_internal_exceptions() -> None:
     for _ in range(200):
         text = " ".join(rng.choice(fragments) for _ in range(rng.randrange(1, 20)))
         try:
-            parse(text, "fuzz.badge")
-        except BadgeError:
+            parse(text, "fuzz.nbl")
+        except NiblickError:
             pass
         except Exception as exc:  # noqa: BLE001 - the point is to catch internal failures
             raise AssertionError(f"parser crashed on {text!r}: {type(exc).__name__}: {exc}") from exc

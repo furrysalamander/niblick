@@ -1,9 +1,9 @@
 {
-  "name": "badgec-vscode",
-  "displayName": "BadgeC",
-  "description": "BadgeC language support for the Hackaday Supercon.6 badge",
+  "name": "niblick-vscode",
+  "displayName": "Niblick",
+  "description": "Niblick language support for the Hackaday Supercon.6 badge",
   "version": "0.1.0",
-  "publisher": "badgec",
+  "publisher": "niblick",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
@@ -14,20 +14,20 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onLanguage:badgec",
+    "onLanguage:niblick",
     "onLanguage:voja4-asm"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "badgec",
+        "id": "niblick",
         "aliases": [
-          "BadgeC",
-          "badgec"
+          "Niblick",
+          "niblick"
         ],
         "extensions": [
-          ".badge"
+          ".nbl"
         ],
         "configuration": "./language-configuration.json"
       },
@@ -42,9 +42,9 @@
     ],
     "grammars": [
       {
-        "language": "badgec",
-        "scopeName": "source.badgec",
-        "path": "./syntaxes/badgec.tmLanguage.json"
+        "language": "niblick",
+        "scopeName": "source.niblick",
+        "path": "./syntaxes/niblick.tmLanguage.json"
       },
       {
         "language": "voja4-asm",
@@ -54,8 +54,8 @@
     ],
     "snippets": [
       {
-        "language": "badgec",
-        "path": "./snippets/badgec.json"
+        "language": "niblick",
+        "path": "./snippets/niblick.json"
       },
       {
         "language": "voja4-asm",
@@ -64,50 +64,50 @@
     ],
     "breakpoints": [
       {
-        "language": "badgec"
+        "language": "niblick"
       },
       {
         "language": "voja4-asm"
       }
     ],
     "configuration": {
-      "title": "BadgeC",
+      "title": "Niblick",
       "properties": {
-        "badgec.pythonPath": {
+        "niblick.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Python executable used to launch the BadgeC language server. Leave empty to auto-detect .venv/venv, then fall back to python3."
+          "description": "Python executable used to launch the Niblick language server. Leave empty to auto-detect .venv/venv, then fall back to python3."
         },
-        "badgec.includePaths": {
+        "niblick.includePaths": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "Additional import search roots, passed as BADGEC_PATH."
+          "description": "Additional import search roots, passed as NIBLICK_PATH."
         }
       }
     },
     "commands": [
       {
-        "command": "badgec.compile",
-        "title": "BadgeC: Compile Current File"
+        "command": "niblick.compile",
+        "title": "Niblick: Compile Current File"
       },
       {
-        "command": "badgec.run",
-        "title": "BadgeC: Run Current File in Emulator"
+        "command": "niblick.run",
+        "title": "Niblick: Run Current File in Emulator"
       },
       {
-        "command": "badgec.restartServer",
-        "title": "BadgeC: Restart Language Server"
+        "command": "niblick.restartServer",
+        "title": "Niblick: Restart Language Server"
       }
     ],
     "debuggers": [
       {
-        "type": "badgec",
-        "label": "BadgeC Emulator",
+        "type": "niblick",
+        "label": "Niblick Emulator",
         "languages": [
-          "badgec",
+          "niblick",
           "voja4-asm"
         ],
         "program": "./out/debugAdapter.js",
@@ -120,7 +120,7 @@
             "properties": {
               "program": {
                 "type": "string",
-                "description": "BadgeC source file to compile and debug."
+                "description": "Niblick source file to compile and debug."
               },
               "hex": {
                 "type": "string",
@@ -149,11 +149,11 @@
         },
         "configurationSnippets": [
           {
-            "label": "BadgeC: Launch Program",
+            "label": "Niblick: Launch Program",
             "body": {
-              "type": "badgec",
+              "type": "niblick",
               "request": "launch",
-              "name": "BadgeC: Run Program",
+              "name": "Niblick: Run Program",
               "program": "${file}",
               "cwd": "${workspaceFolder}",
               "stopOnEntry": true

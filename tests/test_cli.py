@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import code_words
-from badgec.cli import main
+from niblick.assembler import code_words
+from niblick.cli import main
 
 
 def test_cli_compiles_and_runs_from_any_working_directory(tmp_path: Path) -> None:
-    source = tmp_path / "hello.badge"
+    source = tmp_path / "hello.nbl"
     source.write_text(
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         const char msg[] = "Hi";
         fn main() {
             uart_init(3);
@@ -29,7 +29,7 @@ def test_cli_compiles_and_runs_from_any_working_directory(tmp_path: Path) -> Non
 
 
 def test_cli_reports_errors_without_traceback(tmp_path: Path, capsys) -> None:
-    source = tmp_path / "bad.badge"
+    source = tmp_path / "bad.nbl"
     source.write_text("fn main() { unknown(); }")
     result = main([str(source)])
     captured = capsys.readouterr()
@@ -39,10 +39,10 @@ def test_cli_reports_errors_without_traceback(tmp_path: Path, capsys) -> None:
 
 
 def test_cli_map_json_trace_and_dumps(tmp_path: Path, capsys) -> None:
-    source = tmp_path / "hello.badge"
+    source = tmp_path / "hello.nbl"
     source.write_text(
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         const char msg[] = "Hi";
         nibble x;
         fn main() {

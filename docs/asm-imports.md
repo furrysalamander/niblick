@@ -1,11 +1,11 @@
 # Imported assembly modules
 
-BadgeC can link hand-written assembly from `.asm` files. This is the
+Niblick can link hand-written assembly from `.asm` files. This is the
 recommended way to keep reusable driver routines out of the compiler's core
-runtime while still calling them from normal BadgeC code.
+runtime while still calling them from normal Niblick code.
 
 ```c
-// lib/drivers/w5500.badge
+// lib/drivers/w5500.nbl
 import "lib/drivers/asm/w5500.asm";
 
 extern fn uint16_t w5500_tx_pointer();
@@ -18,9 +18,9 @@ fn_w5500_tx_pointer:
     RET R0, 0
 ```
 
-An `import "file.asm";` is resolved with the same rules as a `.badge` import:
+An `import "file.asm";` is resolved with the same rules as a `.nbl` import:
 relative to the importing file first, then the repository root and
-`BADGEC_PATH` entries. Each file is read once; reachable routine sections are
+`NIBLICK_PATH` entries. Each file is read once; reachable routine sections are
 appended to the generated assembly in import order.
 
 ## Extern declarations
@@ -33,7 +33,7 @@ extern fn char spi_xfer(char out);
 extern uint16_t read16(nibble addr);    // C-style spelling also works
 ```
 
-An `extern fn` gets the normal BadgeC calling convention:
+An `extern fn` gets the normal Niblick calling convention:
 
 - every parameter has a static RAM slot allocated by the compiler;
 - the caller stores arguments into those slots before `GOSUB fn_name`;
@@ -47,7 +47,7 @@ is called but no label exists, compilation fails.
 
 ## Placeholders
 
-Imported assembly can refer to BadgeC symbols with `${...}`:
+Imported assembly can refer to Niblick symbols with `${...}`:
 
 | Placeholder | Expands to |
 |---|---|
@@ -55,7 +55,7 @@ Imported assembly can refer to BadgeC symbols with `${...}`:
 | `${name+1}` / `${name-1}` | RAM address plus/minus a constant |
 | `${&name}` | Address of a RAM variable or flash label |
 | `${function.param}` | A specific function's parameter address |
-| `${CONST << 2}` | A normal BadgeC constant expression |
+| `${CONST << 2}` | A normal Niblick constant expression |
 
 Within a `fn_*` block, `${param}` resolves against that function's parameters
 first, then globals. Outside a function block, only globals are available.
@@ -79,11 +79,11 @@ fn_spi_xfer:
 ## Scratch RAM
 
 Addresses `0x20..0x3F` are reserved for imported assembly helpers and compiler
-temporaries. BadgeC variables and arrays start at `0x40`, and the hardware
+temporaries. Niblick variables and arrays start at `0x40`, and the hardware
 call stack lives below `0x20`. A helper may use the reserved block directly:
 
 ```asm
-fn___bc_f32_add:
+fn___nib_f32_add:
     MOV R0, [${a}]
     MOV [0x20], R0
     ...
@@ -98,7 +98,7 @@ non-reentrant core, and return before the next helper call.
 
 The compiler scans imported assembly for `GOSUB` and `GOTO`:
 
-- `GOSUB __bc_*` marks a compiler runtime routine as used, so the existing
+- `GOSUB __nib_*` marks a compiler runtime routine as used, so the existing
   runtime linker keeps only that routine and its dependencies;
 - `GOSUB fn_*` adds a normal call-graph edge;
 - `GOTO fn_*` adds a tail-call edge;
@@ -111,8 +111,8 @@ statically.
 Functions and globals referenced only from imported assembly are kept alive
 during dead-declaration elimination. Conversely, a `fn_*` section whose
 extern function is not reachable from `main`, a kept C function, or another
-kept assembly routine is stripped along with its parameter slots, just like
-an unused BadgeC function. A source file without any `fn_*` label is treated
+kept assembly routine is stripped along with its parameter slots, like
+an unused Niblick function. A source file without any `fn_*` label is treated
 as data and kept whole; data before the first `fn_*` label is always kept.
 Put shared tables before the first entry point: any labels after a `fn_*`
 section belong to that section and disappear if the function is removed.
@@ -120,15 +120,15 @@ section belong to that section and disappear if the function is removed.
 ## Labels and restrictions
 
 - Entry points are global labels named `fn_<function>` in lowercase, matching
-  the BadgeC declaration exactly.
+  the Niblick declaration exactly.
 - Local labels start with `.` and are scoped by the assembler to the preceding
   global label.
-- `__bc_*` labels are reserved for the compiler runtime.
+- `__nib_*` labels are reserved for the compiler runtime.
 - Every `fn_*` entry point must have an `extern fn` declaration.
 - Raw `MOV JSR`, `MOV PCL`, `MOV PCM`, and `MOV PCH` are rejected; use
   `GOSUB`/`GOTO` so the compiler can see calls.
 - `ORG`, `BYTE`, and `ASCII` are rejected in imported assembly. Use `NIBBLE`
-  for data tables; BadgeC emits flash data as `NIBBLE` directives. The packaged
+  for data tables; Niblick emits flash data as `NIBBLE` directives. The packaged
   `supercon6-assembler` includes the upstream `BYTE` symbol-accounting fix.
 - `EXR 0` and `EXR` with more than ten registers are rejected because they
   touch compiler/runtime state.
@@ -144,7 +144,7 @@ exact instruction sequence. For timing-sensitive code, mark a region or file
 opaque:
 
 ```asm
-; @badgec: no-optimize
+; @niblick: no-optimize
 fn_delay_loop:
     MOV R0, R0
     ...
@@ -155,10 +155,10 @@ or:
 
 ```asm
 fn_delay_loop:
-; @badgec: no-optimize-begin
+; @niblick: no-optimize-begin
     MOV R0, R0
     ...
-; @badgec: no-optimize-end
+; @niblick: no-optimize-end
     RET R0, 0
 ```
 
@@ -168,7 +168,7 @@ for size reporting and branch relaxation outside the region.
 ## Worked example: `w5500_tx_pointer`
 
 `lib/drivers/asm/w5500.asm` contains the W5500 socket-0 TX pointer routine. It is no
-longer part of `badgec/runtime/runtime.asm`; `lib/drivers/w5500.badge` declares it and
+longer part of `niblick/runtime/runtime.asm`; `lib/drivers/w5500.nbl` declares it and
 imports the assembly file. The routine calls the generic
-`__bc_w5500_spi_xfer_fast` runtime helper, so the compiler's scanner adds that
+`__nib_w5500_spi_xfer_fast` runtime helper, so the compiler's scanner adds that
 runtime routine to the linked set automatically.

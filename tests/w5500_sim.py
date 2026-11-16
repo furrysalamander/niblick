@@ -11,7 +11,7 @@ from __future__ import annotations
 import socket
 from typing import Optional
 
-from badgec.emulator import Emulator
+from niblick.emulator import Emulator
 
 
 class W5500Model:

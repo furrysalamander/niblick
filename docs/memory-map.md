@@ -101,12 +101,12 @@ All are data-memory locations and are accessed with `MOV [NN],R0` /
 | `0xFE` | `Dimmer` | `DIMMER[3:0]` | `1111` | LED PWM duty; `1111` = 100%, `0000` = lowest |
 | `0xFF` | `Random` | `RANDOM[3:0]` | random | 4-bit PRNG output; each read advances the LCG; writing reseeds (`1111` = true random) |
 
-### SFR access from BadgeC
+### SFR access from Niblick
 
 Every page-15 SFR has a typed helper in `lib/`, and `peek`/`poke` can reach
 any data address directly when a raw access is needed.
 
-| SFR | Address | Public BadgeC API |
+| SFR | Address | Public Niblick API |
 |---|---:|---|
 | `Page` | `0xF0` | `display_page`, `display_page_get`, `system_page` |
 | `Clock` | `0xF1` | `time_clock_set`, `time_clock_get` |

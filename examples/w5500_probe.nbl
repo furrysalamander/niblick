@@ -1,0 +1,40 @@
+import "lib/time.nbl";
+// W5500 SPI bring-up probe.
+//
+// Wiring assumed:
+//   OUT0 = W5500 RST
+//   OUT1 = W5500 CS
+//   OUT2 = W5500 SCLK
+//   OUT3 = W5500 MOSI
+//   IN0  = W5500 MISO
+//
+// Reads VERSIONR (0x0039, should be 0x04) and PHYCFGR (0x002E, bit 0 is link
+// status) and prints them continuously on the main UART at 9600 8N1.
+
+import "lib/spi.nbl";
+import "lib/drivers/w5500.nbl";
+import "lib/uart.nbl";
+
+fn main() {
+    char version;
+    char phy;
+
+    spi_init();
+    w5500_reset();
+
+    uart_route(1);
+    uart_init(3);
+    uart_puts("W5500 probe\n");
+
+    while (1) {
+        version = w5500_version();
+        phy = w5500_phy();
+
+        uart_puts("ver=");
+        uart_print_hex8(version);
+        uart_puts(" phy=");
+        uart_print_hex8(phy);
+        uart_nl();
+        delay(10);
+    }
+}

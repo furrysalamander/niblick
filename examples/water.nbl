@@ -1,0 +1,284 @@
+import "lib/time.nbl";
+import "lib/display.nbl";
+// Water in a closed 8x16 box, with periodically changing gravity.
+//
+// This is a falling-sand style cellular automaton: each cell is either empty
+// or water.  Water falls in the current gravity direction, slides diagonally
+// when blocked, and spreads sideways when it piles up.  The display edges are
+// the only boundaries.  There are no drawn walls or platforms, and water is
+// simply a lit LED.
+//
+// The amount of water is fixed at startup: a centred band of five rows.
+// Gravity cycles through down, left, up, and right, so the pool sloshes
+// around and never settles permanently.
+//
+// Each cell uses two bits in the packed grid:
+//   bit 0 = water
+//   bit 1 = moved already this frame
+//
+// The moved bit prevents a cell from moving right and then being moved back
+// by a later scan step, which previously produced a stable staircase under
+// upward gravity.  The visible page is updated one pixel at a time, without
+// clearing the whole screen, so there is no full-frame blank.
+
+nibble screen[32];
+nibble grid[64];
+nibble pixel_masks[4];
+char frame;
+nibble dir;
+
+fn nibble cell_get(char i) {
+    nibble v;
+    v = grid[i >> 1];
+    v = v >> ((i & 1) << 1);
+    return v & 3;
+}
+
+fn void cell_write(char i, nibble v) {
+    char slot;
+    nibble shift;
+    nibble mask;
+
+    slot = i >> 1;
+    shift = (nibble)((i & 1) << 1);
+    mask = 3 << shift;
+    grid[slot] = (grid[slot] & (mask ^ 15)) | (v << shift);
+}
+
+fn void put_pixel(nibble x, char y, nibble on) {
+    char addr;
+    nibble bit;
+
+    if (x < 4) {
+        addr = 16 + y;
+    } else {
+        addr = y;
+    }
+    bit = pixel_masks[x & 3];
+    if (on != 0) {
+        screen[addr] = screen[addr] | bit;
+    } else {
+        screen[addr] = screen[addr] & (bit ^ 15);
+    }
+}
+
+// Try to move one water cell in the current gravity direction.
+// dir: 0 = down, 1 = left, 2 = up, 3 = right.
+fn void update_cell(char i, nibble x, nibble y, nibble dir) {
+    char target;
+
+    target = 255;
+
+    if (dir == 0) {
+        if (y < 15) {
+            if ((cell_get(i + 8) & 1) == 0) {
+                target = i + 8;
+            } else if (x > 0 && (cell_get(i + 7) & 1) == 0) {
+                target = i + 7;
+            } else if (x < 7 && (cell_get(i + 9) & 1) == 0) {
+                target = i + 9;
+            } else if (x > 0 && (cell_get(i - 1) & 1) == 0) {
+                target = i - 1;
+            } else if (x < 7 && (cell_get(i + 1) & 1) == 0) {
+                target = i + 1;
+            }
+        }
+    } else if (dir == 1) {
+        if (x > 0) {
+            if ((cell_get(i - 1) & 1) == 0) {
+                target = i - 1;
+            } else if (y < 15 && (cell_get(i + 7) & 1) == 0) {
+                target = i + 7;
+            } else if (y > 0 && (cell_get(i - 9) & 1) == 0) {
+                target = i - 9;
+            } else if (y < 15 && (cell_get(i + 8) & 1) == 0) {
+                target = i + 8;
+            } else if (y > 0 && (cell_get(i - 8) & 1) == 0) {
+                target = i - 8;
+            }
+        }
+    } else if (dir == 2) {
+        if (y > 0) {
+            if ((cell_get(i - 8) & 1) == 0) {
+                target = i - 8;
+            } else if (x > 0 && (cell_get(i - 9) & 1) == 0) {
+                target = i - 9;
+            } else if (x < 7 && (cell_get(i - 7) & 1) == 0) {
+                target = i - 7;
+            } else if (x > 0 && (cell_get(i - 1) & 1) == 0) {
+                target = i - 1;
+            } else if (x < 7 && (cell_get(i + 1) & 1) == 0) {
+                target = i + 1;
+            }
+        }
+    } else {
+        if (x < 7) {
+            if ((cell_get(i + 1) & 1) == 0) {
+                target = i + 1;
+            } else if (y < 15 && (cell_get(i + 9) & 1) == 0) {
+                target = i + 9;
+            } else if (y > 0 && (cell_get(i - 7) & 1) == 0) {
+                target = i - 7;
+            } else if (y < 15 && (cell_get(i + 8) & 1) == 0) {
+                target = i + 8;
+            } else if (y > 0 && (cell_get(i - 8) & 1) == 0) {
+                target = i - 8;
+            }
+        }
+    }
+
+    if (target != 255) {
+        cell_write(i, 0);
+        cell_write(target, 3);   // water + moved
+    }
+}
+
+// Scan one row.  Right-gravity scans right-to-left so a cell that just moved
+// right is not visited again in the same pass.  Cells that moved into this
+// row from elsewhere are skipped through the moved bit.
+fn void process_row(nibble y, nibble dir) {
+    char i;
+    nibble x;
+    nibble cell;
+
+    if (dir == 3) {
+        x = 7;
+        while (1) {
+            i = ((char)y << 3) + x;
+            cell = cell_get(i);
+            if ((cell & 1) != 0 && (cell & 2) == 0) {
+                update_cell(i, x, y, dir);
+            }
+            if (x == 0) {
+                break;
+            }
+            x = x - 1;
+        }
+    } else {
+        x = 0;
+        while (x < 8) {
+            i = ((char)y << 3) + x;
+            cell = cell_get(i);
+            if ((cell & 1) != 0 && (cell & 2) == 0) {
+                update_cell(i, x, y, dir);
+            }
+            x = x + 1;
+        }
+    }
+}
+
+fn main() {
+    char i;
+    char phase_limit;
+    nibble x;
+    nibble y;
+
+    dimmer(15);
+    leds_enable(1);
+    matrix_enable(1);
+
+    pixel_masks[0] = 8;
+    pixel_masks[1] = 4;
+    pixel_masks[2] = 2;
+    pixel_masks[3] = 1;
+
+    i = 0;
+    while (i < 32) {
+        screen[i] = 0;
+        i = i + 1;
+    }
+    i = 0;
+    while (i < 64) {
+        grid[i] = 0;
+        i = i + 1;
+    }
+
+    // Fixed amount of water: a centred five-row band.
+    y = 5;
+    while (1) {
+        x = 0;
+        while (x < 8) {
+            i = ((char)y << 3) + x;
+            cell_write(i, 1);
+            x = x + 1;
+        }
+        if (y == 9) {
+            break;
+        }
+        y = y + 1;
+    }
+
+    dir = 0;
+    frame = 0;
+    display_page(4);
+
+    while (1) {
+        // Sideways settling needs more time than the 8-column width suggests
+        // because the water has to build up a vertical wall in the 16-row box.
+        if (dir == 1 || dir == 3) {
+            phase_limit = 24;
+        } else {
+            phase_limit = 16;
+        }
+
+        // Clear the previous frame's moved bits; water bits are preserved.
+        i = 0;
+        while (i < 64) {
+            grid[i] = grid[i] & 5;
+            i = i + 1;
+        }
+
+        // Up gravity scans top-down so rising water is not visited twice.
+        // The other directions scan bottom-up.
+        if (dir == 2) {
+            y = 0;
+            while (1) {
+                process_row(y, dir);
+                if (y == 15) {
+                    break;
+                }
+                y = y + 1;
+            }
+        } else {
+            y = 15;
+            while (1) {
+                process_row(y, dir);
+                if (y == 0) {
+                    break;
+                }
+                y = y - 1;
+            }
+        }
+
+        // Update each pixel in place: no full-screen clear, so the visible
+        // page never blanks between frames.
+        y = 0;
+        while (1) {
+            x = 0;
+            while (x < 8) {
+                i = ((char)y << 3) + x;
+                if ((cell_get(i) & 1) != 0) {
+                    put_pixel(x, y, 1);
+                } else {
+                    put_pixel(x, y, 0);
+                }
+                x = x + 1;
+            }
+            if (y == 15) {
+                break;
+            }
+            y = y + 1;
+        }
+
+        display_page(4);
+        frame = frame + 1;
+        if (frame == phase_limit) {
+            frame = 0;
+            dir = dir + 1;
+            if (dir == 4) {
+                dir = 0;
+            }
+        }
+        delay(1);
+    }
+}

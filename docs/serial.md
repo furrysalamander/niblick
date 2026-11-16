@@ -142,7 +142,7 @@ load/save if wired correctly:
 1. Set the Tigard I/O supply to **3.3 V**, not 5 V.
 2. Connect Tigard GND to badge GND.
 3. Connect Tigard TX to badge RX and Tigard RX to badge TX.
-4. Leave Tigard VCC/+ disconnected unless you have deliberately removed the
+4. Leave Tigard VCC/+ disconnected unless you have removed the
    badge batteries and are powering the badge from a known-good 3.3 V source.
 5. For program load/save and firmware bootload, use the **main I/O connector**
    (pins 2/3 from the left), not the SAO header.

@@ -5,19 +5,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from badgec.analysis import Analysis
-from badgec.cli import main
-from badgec.compiler import Compiler
-from badgec.errors import BadgeSyntaxError
-from badgec.loader import load_program
-from badgec.parser import parse
+from niblick.analysis import Analysis
+from niblick.cli import main
+from niblick.compiler import Compiler
+from niblick.errors import NiblickSyntaxError
+from niblick.loader import load_program
+from niblick.parser import parse
 
 
 def test_parser_error_exposes_structured_fields() -> None:
     try:
-        parse("fn main() { nibble x = ; }", "bad.badge")
-    except BadgeSyntaxError as exc:
-        assert exc.file == "bad.badge"
+        parse("fn main() { nibble x = ; }", "bad.nbl")
+    except NiblickSyntaxError as exc:
+        assert exc.file == "bad.nbl"
         assert exc.line == 1
         assert exc.column > 1
         assert "expected" in exc.message
@@ -26,12 +26,12 @@ def test_parser_error_exposes_structured_fields() -> None:
 
 
 def test_compiler_error_exposes_structured_fields(tmp_path: Path) -> None:
-    entry = tmp_path / "bad.badge"
+    entry = tmp_path / "bad.nbl"
     entry.write_text("nibble x;\nfn main() { x = 300; }\n")
     compiler = Compiler(load_program(entry), str(entry))
     try:
         compiler.compile()
-    except Exception as exc:  # BadgeTypeError
+    except Exception as exc:  # NiblickTypeError
         assert exc.file == str(entry)
         assert exc.line == 2
         assert "cannot convert" in exc.message
@@ -40,7 +40,7 @@ def test_compiler_error_exposes_structured_fields(tmp_path: Path) -> None:
 
 
 def test_cli_diagnostics_json(tmp_path: Path, capsys) -> None:
-    entry = tmp_path / "bad.badge"
+    entry = tmp_path / "bad.nbl"
     entry.write_text("nibble x;\nfn main() { x = 300; }\n")
     code = main([str(entry), "--no-assemble", "--diagnostics-json"])
     captured = capsys.readouterr()
@@ -53,7 +53,7 @@ def test_cli_diagnostics_json(tmp_path: Path, capsys) -> None:
 
 
 def test_assembler_error_maps_to_imported_asm_line(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         'import "bad.asm";\n'
         "extern fn void bad();\n"
@@ -72,7 +72,7 @@ def test_assembler_error_maps_to_imported_asm_line(tmp_path: Path) -> None:
 
 
 def test_assembler_error_maps_to_inline_asm_line(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         "fn main() {\n"
         "    asm {\n"

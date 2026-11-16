@@ -1,6 +1,6 @@
 # Inline assembly
 
-BadgeC supports raw assembly blocks inside functions:
+Niblick supports raw assembly blocks inside functions:
 
 ```c
 fn main() {
@@ -30,7 +30,7 @@ Inline asm uses the same `${...}` resolver as imported `.asm` modules:
 | `${name+1}` / `${name-1}` | RAM address plus/minus a constant |
 | `${&name}` | Address of a RAM variable or flash label |
 | `${function.param}` | A specific function's parameter address |
-| `${CONST << 2}` | A normal BadgeC constant expression |
+| `${CONST << 2}` | A normal Niblick constant expression |
 
 Names resolve against the current lexical scope first, then globals. Locals
 must be declared before the `asm` block. Comments are not substituted.
@@ -55,9 +55,9 @@ asm {
 Each block gets a synthetic global label, so multiple blocks can use the same
 local label names without colliding.
 
-- `GOSUB __bc_*` calls a compiler runtime routine and updates the linker and
+- `GOSUB __nib_*` calls a compiler runtime routine and updates the linker and
   stack report.
-- `GOSUB fn_*` / `GOTO fn_*` call BadgeC or extern assembly functions and
+- `GOSUB fn_*` / `GOTO fn_*` call Niblick or extern assembly functions and
   update the call graph.
 - `GOTO .local` is a local branch.
 
@@ -66,7 +66,7 @@ stack depth harder to model statically.
 
 ## Restrictions
 
-- `RET` is rejected. Let the surrounding BadgeC function return normally.
+- `RET` is rejected. Let the surrounding Niblick function return normally.
 - Global labels are rejected; use `.local` labels.
 - Raw `MOV JSR`, `MOV PCL`, `MOV PCM`, and `MOV PCH` are rejected; use
   `GOSUB`/`GOTO`.

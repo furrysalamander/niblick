@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.errors import BadgeCompileError
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.errors import NiblickCompileError
+from niblick.loader import load_program
 
 
 def build(tmp_path: Path, source: str, asm: dict[str, str], name: str = "main"):
@@ -19,7 +19,7 @@ def build(tmp_path: Path, source: str, asm: dict[str, str], name: str = "main"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
 
-    entry = tmp_path / f"{name}.badge"
+    entry = tmp_path / f"{name}.nbl"
     entry.write_text(source)
     compiler = Compiler(load_program(entry), str(entry))
     asm_text = compiler.compile()
@@ -100,7 +100,7 @@ def test_asm_runtime_call_is_linked_and_emits_uart(tmp_path: Path) -> None:
         tmp_path,
         """
         import "emit.asm";
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         extern fn void emit(char value);
         fn main() {
             uart_init(3);
@@ -115,14 +115,14 @@ def test_asm_runtime_call_is_linked_and_emits_uart(tmp_path: Path) -> None:
                 MOV R1, R0
                 MOV R0, [${value+1}]
                 MOV R2, R0
-                GOSUB __bc_uart_putc
+                GOSUB __nib_uart_putc
                 RET R0, 0
             """
         },
     )
     emu = run(hex_path)
     assert b"A" in bytes(emu.uart_tx)
-    assert "__bc_uart_putc" in compiler.linked_runtime
+    assert "__nib_uart_putc" in compiler.linked_runtime
 
 
 def test_asm_can_call_c_function_and_dce_keeps_it(tmp_path: Path) -> None:
@@ -189,7 +189,7 @@ def test_const_array_placeholder_uses_flash_label(tmp_path: Path) -> None:
         tmp_path,
         """
         import "print.asm";
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         const char msg[] = "Hi";
         extern fn void print_msg();
         fn main() {
@@ -204,8 +204,8 @@ def test_const_array_placeholder_uses_flash_label(tmp_path: Path) -> None:
                 MOV R1, LOW ${msg}
                 MOV R2, MID ${msg}
                 MOV R3, HIGH ${msg}
-                GOSUB __bc_flash_read_char
-                GOSUB __bc_uart_putc
+                GOSUB __nib_flash_read_char
+                GOSUB __nib_uart_putc
                 RET R0, 0
             """
         },
@@ -246,7 +246,7 @@ def test_qualified_placeholder_addresses_another_function_param(tmp_path: Path) 
 
 
 def test_missing_asm_entry_point_is_reported(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         import "empty.asm";
@@ -256,12 +256,12 @@ def test_missing_asm_entry_point_is_reported(tmp_path: Path) -> None:
     )
     (tmp_path / "empty.asm").write_text("; no functions here\n")
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match="has no fn_missing"):
+    with pytest.raises(NiblickCompileError, match="has no fn_missing"):
         compiler.compile()
 
 
 def test_asm_entry_without_extern_is_reported(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         import "extra.asm";
@@ -272,12 +272,12 @@ def test_asm_entry_without_extern_is_reported(tmp_path: Path) -> None:
         "fn_extra:\n    RET R0, 0\n"
     )
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match="no extern fn extra"):
+    with pytest.raises(NiblickCompileError, match="no extern fn extra"):
         compiler.compile()
 
 
 def test_unknown_placeholder_is_reported(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         import "bad.asm";
@@ -289,12 +289,12 @@ def test_unknown_placeholder_is_reported(tmp_path: Path) -> None:
         "fn_bad:\n    MOV R0, [${nope}]\n    RET R0, 0\n"
     )
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match="unknown asm placeholder"):
+    with pytest.raises(NiblickCompileError, match="unknown asm placeholder"):
         compiler.compile()
 
 
 def test_raw_pc_write_is_rejected(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         import "bad.asm";
@@ -306,15 +306,15 @@ def test_raw_pc_write_is_rejected(tmp_path: Path) -> None:
         "fn_bad:\n    MOV JSR, R1\n    RET R0, 0\n"
     )
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match="raw MOV JSR"):
+    with pytest.raises(NiblickCompileError, match="raw MOV JSR"):
         compiler.compile()
 
 
 def test_same_asm_file_is_loaded_once(tmp_path: Path) -> None:
     lib = tmp_path / "lib"
     lib.mkdir()
-    (lib / "one.badge").write_text('import "shared.asm";\nextern fn nibble one();\n')
-    (lib / "two.badge").write_text('import "shared.asm";\nextern fn nibble two();\n')
+    (lib / "one.nbl").write_text('import "shared.asm";\nextern fn nibble one();\n')
+    (lib / "two.nbl").write_text('import "shared.asm";\nextern fn nibble two();\n')
     (lib / "shared.asm").write_text(
         """
         fn_one:
@@ -325,11 +325,11 @@ def test_same_asm_file_is_loaded_once(tmp_path: Path) -> None:
             RET R0, 0
         """
     )
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
-        import "lib/one.badge";
-        import "lib/two.badge";
+        import "lib/one.nbl";
+        import "lib/two.nbl";
         nibble a;
         nibble b;
         fn main() {
@@ -355,7 +355,7 @@ def test_file_level_no_optimize_marker_preserves_text(tmp_path: Path) -> None:
         """,
         {
             "keep.asm": """
-            ; @badgec: no-optimize
+            ; @niblick: no-optimize
             fn_keep:
                 MOV R1, R1
                 RET R0, 0
@@ -376,9 +376,9 @@ def test_region_no_optimize_marker_preserves_region(tmp_path: Path) -> None:
         {
             "keep.asm": """
             fn_keep:
-            ; @badgec: no-optimize-begin
+            ; @niblick: no-optimize-begin
                 MOV R1, R1
-            ; @badgec: no-optimize-end
+            ; @niblick: no-optimize-end
                 MOV R2, R2
                 RET R0, 0
             """
@@ -389,10 +389,10 @@ def test_region_no_optimize_marker_preserves_region(tmp_path: Path) -> None:
 
 
 def test_w5500_tx_pointer_moved_to_library(tmp_path: Path) -> None:
-    entry = tmp_path / "caller.badge"
+    entry = tmp_path / "caller.nbl"
     entry.write_text(
         """
-        import "lib/drivers/w5500.badge";
+        import "lib/drivers/w5500.nbl";
         uint16_t pointer;
         fn main() {
             pointer = w5500_tx_pointer();
@@ -403,8 +403,8 @@ def test_w5500_tx_pointer_moved_to_library(tmp_path: Path) -> None:
     compiler = Compiler(load_program(entry), str(entry))
     asm = compiler.compile()
     assert "fn_w5500_tx_pointer:" in asm
-    assert "__bc_w5500_tx_pointer:" not in asm
-    assert "GOSUB __bc_w5500_spi_xfer_fast" in asm
+    assert "__nib_w5500_tx_pointer:" not in asm
+    assert "GOSUB __nib_w5500_spi_xfer_fast" in asm
 
     asm_path = tmp_path / "caller.asm"
     asm_path.write_text(asm)
@@ -414,7 +414,7 @@ def test_w5500_tx_pointer_moved_to_library(tmp_path: Path) -> None:
 
 
 def test_unused_asm_entry_point_is_stripped(tmp_path: Path) -> None:
-    source = Path(__file__).resolve().parent.parent / "examples" / "w5500_probe.badge"
+    source = Path(__file__).resolve().parent.parent / "examples" / "w5500_probe.nbl"
     compiler = Compiler(load_program(source), str(source))
     asm = compiler.compile()
     assert "w5500_tx_pointer" not in compiler.functions
@@ -433,7 +433,7 @@ def test_unused_asm_routine_does_not_link_runtime(tmp_path: Path) -> None:
         {
             "two.asm": """
             fn_dead:
-                GOSUB __bc_uart_putc
+                GOSUB __nib_uart_putc
                 RET R0, 0
             fn_used:
                 MOV R1, 1
@@ -443,11 +443,11 @@ def test_unused_asm_routine_does_not_link_runtime(tmp_path: Path) -> None:
     )
     assert "fn_dead:" not in asm_text
     assert "fn_used:" in asm_text
-    assert "__bc_uart_putc" not in compiler.linked_runtime
+    assert "__nib_uart_putc" not in compiler.linked_runtime
 
 
 def test_asm_error_keeps_original_line_number(tmp_path: Path) -> None:
-    entry = tmp_path / "main.badge"
+    entry = tmp_path / "main.nbl"
     entry.write_text(
         """
         import "lines.asm";
@@ -465,5 +465,5 @@ def test_asm_error_keeps_original_line_number(tmp_path: Path) -> None:
         "    RET R0, 0\n"
     )
     compiler = Compiler(load_program(entry), str(entry))
-    with pytest.raises(BadgeCompileError, match=r"lines\.asm:5: unknown asm placeholder"):
+    with pytest.raises(NiblickCompileError, match=r"lines\.asm:5: unknown asm placeholder"):
         compiler.compile()

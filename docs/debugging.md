@@ -1,7 +1,7 @@
-# Debugging BadgeC programs
+# Debugging Niblick programs
 
-The VS Code extension includes a BadgeC emulator debugger. It compiles the
-active `.badge` file, loads the resulting `.hex` into the existing headless
+The VS Code extension includes a Niblick emulator debugger. It compiles the
+active `.nbl` file, loads the resulting `.hex` into the existing headless
 emulator, and exposes breakpoints, stepping, registers, flags, globals, and
 UART output.
 
@@ -11,24 +11,24 @@ Add this to `.vscode/launch.json`:
 
 ```json
 {
-  "type": "badgec",
+  "type": "niblick",
   "request": "launch",
-  "name": "BadgeC: Run Program",
+  "name": "Niblick: Run Program",
   "program": "${file}",
   "cwd": "${workspaceFolder}",
   "stopOnEntry": true
 }
 ```
 
-Then open a `.badge` file and press F5.
+Then open a `.nbl` file and press F5.
 
-The extension also contributes a **BadgeC: Launch Program** configuration
+The extension also contributes a **Niblick: Launch Program** configuration
 snippet in the debug configuration picker.
 
 ## What works
 
 - stop on entry;
-- line breakpoints in `.badge` and `.asm` source files;
+- line breakpoints in `.nbl` and `.asm` source files;
 - continue and pause;
 - step over, step into, and step out;
 - registers `R0`–`R9`;
@@ -45,7 +45,7 @@ snippet in the debug configuration picker.
 The compiler emits source markers into the generated assembly:
 
 ```asm
-; @badgec-src /path/main.badge:12
+; @niblick-src /path/main.nbl:12
 ```
 
 After optimization, the debug map scans the final assembly and records the
@@ -60,7 +60,7 @@ word address of each marker. The map contains:
 Generate one manually with:
 
 ```bash
-python3 -m badgec examples/hello.badge --debug-map hello.map.json
+python3 -m niblick examples/hello.nbl --debug-map hello.map.json
 ```
 
 ## Debugging an existing `.hex`
@@ -69,9 +69,9 @@ Use the `hex` launch field instead of `program`:
 
 ```json
 {
-  "type": "badgec",
+  "type": "niblick",
   "request": "launch",
-  "name": "BadgeC: Run Hex",
+  "name": "Niblick: Run Hex",
   "hex": "${workspaceFolder}/examples/hello.hex",
   "debugMap": "${workspaceFolder}/examples/hello.map.json",
   "cwd": "${workspaceFolder}"
@@ -86,7 +86,7 @@ but registers and execution still work.
 The debug service uses the repository's emulator:
 
 ```bash
-python3 -m badgec.debug
+python3 -m niblick.debug
 ```
 
 No extra package is needed beyond the compiler itself. The extension

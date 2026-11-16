@@ -36,7 +36,7 @@
           }
         },
         {
-          "match": "^\\s*(__bc_[A-Za-z0-9_]+)\\s*:",
+          "match": "^\\s*(__nib_[A-Za-z0-9_]+)\\s*:",
           "captures": {
             "1": { "name": "entity.name.function.runtime.voja4" }
           }
@@ -157,7 +157,7 @@
       "patterns": [
         {
           "name": "entity.name.function.reference.voja4",
-          "match": "\\b(?:fn_|__bc_)[A-Za-z0-9_]+\\b"
+          "match": "\\b(?:fn_|__nib_)[A-Za-z0-9_]+\\b"
         }
       ]
     },

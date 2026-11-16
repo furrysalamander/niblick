@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_source
 
 
 def compile_source(tmp_path: Path, source: str) -> tuple[Compiler, Emulator]:
-    filename = tmp_path / "board.badge"
+    filename = tmp_path / "board.nbl"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
     asm = compiler.compile()
@@ -30,7 +30,7 @@ def test_voja4_pin_masks(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/boards/voja4.badge";
+        import "lib/boards/voja4.nbl";
 
         nibble values[15];
 

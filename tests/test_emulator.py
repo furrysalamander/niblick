@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from badgec.emulator import Emulator, EmulatorStackError
+from niblick.emulator import Emulator, EmulatorStackError
 
 
 # ---------------------------------------------------------------------------

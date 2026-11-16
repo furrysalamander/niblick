@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from badgec.emulator import Emulator
+from niblick.emulator import Emulator
 
 
 def test_key_status_and_key_reg() -> None:

@@ -1,0 +1,14 @@
+// Scroll a message across the LED matrix using the 5x8 font.
+import "lib/display.nbl";
+import "lib/time.nbl";
+import "lib/textscroll.nbl";
+
+nibble screen[32];
+
+fn main() {
+    leds_enable(1);
+    matrix_enable(1);
+    dimmer(15);
+    clear_screen(&screen);
+    text_scroll_loop(&screen, "HACKADAY SUPERCON 2026  ", SYNC_10HZ);
+}

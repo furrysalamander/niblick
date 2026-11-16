@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the BadgeC hardware self-test over UART.
+"""Run the Niblick hardware self-test over UART.
 
 Usage:
     python3 scripts/hw_test.py /dev/ttyUSB0

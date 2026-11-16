@@ -72,7 +72,7 @@ function runAndCollect(
   };
 }
 
-class BadgeCDebugSession extends DebugSession {
+class NiblickDebugSession extends DebugSession {
   private service?: ChildProcessWithoutNullStreams;
   private nextId = 1;
   private pending = new Map<
@@ -110,14 +110,14 @@ class BadgeCDebugSession extends DebugSession {
           throw new Error("launch requires 'program' or 'hex'");
         }
         this.temporaryDir = fs.mkdtempSync(
-          path.join(os.tmpdir(), "badgec-debug-"),
+          path.join(os.tmpdir(), "niblick-debug-"),
         );
         const mapPath = path.join(this.temporaryDir, "debug.json");
         const result = runAndCollect(
           python,
           [
             "-m",
-            "badgec",
+            "niblick",
             launch.program,
             "-o",
             this.temporaryDir,
@@ -127,7 +127,7 @@ class BadgeCDebugSession extends DebugSession {
           { cwd, env },
         );
         if (result.code !== 0) {
-          throw new Error(result.output || "BadgeC compilation failed");
+          throw new Error(result.output || "Niblick compilation failed");
         }
         hexPath = path.join(
           this.temporaryDir,
@@ -138,7 +138,7 @@ class BadgeCDebugSession extends DebugSession {
         debugMap = JSON.parse(fs.readFileSync(launch.debugMap, "utf8"));
       }
 
-      this.service = spawn(python, ["-m", "badgec.debug"], {
+      this.service = spawn(python, ["-m", "niblick.debug"], {
         cwd,
         env,
       });
@@ -164,7 +164,7 @@ class BadgeCDebugSession extends DebugSession {
       this.sendErrorResponse(
         response,
         1001,
-        `BadgeC launch failed: ${String(error)}`,
+        `Niblick launch failed: ${String(error)}`,
       );
     }
   }
@@ -224,7 +224,7 @@ class BadgeCDebugSession extends DebugSession {
   }
 
   protected threadsRequest(response: any): void {
-    response.body = { threads: [new Thread(1, "BadgeC emulator")] };
+    response.body = { threads: [new Thread(1, "Niblick emulator")] };
     this.sendResponse(response);
   }
 
@@ -408,4 +408,4 @@ class BadgeCDebugSession extends DebugSession {
   }
 }
 
-DebugSession.run(BadgeCDebugSession);
+DebugSession.run(NiblickDebugSession);

@@ -1,0 +1,12 @@
+import "lib/time.nbl";
+import "lib/uart.nbl";
+const char msg[] = "Hello, Supercon!\n";
+
+fn main() {
+    uart_route(1);         // application UART on the main I/O header
+    uart_init(3);
+    while (1) {
+        uart_puts(msg);
+        delay(5);
+    }
+}

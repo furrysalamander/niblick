@@ -17,7 +17,7 @@ function workspaceRoot(): string {
 }
 
 function pythonExecutable(): string {
-  const config = vscode.workspace.getConfiguration("badgec");
+  const config = vscode.workspace.getConfiguration("niblick");
   const configured = config.get<string>("pythonPath", "").trim();
   if (configured.length > 0) {
     return configured;
@@ -40,13 +40,13 @@ function pythonExecutable(): string {
 
 function pythonEnvironment(): { [key: string]: string | undefined } {
   const includePaths = vscode.workspace
-    .getConfiguration("badgec")
+    .getConfiguration("niblick")
     .get<string[]>("includePaths", []);
   const env: { [key: string]: string | undefined } = { ...process.env };
   const root = workspaceRoot();
   env.PYTHONPATH = [root, env.PYTHONPATH].filter(Boolean).join(path.delimiter);
   if (includePaths.length > 0) {
-    env.BADGEC_PATH = includePaths.join(path.delimiter);
+    env.NIBLICK_PATH = includePaths.join(path.delimiter);
   }
   return env;
 }
@@ -54,7 +54,7 @@ function pythonEnvironment(): { [key: string]: string | undefined } {
 function makeServerOptions(): ServerOptions {
   return {
     command: pythonExecutable(),
-    args: ["-m", "badgec.lsp", "--stdio"],
+    args: ["-m", "niblick.lsp", "--stdio"],
     transport: TransportKind.stdio,
     options: {
       cwd: workspaceRoot(),
@@ -66,12 +66,12 @@ function makeServerOptions(): ServerOptions {
 function makeClientOptions(): LanguageClientOptions {
   return {
     documentSelector: [
-      { scheme: "file", language: "badgec" },
+      { scheme: "file", language: "niblick" },
       { scheme: "file", language: "voja4-asm" },
     ],
     synchronize: {
-      configurationSection: "badgec",
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{badge,asm}"),
+      configurationSection: "niblick",
+      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{nbl,asm}"),
     },
     outputChannel,
     traceOutputChannel: outputChannel,
@@ -88,8 +88,8 @@ async function startClient(): Promise<void> {
   }
 
   client = new LanguageClient(
-    "badgec",
-    "BadgeC Language Server",
+    "niblick",
+    "Niblick Language Server",
     makeServerOptions(),
     makeClientOptions(),
   );
@@ -99,9 +99,9 @@ async function startClient(): Promise<void> {
 
 function activeBadgeFile(): string | undefined {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || !editor.document.fileName.toLowerCase().endsWith(".badge")) {
+  if (!editor || !editor.document.fileName.toLowerCase().endsWith(".nbl")) {
     void vscode.window.showErrorMessage(
-      "Open a .badge file before running this command.",
+      "Open a .nbl file before running this command.",
     );
     return undefined;
   }
@@ -113,9 +113,9 @@ function runCompilerCommand(label: string, extraArgs: string[]): void {
   if (file === undefined) {
     return;
   }
-  const outDir = path.join(workspaceRoot(), ".badgec-build");
+  const outDir = path.join(workspaceRoot(), ".niblick-build");
   const python = pythonExecutable();
-  const args = ["-m", "badgec", file, "-o", outDir, ...extraArgs];
+  const args = ["-m", "niblick", file, "-o", outDir, ...extraArgs];
   outputChannel.show(true);
   outputChannel.appendLine(`> ${python} ${args.join(" ")}`);
 
@@ -133,7 +133,7 @@ function runCompilerCommand(label: string, extraArgs: string[]): void {
     outputChannel.appendLine(`[${label} exited with code ${code ?? "?"}]`);
     if (code !== 0) {
       void vscode.window.showWarningMessage(
-        `${label} failed. See the BadgeC output channel.`,
+        `${label} failed. See the Niblick output channel.`,
       );
     }
   });
@@ -144,21 +144,21 @@ async function fixBadgeLanguageMode(
 ): Promise<void> {
   if (
     document.uri.scheme === "file" &&
-    document.fileName.toLowerCase().endsWith(".badge") &&
+    document.fileName.toLowerCase().endsWith(".nbl") &&
     document.languageId === "plaintext"
   ) {
     try {
-      await vscode.languages.setTextDocumentLanguage(document, "badgec");
+      await vscode.languages.setTextDocumentLanguage(document, "niblick");
     } catch (error) {
       outputChannel.appendLine(
-        `Could not switch ${document.fileName} to BadgeC: ${String(error)}`,
+        `Could not switch ${document.fileName} to Niblick: ${String(error)}`,
       );
     }
   }
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  outputChannel = vscode.window.createOutputChannel("BadgeC");
+  outputChannel = vscode.window.createOutputChannel("Niblick");
   context.subscriptions.push(outputChannel);
 
   for (const document of vscode.workspace.textDocuments) {
@@ -172,23 +172,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("badgec.compile", () => {
-      runCompilerCommand("BadgeC compile", []);
+    vscode.commands.registerCommand("niblick.compile", () => {
+      runCompilerCommand("Niblick compile", []);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("badgec.run", () => {
-      runCompilerCommand("BadgeC run", ["--run"]);
+    vscode.commands.registerCommand("niblick.run", () => {
+      runCompilerCommand("Niblick run", ["--run"]);
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("badgec.restartServer", async () => {
-      outputChannel.appendLine("Restarting BadgeC language server...");
+    vscode.commands.registerCommand("niblick.restartServer", async () => {
+      outputChannel.appendLine("Restarting Niblick language server...");
       try {
         await startClient();
-        outputChannel.appendLine("BadgeC language server restarted.");
+        outputChannel.appendLine("Niblick language server restarted.");
       } catch (error) {
         outputChannel.appendLine(`Restart failed: ${String(error)}`);
       }
@@ -197,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (event.affectsConfiguration("badgec")) {
+      if (event.affectsConfiguration("niblick")) {
         try {
           await startClient();
         } catch (error) {
@@ -211,9 +211,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await startClient();
   } catch (error) {
     const message =
-      "BadgeC language server failed to start. " +
+      "Niblick language server failed to start. " +
       "Install the Python extra with `pip install -e \".[lsp]\"` " +
-      "or set `badgec.pythonPath` to the right interpreter.";
+      "or set `niblick.pythonPath` to the right interpreter.";
     outputChannel.appendLine(message);
     outputChannel.appendLine(String(error));
     void vscode.window.showErrorMessage(message);

@@ -4,10 +4,10 @@ The badge exposes four output bits and four input bits on the main I/O
 connector. Pins are accessed as **bit masks**, not bit indices, through the
 GPIO helpers.
 
-All board-specific assignments live in `lib/boards/voja4.badge`:
+All board-specific assignments live in `lib/boards/voja4.nbl`:
 
 ```c
-import "lib/boards/voja4.badge";
+import "lib/boards/voja4.nbl";
 ```
 
 ## Output pins
@@ -63,8 +63,8 @@ drivers.
 
 ## Changing the wiring
 
-Edit `lib/boards/voja4.badge` rather than changing constants in individual
-drivers. `lib/spi.badge`, `lib/drivers/w5500.badge`, and the W5500 examples all
+Edit `lib/boards/voja4.nbl` rather than changing constants in individual
+drivers. `lib/spi.nbl`, `lib/drivers/w5500.nbl`, and the W5500 examples all
 import that board file.
 
 If a project adds an SD card or SPI flash, give each device its own chip-select

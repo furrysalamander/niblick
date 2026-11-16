@@ -1,0 +1,12 @@
+import "lib/time.nbl";
+import "lib/uart.nbl";
+const char msg[] = "Hello from SAO!\n";
+
+fn main() {
+    uart_route(0);         // application UART on the SAO header
+    uart_init(3);
+    while (1) {
+        uart_puts(msg);
+        delay(5);
+    }
+}

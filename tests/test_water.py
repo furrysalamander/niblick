@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -25,7 +25,7 @@ def _screen_bits(emu: Emulator, screen: int) -> int:
 
 
 def test_water_conserves_cells_and_changes_gravity(tmp_path: Path) -> None:
-    example = ROOT / "examples" / "water.badge"
+    example = ROOT / "examples" / "water.nbl"
     compiler = Compiler(load_program(example), str(example))
     asm_path = tmp_path / "water.asm"
     asm_path.write_text(compiler.compile())

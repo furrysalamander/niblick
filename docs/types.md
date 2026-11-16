@@ -1,6 +1,6 @@
 # Types and arithmetic
 
-BadgeC uses explicit-width integer types. There are no implicit C integer
+Niblick uses explicit-width integer types. There are no implicit C integer
 promotions: the width of an expression comes from its operands and from the
 type it is being assigned to.
 
@@ -26,7 +26,7 @@ type it is being assigned to.
 signed byte. `int` is signed 16-bit and `long` is signed 32-bit; this matches
 the usual choice for 16-bit C targets. The `int_least*_t`, `int_fast*_t`,
 `intmax_t`, and `uintmax_t` spellings are aliases for the same fixed-width
-types. `intptr_t`/`uintptr_t` are not defined because BadgeC has no general
+types. `intptr_t`/`uintptr_t` are not defined because Niblick has no general
 pointers.
 
 The old `word` and `dword` type spellings have been removed. The ISA still
@@ -274,8 +274,7 @@ sixteen nibbles and cannot fit in the register result convention. Each 64-bit va
 sixteen nibbles of RAM, and the compiler also reserves a result buffer plus
 temporary slots while a 64-bit expression is evaluated. Programs with many
 64-bit globals may not fit in the badge's data RAM. 64-bit multiply and
-divide are implemented by `lib/wide.badge`; they are correct but deliberately
-size- and RAM-conscious, so they are best used sparingly. The 64-bit print
-helpers live in `lib/wide.badge` as well; the current UART helper call chain
+divide are implemented by `lib/wide.nbl`; they are correct but size- and RAM-constrained, so they are best used sparingly. The 64-bit print
+helpers live in `lib/wide.nbl` as well; the current UART helper call chain
 can exceed the five-entry hardware call stack for some 64-bit formats, and a
 64-bit print program may not have enough RAM for the full formatter set.

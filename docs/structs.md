@@ -1,6 +1,6 @@
 # Structs
 
-BadgeC supports small RAM-resident structs with scalar fields:
+Niblick supports RAM-resident structs with scalar fields:
 
 ```c
 struct Point {
@@ -82,8 +82,8 @@ own structs internally.
 A struct occupies its padded size in RAM, whether it is a single variable or
 an array element. Struct parameters are copied into the called function's
 frame, and struct returns use a shared result buffer sized to the largest
-struct in the program. Keep structs small; the badge has only about 176 usable
-nibbles of data RAM after globals and function frames.
+struct in the program. Struct size is limited by the 176 usable nibbles of data
+RAM after globals and function frames.
 
 For a one-off group of values that is never indexed, separate variables may be
 cheaper because they avoid padding.

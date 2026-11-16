@@ -12,7 +12,7 @@ pytest.importorskip("lsprotocol")
 
 from lsprotocol import types
 
-from badgec.lsp import DEBOUNCE_SECONDS, create_server
+from niblick.lsp import DEBOUNCE_SECONDS, create_server
 
 
 def position(source: str, needle: str) -> tuple[int, int]:
@@ -37,7 +37,7 @@ def test_server_registers_diagnostics_symbols_and_navigation() -> None:
 
 
 def test_document_symbol_handler(tmp_path: Path) -> None:
-    source = tmp_path / "main.badge"
+    source = tmp_path / "main.nbl"
     source.write_text(
         "nibble result;\n"
         "fn main() { result = 1; }\n"
@@ -53,7 +53,7 @@ def test_document_symbol_handler(tmp_path: Path) -> None:
 
 
 def test_open_publishes_diagnostics(tmp_path: Path) -> None:
-    source = tmp_path / "bad.badge"
+    source = tmp_path / "bad.nbl"
     source.write_text("fn main() { }\n")
     server = create_server()
     published: list[types.PublishDiagnosticsParams] = []
@@ -69,7 +69,7 @@ def test_open_publishes_diagnostics(tmp_path: Path) -> None:
             types.DidOpenTextDocumentParams(
                 text_document=types.TextDocumentItem(
                     uri=source.as_uri(),
-                    language_id="badgec",
+                    language_id="niblick",
                     version=1,
                     text="nibble x;\nfn main() { x = 300; }\n",
                 )
@@ -94,7 +94,7 @@ def test_hover_definition_and_completion_handlers(tmp_path: Path) -> None:
         "fn nibble add(nibble a, nibble b) { return a + b; }\n"
         "fn main() { nibble x; x = add(g, 2); }\n"
     )
-    source = tmp_path / "nav.badge"
+    source = tmp_path / "nav.nbl"
     source.write_text(text)
     server = create_server()
     uri = source.as_uri()
@@ -134,7 +134,7 @@ def test_hover_definition_and_completion_handlers(tmp_path: Path) -> None:
 
 
 def test_asm_completion_handler(tmp_path: Path) -> None:
-    source = tmp_path / "main.badge"
+    source = tmp_path / "main.nbl"
     source.write_text("fn main() { while (1) { } }\n")
     asm = tmp_path / "impl.asm"
     asm.write_text("fn_impl:\n    RET R0, 0\n")
@@ -160,7 +160,7 @@ def test_references_handler(tmp_path: Path) -> None:
         "    }\n"
         "}\n"
     )
-    source = tmp_path / "refs.badge"
+    source = tmp_path / "refs.nbl"
     source.write_text(text)
     server = create_server()
     references = server.protocol.fm._features["textDocument/references"]
@@ -186,7 +186,7 @@ def test_rename_handler(tmp_path: Path) -> None:
         "    }\n"
         "}\n"
     )
-    source = tmp_path / "rename.badge"
+    source = tmp_path / "rename.nbl"
     source.write_text(text)
     server = create_server()
     rename = server.protocol.fm._features["textDocument/rename"]
@@ -214,7 +214,7 @@ def test_completion_inside_inline_asm(tmp_path: Path) -> None:
         "    }\n"
         "}\n"
     )
-    source = tmp_path / "inline.badge"
+    source = tmp_path / "inline.nbl"
     source.write_text(text)
     server = create_server()
     completion = server.protocol.fm._features["textDocument/completion"]

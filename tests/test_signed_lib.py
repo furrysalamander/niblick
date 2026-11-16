@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_source
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_source
 
 
 def compile_source(
     tmp_path: Path, source: str, name: str = "signedlib"
 ) -> tuple[Compiler, Emulator]:
-    filename = tmp_path / f"{name}.badge"
+    filename = tmp_path / f"{name}.nbl"
     program = load_source(source, filename=str(filename))
     compiler = Compiler(program, str(filename))
     asm_path = tmp_path / f"{name}.asm"
@@ -47,7 +47,7 @@ def test_signed_4bit_helpers(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/signed.badge";
+        import "lib/signed.nbl";
 
         nibble r[32];
         char q[6];
@@ -124,7 +124,7 @@ def test_signed_8bit_helpers(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/signed.badge";
+        import "lib/signed.nbl";
 
         nibble r[8];
         char q[24];
@@ -200,7 +200,7 @@ def test_signed_16bit_compare_and_clamp(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/signed.badge";
+        import "lib/signed.nbl";
 
         nibble r[8];
         uint16_t w[16];
@@ -240,7 +240,7 @@ def test_signed_16bit_math(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/signed.badge";
+        import "lib/signed.nbl";
 
         nibble r[4];
         uint16_t w[16];
@@ -305,7 +305,7 @@ def test_q4_4_fixed_point(tmp_path: Path) -> None:
     compiler, emu = compile_source(
         tmp_path,
         """
-        import "lib/fixed.badge";
+        import "lib/fixed.nbl";
 
         char q[16];
         nibble r[4];
@@ -353,7 +353,7 @@ def test_signed_decimal_printing(tmp_path: Path) -> None:
     _, emu = compile_source(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
 
         char done;
 

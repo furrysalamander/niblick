@@ -13,16 +13,16 @@ dist/
 
 # Generated compiler output
 *.asm
-!badgec/runtime/runtime.asm
+!niblick/runtime/runtime.asm
 !lib/asm/**/*.asm
 !lib/*.asm
-!examples/mc_void.asm
+!examples/asm/*.asm
 *.hex
 
 # Generated at runtime
 captures/
 badge-backup/
-.badgec-build/
+.niblick-build/
 
 # VS Code extension build output
 editors/vscode/node_modules/

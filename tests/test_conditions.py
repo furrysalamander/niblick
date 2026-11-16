@@ -2,7 +2,7 @@
 
 Every condition is written as ``if (cond) { results[i] = 1; }`` so the
 compiler can branch straight from flags instead of materialising a value.
-Expected results are computed in Python with BadgeC's unsigned semantics.
+Expected results are computed in Python with Niblick's unsigned semantics.
 Cases are split across a few small programs to stay inside code and RAM.
 """
 
@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.parser import parse
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.parser import parse
 
 OPS = {
     "==": lambda a, b: a == b,
@@ -40,7 +40,7 @@ def _run_cases(
     lines.append("}")
     source = "\n".join(lines) + "\n"
 
-    source_path = tmp_path / f"{name}.badge"
+    source_path = tmp_path / f"{name}.nbl"
     source_path.write_text(source)
     compiler = Compiler(parse(source, str(source_path)), str(source_path))
     asm_path = tmp_path / f"{name}.asm"
@@ -146,7 +146,7 @@ fn main() {
     if (bump() >= 0) { }
 }
 """
-    source_path = tmp_path / "side_effects.badge"
+    source_path = tmp_path / "side_effects.nbl"
     source_path.write_text(source)
     compiler = Compiler(parse(source, str(source_path)), str(source_path))
     asm_path = tmp_path / "side_effects.asm"

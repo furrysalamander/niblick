@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_wave_demo_runs_and_draws(tmp_path: Path) -> None:
-    example = ROOT / "examples" / "wave.badge"
+    example = ROOT / "examples" / "wave.nbl"
     compiler = Compiler(load_program(example), str(example))
     asm_path = tmp_path / "wave.asm"
     asm_path.write_text(compiler.compile())

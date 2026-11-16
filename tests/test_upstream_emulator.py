@@ -25,8 +25,8 @@ pytest.importorskip("bvmCPU")
 pytest.importorskip("bvmParser")
 
 from badge import Badge  # noqa: E402
-from badgec.assembler import assemble_file  # noqa: E402
-from badgec.emulator import Emulator  # noqa: E402
+from niblick.assembler import assemble_file  # noqa: E402
+from niblick.emulator import Emulator  # noqa: E402
 
 PROGRAM = """\
 ; Exercise arithmetic, logic, and register-move paths.
@@ -59,7 +59,7 @@ def _our_state(emulator: Emulator) -> tuple[int, int, int, int, int, list[int]]:
     )
 
 
-def test_upstream_core_matches_badgec_on_arithmetic(tmp_path: Path) -> None:
+def test_upstream_core_matches_niblick_on_arithmetic(tmp_path: Path) -> None:
     asm_path = tmp_path / "arith.asm"
     asm_path.write_text(PROGRAM)
     hex_path = tmp_path / "arith.hex"

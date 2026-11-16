@@ -3,9 +3,9 @@
 The Supercon.6 toolchain lives in the upstream
 [Hack-a-Day/2022-Supercon6-Badge-Tools](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools)
 repository, which contains the Python assembler, a disassembler, a Tk emulator,
-example programs, and Windows serial helpers. BadgeC uses the assembler through
+example programs, and Windows serial helpers. Niblick uses the assembler through
 the `supercon6-assembler` package; that package is installed automatically as a
-BadgeC dependency. This page documents how to use the upstream tools for BadgeC
+Niblick dependency. This page documents how to use the upstream tools for Niblick
 development and where they stop being faithful to hardware.
 
 ## Assembler
@@ -128,7 +128,7 @@ git clone https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools
 cd 2022-Supercon6-Badge-Tools
 ```
 
-Most examples have a small makefile that calls the assembler and, optionally,
+Most examples have a makefile that calls the assembler and, optionally,
 flashes the badge:
 
 ```sh
@@ -167,14 +167,14 @@ Run from the `emulator/` directory: the GUI loads `gui_assets/badgeface.jpg`,
 mode in the upstream GUI.
 
 The headless CPU core (`badge`, `bvmCPU`, and `bvmParser`) is available as the
-optional `supercon6-emulator` package. Install it with BadgeC's `fidelity`
+optional `supercon6-emulator` package. Install it with Niblick's `fidelity`
 extra:
 
 ```sh
 python3 -m pip install -e ".[fidelity]"
 ```
 
-BadgeC's own emulator lives in `badgec/emulator.py` and is the primary test
+Niblick's own emulator lives in `niblick/emulator.py` and is the primary test
 model. The `fidelity` extra installs the upstream core for cross-checks.
 
 The README calls the input a `.bin`; in practice `badge.py` expects the
@@ -201,7 +201,7 @@ assembler's 8-byte header + length + words + checksum container, so pass the
 | Timing | Wall-clock tick (`frameDelay` 10 ms, `0.5/speed` gate); not cycle-accurate. `Clock` indexes a speed table rather than modeling instruction costs. |
 | Input file | Header is skipped, length is ignored, and checksum is not verified. Truncated/extra bytes can be silently accepted. |
 | Instruction aliases | `BIT`/`BSET`/`BCLR`/`BTG` with `G=3` operate on `R3`, matching the assembler's `R3`/`RS` alias rather than the hardware I/O port (`IN` for `BIT`, `OUT` for the write forms). |
-| Flags | `SUB`/`SBB` clear `C` when there is no borrow; the hardware manuals specify inverse borrow (`C=1` for no borrow). BadgeC's emulator follows the manuals. |
+| Flags | `SUB`/`SBB` clear `C` when there is no borrow; the hardware manuals specify inverse borrow (`C=1` for no borrow). Niblick's emulator follows the manuals. |
 | Errors | Stack overflow/underflow raises a Python exception; it does not reproduce the badge's halted-error display. |
 | Output | Prints every decoded instruction and stack event to stdout; very noisy for large programs. |
 
@@ -267,7 +267,7 @@ These are the details that most often waste a flashing attempt:
    final bytes. The badge ignores the padding.
 6. **Validate the container first.** The file starts with
    `00 FF 00 FF A5 C3`, followed by a 16-bit word count, the words, and a
-   16-bit checksum. `examples/*.hex` from the BadgeC toolchain already satisfy
+   16-bit checksum. `examples/*.hex` from the Niblick toolchain already satisfy
    this.
 7. **Wiring:** 3.3 V logic, common ground, adapter TX to badge RX and adapter RX
    to badge TX. Use the main I/O connector (pins 2/3), not the SAO header. Do

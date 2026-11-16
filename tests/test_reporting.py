@@ -5,17 +5,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from badgec.assembler import assemble_file, code_words
-from badgec.cli import main
-from badgec.compiler import Compiler
-from badgec.loader import load_program
-from badgec.runtime_linker import runtime_stack_costs
+from niblick.assembler import assemble_file, code_words
+from niblick.cli import main
+from niblick.compiler import Compiler
+from niblick.loader import load_program
+from niblick.runtime_linker import runtime_stack_costs
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def build(tmp_path: Path, source: str, name: str = "report"):
-    path = tmp_path / f"{name}.badge"
+    path = tmp_path / f"{name}.nbl"
     path.write_text(source)
     compiler = Compiler(load_program(path), str(path))
     asm_path = tmp_path / f"{name}.asm"
@@ -26,13 +26,13 @@ def build(tmp_path: Path, source: str, name: str = "report"):
 
 
 def test_runtime_stack_costs_match_documented_values() -> None:
-    text = (ROOT / "badgec" / "runtime" / "runtime.asm").read_text()
+    text = (ROOT / "niblick" / "runtime" / "runtime.asm").read_text()
     costs = runtime_stack_costs(text)
-    assert costs["__bc_uart_putc"] == 1
-    assert costs["__bc_flash_read_char_ptr"] == 2
-    assert costs["__bc_flash_read_char"] == 3
-    assert costs["__bc_gpio_set"] == 2
-    assert costs["__bc_mul16"] == 1
+    assert costs["__nib_uart_putc"] == 1
+    assert costs["__nib_flash_read_char_ptr"] == 2
+    assert costs["__nib_flash_read_char"] == 3
+    assert costs["__nib_gpio_set"] == 2
+    assert costs["__nib_mul16"] == 1
 
 
 def test_per_function_sizes_sum_to_total(tmp_path: Path) -> None:
@@ -68,10 +68,10 @@ def test_per_function_sizes_sum_to_total(tmp_path: Path) -> None:
 
 
 def test_map_json_includes_sizes_and_stack(tmp_path: Path) -> None:
-    source = tmp_path / "report.badge"
+    source = tmp_path / "report.nbl"
     source.write_text(
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         nibble x;
         fn main() {
             uart_init(3);
@@ -86,13 +86,13 @@ def test_map_json_includes_sizes_and_stack(tmp_path: Path) -> None:
     assert data["code_words"] > 0
     assert data["asm_words"] == data["code_words"]
     assert data["functions"][0]["words"] > 0
-    assert data["runtime_words"]["__bc_uart_putc"] > 0
+    assert data["runtime_words"]["__nib_uart_putc"] > 0
     assert data["stack"]["max_call_depth"] == 1
-    assert data["stack"]["runtime_costs"]["__bc_uart_putc"] == 1
+    assert data["stack"]["runtime_costs"]["__nib_uart_putc"] == 1
 
 
 def test_stack_report_and_warning_for_deep_runtime_call(tmp_path: Path) -> None:
-    source = tmp_path / "deep.badge"
+    source = tmp_path / "deep.nbl"
     source.write_text(
         """
         nibble x;
@@ -107,7 +107,7 @@ def test_stack_report_and_warning_for_deep_runtime_call(tmp_path: Path) -> None:
     asm = compiler.compile()
     assert compiler.max_call_depth == 4
     assert compiler.deepest_path == ["main", "c", "b", "a", "leaf"]
-    assert compiler.runtime_costs["__bc_gpio_test"] == 2
+    assert compiler.runtime_costs["__nib_gpio_test"] == 2
     assert compiler.stack_warnings
     assert "6 stack levels" in compiler.stack_warnings[0]
 
@@ -117,7 +117,7 @@ def test_stack_report_and_warning_for_deep_runtime_call(tmp_path: Path) -> None:
 
 
 def test_symbols_prints_function_words(tmp_path: Path, capsys) -> None:
-    source = tmp_path / "size.badge"
+    source = tmp_path / "size.nbl"
     source.write_text(
         """
         nibble x;
@@ -137,7 +137,7 @@ def test_symbols_prints_function_words(tmp_path: Path, capsys) -> None:
 
 
 def test_example_sizes_stay_consistent(tmp_path: Path) -> None:
-    example = ROOT / "examples" / "u32_math.badge"
+    example = ROOT / "examples" / "u32_math.nbl"
     compiler = Compiler(load_program(example), str(example))
     asm_path = tmp_path / "u32_math.asm"
     asm_path.write_text(compiler.compile())

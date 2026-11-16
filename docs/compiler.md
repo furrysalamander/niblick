@@ -1,26 +1,25 @@
-# BadgeC compiler internals
+# Niblick compiler internals
 
 ## Pipeline
 
 ```text
-.badge source
-  -> badgec/loader.py       resolve imports; collect .asm modules
-  -> badgec/lexer.py        tokens
-  -> badgec/parser.py       AST (badgec/ast_nodes.py)
-  -> badgec/inline.py       inline tiny/statement wrappers, remove dead declarations
-  -> badgec/compiler.py     semantic checks, allocation, code generation
-  -> badgec/asm_link.py     scan imported assembly for calls and symbols
-  -> badgec/asm_opt.py      peepholes, copy propagation, branch relaxation
+.nbl source
+  -> niblick/loader.py       resolve imports; collect .asm modules
+  -> niblick/lexer.py        tokens
+  -> niblick/parser.py       AST (niblick/ast_nodes.py)
+  -> niblick/inline.py       inline single-statement wrappers; remove dead declarations
+  -> niblick/compiler.py     semantic checks, allocation, code generation
+  -> niblick/asm_link.py     scan imported assembly for calls and symbols
+  -> niblick/asm_opt.py      peepholes, copy propagation, branch relaxation
   -> .asm
   -> supercon6-assembler      .hex
-  -> badgec/emulator.py     headless execution / tests
+  -> niblick/emulator.py     headless execution / tests
 ```
 
-There is deliberately no heavyweight IR yet. The current generator is a
-direct AST-to-assembly backend with a fixed-register expression convention.
-This keeps the first working compiler small and makes the hardware
-constraints explicit. The pass boundaries are still clean enough to add an
-IR and optimizer later.
+The compiler is a direct AST-to-assembly backend with a fixed-register
+expression convention. There is no intermediate representation. The pass
+boundaries are `loader`, `lexer`, `parser`, `inline`, `compiler`, `asm_link`,
+and `asm_opt`.
 
 ## Expression convention
 
@@ -41,7 +40,7 @@ it (`MOV [NN],R0`, `MOV R0,[NN]`, `CP R0,N`, `ADD R0,N`).
 Nested binary expressions park the left operand in a temporary slot, evaluate
 the right operand, then reload and combine. Most functions use the shared
 `0x20..0x37` scratch area. If an expression keeps a temporary live across a
-call, the compiler gives that function a private small scratch area at the top
+call, the compiler gives that function a private scratch area at the top
 of its frame, so the callee cannot clobber it. No runtime stack pointer is
 needed; all slot addresses are known at compile time.
 
@@ -73,14 +72,14 @@ and the lack of a software frame pointer are unchanged.
 
 ## Imports
 
-`import "lib/uart.badge";` is resolved by `badgec/loader.py` before semantic
+`import "lib/uart.nbl";` is resolved by `niblick/loader.py` before semantic
 analysis. Imports are looked up relative to the importing file, then relative
-to the repository root and any `BADGEC_PATH` entries. Each file is parsed
+to the repository root and any `NIBLICK_PATH` entries. Each file is parsed
 once, cycles are rejected, and the declarations are merged into a single
 `ast.Program`.
 
 `import "lib/drivers/asm/w5500.asm";` imports assembly instead. The file is read and
-kept as text on the program; it is not parsed as BadgeC. Assembly modules
+kept as text on the program; it is not parsed as Niblick. Assembly modules
 declare their entry points with `extern fn ...;` and are scanned for labels,
 `GOSUB`/`GOTO` targets, placeholders, and runtime calls before linking. See
 [asm-imports.md](asm-imports.md).
@@ -90,8 +89,8 @@ the current statement position. They resolve `${...}` against the current
 lexical scope and are wrapped in opaque optimizer markers. See
 [inline-asm.md](inline-asm.md).
 
-The compiler also emits `; @badgec-src file:line` markers. The optimized
-assembly is scanned into a PC-to-source map by `badgec/debugmap.py`, exposed
+The compiler also emits `; @niblick-src file:line` markers. The optimized
+assembly is scanned into a PC-to-source map by `niblick/debugmap.py`, exposed
 with `--debug-map`, and consumed by the emulator debugger. See
 [debugging.md](debugging.md).
 
@@ -108,13 +107,13 @@ Dead-declaration elimination runs after inlining:
 
 This is what makes importing a module free when only part of it is used.
 Error locations inside imported files report that file's path and line for
-`.`asm` modules; `.badge` AST nodes still carry a line but not a filename, so
-errors in imported BadgeC report the entry file's name.
+`.`asm` modules; `.nbl` AST nodes still carry a line but not a filename, so
+errors in imported Niblick report the entry file's name.
 
 ## Print formatting
 
 `print("text {} {:x}\n", a, b);` is expanded at compile time. The format
-string must be a literal, and `lib/uart.badge` must be imported because the
+string must be a literal, and `lib/uart.nbl` must be imported because the
 expansion emits calls to `uart_puts` and the `uart_print_*` helpers. Each
 placeholder is checked against the argument type, so `{}`/`{:d}` choose the
 decimal formatter, `{:x}` the hex formatter, `{:b}` binary, `{:c}` a character,
@@ -143,7 +142,7 @@ cover it.
 
 ## Types and coercions
 
-BadgeC has explicit-width integer types: `nibble`/`u4`, `i4`, `char`/`u8`,
+Niblick has explicit-width integer types: `nibble`/`u4`, `i4`, `char`/`u8`,
 `i8`, `uint16_t`/`u16`, `i16`, `uint32_t`/`u32`, `i32`, plus `bool` and
 `flashptr`. C/cstdint aliases include `int8_t`, `uint8_t`, `int16_t`,
 `uint16_t`, `int32_t`, `uint32_t`, `short`, `int`, and `long`. The old
@@ -198,8 +197,7 @@ Native signed types are implemented with two's-complement semantics:
 `i32`/`int32_t`/`long`, and `i64`/`int64_t`/`u64`/`uint64_t`. Overflow wraps; signed division truncates toward zero;
 `%` takes the dividend's sign; `>>` is arithmetic; signed comparisons flip the
 sign bit before comparing. 64-bit expression results live in a dedicated
-16-nibble buffer; the compiler saves operands in a small 64-bit temporary
-pool. 64-bit multiply/divide call the helpers in `lib/wide.badge`. `lib/signed.badge` remains as a raw-bit helper
+16-nibble buffer; the compiler saves operands in a 64-bit temporary pool. 64-bit multiply/divide call the helpers in `lib/wide.nbl`. `lib/signed.nbl` remains as a raw-bit helper
 library for fixed-point and bit-oriented code. See [types.md](types.md).
 
 `char` is unsigned 0..255, `uint16_t` is unsigned 0..65535, and `uint32_t` is
@@ -214,7 +212,7 @@ Flash data is emitted as `RET R0,nibble` words. For a `char`, the low nibble
 comes first, then the high nibble, matching the badge demos and the
 assembler's `BYTE` directive.
 
-BadgeC emits **pairs of `NIBBLE` directives** rather than `BYTE` because the
+Niblick emits **pairs of `NIBBLE` directives** rather than `BYTE` because the
 upstream assembler miscounts `BYTE`/`ASCII` when a later label is resolved.
 Each `NIBBLE` is one word, so labels after a table are correct.
 
@@ -228,17 +226,17 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Constant-address `peek`/`poke`/`peek8`/`poke8` lowering to direct
   `MOV R0,[NN]` / `MOV [NN],R0` instructions.
 - Compile-time `print()` expansion into typed UART formatting calls.
-- Whole-program inlining of tiny `return <expr>` functions and small
+- Whole-program inlining of single-statement `return <expr>` functions and
   single-statement void wrappers. Parameters used more than once are guarded
   by a side-effect check. Char arguments are wrapped in an internal `ToChar`
   node so substituted literals keep 8-bit semantics.
 - Dead-function elimination based on reachability from `main` and global
   initializers.
-- Runtime stripping: only the `__bc_*` routines reachable from used builtins
+- Runtime stripping: only the `__nib_*` routines reachable from used builtins
   are emitted.
 - Imported `.asm` modules with `extern fn` declarations, scoped `${...}`
   symbol placeholders, call-graph/runtime-linker scanning, and per-file or
-  per-region `; @badgec: no-optimize` markers.
+  per-region `; @niblick: no-optimize` markers.
 - Inline `asm { ... }` statements with lexical `${...}` placeholders, local
   labels, call-graph/runtime-linking integration, and optimizer opacity.
 - Call-graph frame overlay for parameter and local slots.
@@ -258,7 +256,7 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   clobber them, replacing RAM spill traffic.
 - Address arithmetic uses operand registers directly and drops carry
   correction for page-aligned arrays.
-- Constant-count `<<`/`>>` are unrolled; variable counts use a small loop.
+- Constant-count `<<`/`>>` are unrolled; variable counts use a loop.
   All integer widths are supported.
 - `*` widens one step (`nibble*nibble -> char`, `char*char -> uint16_t`) and
   keeps `uint16_t*uint16_t -> uint16_t`, `uint32_t*uint32_t -> uint32_t` (low
@@ -280,21 +278,12 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 - Static call-depth checking.
 - Code-size regression budgets in `tests/test_size.py`.
 
-## Planned optimizations
+## Code-size budgets
 
-1. More aggressive size-aware inlining, including small multi-statement bodies.
-2. Peephole rules for constant branches and wider delete/replace patterns.
-3. Short-`if` skip fusion for bodies of four words or fewer.
-4. Loop rotation to remove the unconditional back-edge.
-5. Faster 32-bit multiply/divide (the current routines are size-conscious).
-
-## Current code-size pressure
-
-The Tetris demo is now around **2577 / 4096 words** and **134 / 176 usable
-RAM nibbles**. That leaves roughly 1500 words for new features. The
-`hello.badge` example is about **146 words** after constant-address lowering,
-small void inlining, and frame overlay. The 32-bit-heavy
-`u32_math.badge` demo is about **2295 words** and **97 RAM nibbles**.
+The Tetris example uses **2573 / 4096 words** and **134 / 176 usable RAM
+nibbles**. `hello.nbl` uses **142 words** after constant-address lowering,
+void-function inlining, and frame overlay. `u32_math.nbl` uses **2289 words**
+and **97 RAM nibbles**.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2800-word
@@ -310,9 +299,9 @@ sizes, flash-data size, startup overhead, and the total:
     spi_byte -> void [fn_spi_byte] 29 words p:char@0x40
     main -> void [fn_main] 142 words
   runtime:
-    __bc_uart_putc: 6 words
+    __nib_uart_putc: 6 words
   startup/other: 2 words
-  total: 2577 words
+  total: 2573 words
 ```
 
 `--map-json` carries the same data (`functions[].words`, `runtime_words`,
@@ -328,7 +317,7 @@ they stay in sync with `docs/runtime-abi.md`. A call that would need more
 than the five hardware stack entries produces a compile warning:
 
 ```text
-warning: driver.badge:42: leaf calls __bc_gpio_test at user depth 4;
+warning: driver.nbl:42: leaf calls __nib_gpio_test at user depth 4;
 runtime cost 2 needs 6 stack levels (the hardware stack has 5)
 ```
 
@@ -347,10 +336,10 @@ unchanged.
 ## Error handling
 
 User-facing errors carry `file:line:column` where possible. The CLI catches
-`BadgeError` and prints a single line without a traceback. Internal
+`NiblickError` and prints a single line without a traceback. Internal
 exceptions are not hidden; they indicate a compiler bug.
 
-Editor tooling reuses the front end through `badgec/analysis.py` and
-`badgec/symbols.py`; the LSP server in `badgec/lsp.py` exposes diagnostics,
+Editor tooling reuses the front end through `niblick/analysis.py` and
+`niblick/symbols.py`; the LSP server in `niblick/lsp.py` exposes diagnostics,
 document symbols, hover, completion, go-to-definition, references, and rename.
 See [vscode.md](vscode.md).

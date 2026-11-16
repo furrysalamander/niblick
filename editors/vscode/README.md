@@ -1,6 +1,6 @@
-# BadgeC VS Code extension
+# Niblick VS Code extension
 
-Language support for BadgeC and the Supercon.6 (Voja4) badge.
+Language support for Niblick and the Supercon.6 (Voja4) badge.
 
 See the repository's `docs/vscode.md` for installation, configuration,
 troubleshooting, and development instructions.
@@ -18,7 +18,7 @@ Then open this folder in VS Code and press F5.
 The extension starts the Python language server with:
 
 ```bash
-python3 -m badgec.lsp --stdio
+python3 -m niblick.lsp --stdio
 ```
 
 It auto-detects a workspace `.venv` or `venv` first. Install the server

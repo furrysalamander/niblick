@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from badgec.asm_opt import (
+from niblick.asm_opt import (
     asm_word_count,
     copy_propagate,
     dead_register_writes,
@@ -157,10 +157,10 @@ target:
 
 def test_no_optimize_region_is_opaque() -> None:
     source = """\
-; @badgec: no-optimize-begin
+; @niblick: no-optimize-begin
 MOV R1, R1
 GOTO target
-; @badgec: no-optimize-end
+; @niblick: no-optimize-end
 MOV R2, R2
 target:
 JR -1
@@ -173,7 +173,7 @@ JR -1
 
 def test_file_no_optimize_marker_is_opaque() -> None:
     source = """\
-; @badgec: no-optimize
+; @niblick: no-optimize
 MOV R1, R1
 GOTO target
 target:

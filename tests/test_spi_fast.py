@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_program
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_program
 
 
 def build(tmp_path: Path, source: str, stem: str):
-    path = tmp_path / f"{stem}.badge"
+    path = tmp_path / f"{stem}.nbl"
     path.write_text(source)
     compiler = Compiler(load_program(path), str(path))
     asm = compiler.compile()

@@ -3,14 +3,15 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "badgec"
+name = "niblick"
 version = "0.1.0"
-description = "A small C-like compiler for the Hackaday Supercon.6 (Voja4) 4-bit badge"
+description = "A C-like compiler for the Hackaday Supercon.6 (Voja4) 4-bit badge"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Mike Abbott" }]
+keywords = ["badge", "supercon6", "voja4", "4-bit", "compiler", "niblick"]
 dependencies = [
     "supercon6-assembler @ git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git@c576ebd08d4916909c89497fba1e1158eb540685#subdirectory=assembler",
 ]
@@ -47,20 +48,20 @@ fidelity = [
 ]
 
 [project.scripts]
-badgec = "badgec.cli:main"
-badgec-lsp = "badgec.lsp:main"
+niblick = "niblick.cli:main"
+niblick-lsp = "niblick.lsp:main"
 
 [tool.setuptools]
-packages = ["badgec", "badgec.runtime"]
+packages = ["niblick", "niblick.runtime"]
 
 [tool.setuptools.package-data]
-badgec = ["runtime/*.asm"]
+niblick = ["runtime/*.asm"]
 
 [tool.setuptools.data-files]
-"share/badgec/lib" = ["lib/*.badge"]
-"share/badgec/lib/boards" = ["lib/boards/*.badge"]
-"share/badgec/lib/drivers" = ["lib/drivers/*.badge"]
-"share/badgec/lib/drivers/asm" = ["lib/drivers/asm/*.asm"]
+"share/niblick/lib" = ["lib/*.nbl"]
+"share/niblick/lib/boards" = ["lib/boards/*.nbl"]
+"share/niblick/lib/drivers" = ["lib/drivers/*.nbl"]
+"share/niblick/lib/drivers/asm" = ["lib/drivers/asm/*.asm"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

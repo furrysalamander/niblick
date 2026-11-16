@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.loader import load_program
 
 ROOT = Path(__file__).resolve().parent.parent
-EXAMPLE = ROOT / "examples" / "cube.badge"
+EXAMPLE = ROOT / "examples" / "cube.nbl"
 
 
 def build(tmp_path: Path):

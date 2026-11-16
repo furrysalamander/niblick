@@ -1,0 +1,171 @@
+// Internal 64-bit helpers.
+//
+// This module is imported implicitly by the loader so the compiler can lower
+// 64-bit multiply and divide operators.  Unused functions and globals are
+// removed by the dead-declaration pass, so programs that do not use 64-bit
+// arithmetic pay neither code nor RAM for them.
+//
+// The helpers keep only the two 64-bit accumulators in module globals; the
+// operands stay in parameter slots.  This keeps persistent RAM use down and
+// lets the frame overlay reuse the parameter space.
+
+uint64_t __nib_w_q;
+uint64_t __nib_w_r;
+
+fn uint64_t __nib_mul64(uint64_t a, uint64_t b) {
+    __nib_w_q = 0;
+    while (b != 0) {
+        if ((b & 1) != 0) {
+            __nib_w_q = __nib_w_q + a;
+        }
+        a = a << 1;
+        b = b >> 1;
+    }
+    return __nib_w_q;
+}
+
+fn uint64_t __nib_div64(uint64_t a, uint64_t b) {
+    uint8_t i;
+    bool bit;
+
+    if (b == 0) {
+        return 0;
+    }
+
+    __nib_w_q = 0;
+    __nib_w_r = 0;
+    i = 64;
+    while (i != 0) {
+        bit = (a >> 63) != 0;
+        __nib_w_r = __nib_w_r << 1;
+        __nib_w_r = __nib_w_r | (uint64_t)bit;
+        a = a << 1;
+        __nib_w_q = __nib_w_q << 1;
+        if (__nib_w_r >= b) {
+            __nib_w_r = __nib_w_r - b;
+            __nib_w_q = __nib_w_q | 1;
+        }
+        i = i - 1;
+    }
+    return __nib_w_q;
+}
+
+fn uint64_t __nib_mod64(uint64_t a, uint64_t b) {
+    uint8_t i;
+    bool bit;
+
+    if (b == 0) {
+        return 0;
+    }
+
+    __nib_w_q = 0;
+    __nib_w_r = 0;
+    i = 64;
+    while (i != 0) {
+        bit = (a >> 63) != 0;
+        __nib_w_r = __nib_w_r << 1;
+        __nib_w_r = __nib_w_r | (uint64_t)bit;
+        a = a << 1;
+        __nib_w_q = __nib_w_q << 1;
+        if (__nib_w_r >= b) {
+            __nib_w_r = __nib_w_r - b;
+            __nib_w_q = __nib_w_q | 1;
+        }
+        i = i - 1;
+    }
+    return __nib_w_r;
+}
+
+fn int64_t __nib_smul64(int64_t a, int64_t b) {
+    __nib_mul64((uint64_t)a, (uint64_t)b);
+    return (int64_t)__nib_w_q;
+}
+
+fn int64_t __nib_sdiv64(int64_t a, int64_t b) {
+    bool negative;
+
+    negative = false;
+    if (a < 0) {
+        negative = !negative;
+        a = (int64_t)(0 - (uint64_t)a);
+    }
+    if (b < 0) {
+        negative = !negative;
+        b = (int64_t)(0 - (uint64_t)b);
+    }
+    __nib_div64((uint64_t)a, (uint64_t)b);
+    if (negative) {
+        __nib_w_q = 0 - __nib_w_q;
+    }
+    return (int64_t)__nib_w_q;
+}
+
+fn int64_t __nib_smod64(int64_t a, int64_t b) {
+    bool negative;
+
+    negative = a < 0;
+    if (a < 0) {
+        a = (int64_t)(0 - (uint64_t)a);
+    }
+    if (b < 0) {
+        b = (int64_t)(0 - (uint64_t)b);
+    }
+    __nib_mod64((uint64_t)a, (uint64_t)b);
+    if (negative) {
+        __nib_w_r = 0 - __nib_w_r;
+    }
+    return (int64_t)__nib_w_r;
+}
+
+// 64-bit print helpers used by the compile-time print expander.
+// Kept out of uart.nbl so ordinary UART programs do not mention 64-bit
+// types and therefore do not pull in the wide arithmetic helpers.
+fn void uart_print_dec32_digits(uint32_t v) {
+    uint32_t divisor;
+    nibble digit;
+
+    divisor = 1000000000;
+    while (divisor != 0) {
+        digit = (nibble)(v / divisor);
+        uart_putc('0' + digit);
+        v = v % divisor;
+        divisor = divisor / 10;
+    }
+}
+
+fn void uart_print_dec64(uint64_t v) {
+    uint32_t high;
+    uint32_t low;
+
+    high = (uint32_t)(v >> 32);
+    low = (uint32_t)v;
+    if (high != 0) {
+        uart_print_dec32(high);
+        uart_print_dec32_digits(low);
+    } else {
+        uart_print_dec32(low);
+    }
+}
+
+fn void uart_print_dec64_signed(int64_t v) {
+    uint64_t magnitude;
+
+    if (v < 0) {
+        uart_putc('-');
+        magnitude = 0 - (uint64_t)v;
+    } else {
+        magnitude = (uint64_t)v;
+    }
+    uart_print_dec64(magnitude);
+}
+
+fn void uart_print_hex64(uint64_t v) {
+    uart_print_hex32((uint32_t)(v >> 32));
+    uart_print_hex32((uint32_t)v);
+}
+
+fn void uart_print_bin64(uint64_t v) {
+    uart_print_bin32((uint32_t)(v >> 32));
+    uart_print_bin32((uint32_t)v);
+}
+

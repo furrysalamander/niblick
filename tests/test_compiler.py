@@ -1,4 +1,4 @@
-"""End-to-end tests for BadgeC: source -> asm -> hex -> emulator."""
+"""End-to-end tests for Niblick: source -> asm -> hex -> emulator."""
 
 from __future__ import annotations
 
@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file, code_words
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.errors import BadgeCompileError, BadgeTypeError
-from badgec.loader import load_program
+from niblick.assembler import assemble_file, code_words
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.errors import NiblickCompileError, NiblickTypeError
+from niblick.loader import load_program
 
 
 def build(tmp_path: Path, source: str, name: str = "prog") -> tuple[Compiler, Path]:
-    source_path = tmp_path / f"{name}.badge"
+    source_path = tmp_path / f"{name}.nbl"
     source_path.write_text(source)
     compiler = Compiler(load_program(source_path), str(source_path))
     asm = compiler.compile()
@@ -256,10 +256,10 @@ def test_non_tail_recursion_is_rejected(tmp_path: Path) -> None:
         nibble x = f(3);
     }
     """
-    source_path = tmp_path / "bad.badge"
+    source_path = tmp_path / "bad.nbl"
     source_path.write_text(source)
     compiler = Compiler(load_program(source_path), str(source_path))
-    with pytest.raises(BadgeCompileError, match="non-tail recursion"):
+    with pytest.raises(NiblickCompileError, match="non-tail recursion"):
         compiler.compile()
 
 
@@ -295,7 +295,7 @@ def test_uart_puts_and_echo(tmp_path: Path) -> None:
     compiler, hex_path = build(
         tmp_path,
         """
-        import "lib/uart.badge";
+        import "lib/uart.nbl";
         char c;
         fn main() {
             uart_init(3);
@@ -347,17 +347,17 @@ def test_type_errors_are_reported(tmp_path: Path) -> None:
         x = c;
     }
     """
-    source_path = tmp_path / "badtype.badge"
+    source_path = tmp_path / "badtype.nbl"
     source_path.write_text(source)
     compiler = Compiler(load_program(source_path), str(source_path))
-    with pytest.raises(BadgeTypeError, match="cannot convert char to nibble"):
+    with pytest.raises(NiblickTypeError, match="cannot convert char to nibble"):
         compiler.compile()
 
 
 def test_const_nibble_table_after_char_table(tmp_path: Path) -> None:
     """Regression test for the assembler's BYTE label-count bug.
 
-    BadgeC emits flash char data as NIBBLE directives so a later label is
+    Niblick emits flash char data as NIBBLE directives so a later label is
     resolved to the correct 12-bit address.
     """
     compiler, hex_path = build(

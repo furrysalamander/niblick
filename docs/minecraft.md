@@ -1,15 +1,16 @@
 # Minecraft 1.8.9 void server
 
-`examples/mc_void.badge` is a minimal Minecraft Java Edition server for the
+`examples/mc_void.nbl` is a minimal Minecraft Java Edition server for the
 Voja4 badge and a W5500 Ethernet module. It targets **1.8.9 / protocol 47**,
 the last version with uncompressed chunk packets and without the modern
 configuration/registry phases.
 
-## What it does
+## Behavior
 
 - Listens on `192.168.1.50:25565` (static IP, gateway `192.168.1.10`).
 - Answers the server-list ping with a MOTD and protocol 47.
-- Lets one vanilla 1.8.9 client join a 16x16 stone platform in a void world.
+- Accepts one vanilla 1.8.9 client connection to a 16x16 stone platform in a
+  void world.
 - Sends one chunk section at y=64 with a 16x16 stone platform, full
   block/sky light, and the void biome (127).
 - Confirms block breaks and placements with `0x23 Block Change`; placement

@@ -1,6 +1,6 @@
 {
   "files.associations": {
-    "*.badge": "badgec",
+    "*.nbl": "niblick",
     "**/*.asm": "voja4-asm"
   }
 }

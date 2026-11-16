@@ -2,9 +2,9 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "badgec",
+      "type": "niblick",
       "request": "launch",
-      "name": "BadgeC: Run Program",
+      "name": "Niblick: Run Program",
       "program": "${file}",
       "cwd": "${workspaceFolder}",
       "stopOnEntry": true

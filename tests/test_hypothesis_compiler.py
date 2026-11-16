@@ -9,10 +9,10 @@ import pytest
 hypothesis = pytest.importorskip("hypothesis")
 from hypothesis import HealthCheck, given, settings, strategies as st  # noqa: E402
 
-from badgec.assembler import assemble_file  # noqa: E402
-from badgec.compiler import Compiler  # noqa: E402
-from badgec.emulator import Emulator  # noqa: E402
-from badgec.loader import load_source  # noqa: E402
+from niblick.assembler import assemble_file  # noqa: E402
+from niblick.compiler import Compiler  # noqa: E402
+from niblick.emulator import Emulator  # noqa: E402
+from niblick.loader import load_source  # noqa: E402
 
 
 @st.composite
@@ -48,7 +48,7 @@ def reference(start: int, steps: list[tuple[str, int]]) -> int:
 
 
 def compile_and_run(tmp_path: Path, source: str) -> int:
-    path = tmp_path / "property.badge"
+    path = tmp_path / "property.nbl"
     path.write_text(source)
     compiler = Compiler(load_source(source, filename=str(path)), str(path))
     asm = compiler.compile()

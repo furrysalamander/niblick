@@ -5,7 +5,7 @@
 ; 0x38 sticky, 0x39..0x3B exp A, 0x3C..0x3E exp B,
 ; 0x3F mode (0 add/sub, 1 multiply, 2 divide).
 
-fn___bc_f32_add:
+fn___nib_f32_add:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -40,9 +40,9 @@ fn___bc_f32_add:
     MOV [0x2F], R0
     MOV R0, 0
     MOV [0x3F], R0
-    GOTO fn___bc_f32_core
+    GOTO fn___nib_f32_core
 
-fn___bc_f32_sub:
+fn___nib_f32_sub:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -80,9 +80,9 @@ fn___bc_f32_sub:
     MOV [0x2F], R0
     MOV R0, 0
     MOV [0x3F], R0
-    GOTO fn___bc_f32_core
+    GOTO fn___nib_f32_core
 
-fn___bc_f32_mul:
+fn___nib_f32_mul:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -117,9 +117,9 @@ fn___bc_f32_mul:
     MOV [0x2F], R0
     MOV R0, 1
     MOV [0x3F], R0
-    GOTO fn___bc_f32_core
+    GOTO fn___nib_f32_core
 
-fn___bc_f32_div:
+fn___nib_f32_div:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -154,9 +154,9 @@ fn___bc_f32_div:
     MOV [0x2F], R0
     MOV R0, 2
     MOV [0x3F], R0
-    GOTO fn___bc_f32_core
+    GOTO fn___nib_f32_core
 
-fn___bc_f32_core:
+fn___nib_f32_core:
     MOV R0, [0x27]
     AND R0, 8
     MOV R8, R0
@@ -243,7 +243,7 @@ fn___bc_f32_core:
     MOV [0x3D], R0
     MOV R0, 0
     MOV [0x3E], R0
-; @badgec-f32: dispatch-begin
+; @niblick-f32: dispatch-begin
     MOV R0, [0x3F]
     CP R0, 1
     SKIP Z, 2
@@ -255,7 +255,7 @@ fn___bc_f32_core:
     GOTO .mode_add
     GOTO .div_special
 .mode_add:
-; @badgec-f32: dispatch-end
+; @niblick-f32: dispatch-end
     MOV R0, [0x39]
     CP R0, 0xF
     SKIP NZ, 2
@@ -664,7 +664,7 @@ fn___bc_f32_core:
     MOV [0x3E], R0
     GOTO .subnorm_5
 .align:
-; @badgec-f32: align-dispatch-begin
+; @niblick-f32: align-dispatch-begin
     MOV R0, [0x3F]
     CP R0, 1
     SKIP Z, 2
@@ -676,7 +676,7 @@ fn___bc_f32_core:
     GOTO .align_addsub
     GOTO .div_calc
 .align_addsub:
-; @badgec-f32: align-dispatch-end
+; @niblick-f32: align-dispatch-end
     MOV R0, [0x3B]
     MOV R1, R0
     MOV R0, [0x3E]
@@ -1755,9 +1755,9 @@ fn___bc_f32_core:
     MOV R7, 15
     MOV R8, 7
     RET R0, 0
-; @badgec-f32: muldiv-begin
+; @niblick-f32: muldiv-begin
 .mul_special:
-; @badgec-f32: mul-special-begin
+; @niblick-f32: mul-special-begin
     MOV R0, [0x39]
     CP R0, 15
     SKIP Z, 2
@@ -1913,9 +1913,9 @@ fn___bc_f32_core:
     GOTO .ret_inf_signed
 .not_inf_38:
     GOTO .unpack_a
-; @badgec-f32: mul-special-end
+; @niblick-f32: mul-special-end
 .div_special:
-; @badgec-f32: div-special-begin
+; @niblick-f32: div-special-begin
     MOV R0, [0x39]
     CP R0, 15
     SKIP Z, 2
@@ -2092,7 +2092,7 @@ fn___bc_f32_core:
     GOTO .nan
 .not_inf_46:
     GOTO .ret_inf_signed
-; @badgec-f32: div-special-end
+; @niblick-f32: div-special-end
 .ret_zero_signed:
     MOV R1, R8
     XOR R1, R9
@@ -2111,32 +2111,32 @@ fn___bc_f32_core:
     MOV R8, R1
     GOTO .pack_inf
 .mul_calc:
-; @badgec-f32: mul-calc-begin
+; @niblick-f32: mul-calc-begin
     MOV R0, [0x39]
     MOV R1, R0
     MOV R0, [0x3C]
     ADD R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+0}], R0
+    MOV [${__nib_f32_tmp+0}], R0
     MOV R0, [0x3A]
     MOV R1, R0
     MOV R0, [0x3D]
     ADC R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+1}], R0
+    MOV [${__nib_f32_tmp+1}], R0
     MOV R0, [0x3B]
     MOV R1, R0
     MOV R0, [0x3E]
     ADC R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+2}], R0
+    MOV [${__nib_f32_tmp+2}], R0
     MOV R1, 1
-    MOV R0, [${__bc_f32_tmp+2}]
+    MOV R0, [${__nib_f32_tmp+2}]
     SUB R0, R1
-    MOV [${__bc_f32_tmp+2}], R0
+    MOV [${__nib_f32_tmp+2}], R0
     MOV R0, R8
     XOR R0, R9
-    MOV [${__bc_f32_tmp2+0}], R0
+    MOV [${__nib_f32_tmp2+0}], R0
     MOV R0, [0x25]
     MOV [0x3C], R0
     MOV R0, [0x26]
@@ -2144,17 +2144,17 @@ fn___bc_f32_core:
     MOV R0, [0x27]
     MOV [0x3E], R0
     MOV R0, [0x2D]
-    MOV [${__bc_f32_tmp+3}], R0
+    MOV [${__nib_f32_tmp+3}], R0
     MOV R0, [0x2E]
-    MOV [${__bc_f32_tmp+4}], R0
+    MOV [${__nib_f32_tmp+4}], R0
     MOV R0, [0x2F]
-    MOV [${__bc_f32_tmp+5}], R0
+    MOV [${__nib_f32_tmp+5}], R0
     MOV R0, [0x2A]
     MOV [0x3F], R0
     MOV R0, [0x2B]
-    MOV [${__bc_f32_tmp+6}], R0
+    MOV [${__nib_f32_tmp+6}], R0
     MOV R0, [0x2C]
-    MOV [${__bc_f32_tmp+7}], R0
+    MOV [${__nib_f32_tmp+7}], R0
     MOV R0, [0x22]
     MOV [0x20], R0
     MOV R0, [0x23]
@@ -2178,9 +2178,9 @@ fn___bc_f32_core:
     MOV [0x2F], R0
     MOV R0, [0x3F]
     MOV [0x28], R0
-    MOV R0, [${__bc_f32_tmp+6}]
+    MOV R0, [${__nib_f32_tmp+6}]
     MOV [0x29], R0
-    MOV R0, [${__bc_f32_tmp+7}]
+    MOV R0, [${__nib_f32_tmp+7}]
     MOV [0x2A], R0
     MOV R0, 0
     MOV [0x30], R0
@@ -2199,7 +2199,7 @@ fn___bc_f32_core:
     MOV R5, 0
     MOV R6, 2
     MOV R7, 8
-    GOSUB __bc_mul32
+    GOSUB __nib_mul32
     MOV R0, [0x30]
     ADD R0, R1
     MOV [0x30], R0
@@ -2221,17 +2221,17 @@ fn___bc_f32_core:
     MOV R0, [0x36]
     ADC R0, R7
     MOV [0x36], R0
-    MOV R0, [${__bc_f32_tmp+3}]
+    MOV R0, [${__nib_f32_tmp+3}]
     MOV [0x28], R0
-    MOV R0, [${__bc_f32_tmp+4}]
+    MOV R0, [${__nib_f32_tmp+4}]
     MOV [0x29], R0
-    MOV R0, [${__bc_f32_tmp+5}]
+    MOV R0, [${__nib_f32_tmp+5}]
     MOV [0x2A], R0
     MOV R4, 2
     MOV R5, 0
     MOV R6, 2
     MOV R7, 8
-    GOSUB __bc_mul32
+    GOSUB __nib_mul32
     MOV R0, [0x33]
     ADD R0, R1
     MOV [0x33], R0
@@ -2261,15 +2261,15 @@ fn___bc_f32_core:
     MOV [0x22], R0
     MOV R0, [0x3F]
     MOV [0x28], R0
-    MOV R0, [${__bc_f32_tmp+6}]
+    MOV R0, [${__nib_f32_tmp+6}]
     MOV [0x29], R0
-    MOV R0, [${__bc_f32_tmp+7}]
+    MOV R0, [${__nib_f32_tmp+7}]
     MOV [0x2A], R0
     MOV R4, 2
     MOV R5, 0
     MOV R6, 2
     MOV R7, 8
-    GOSUB __bc_mul32
+    GOSUB __nib_mul32
     MOV R0, [0x33]
     ADD R0, R1
     MOV [0x33], R0
@@ -2291,17 +2291,17 @@ fn___bc_f32_core:
     MOV R0, [0x39]
     ADC R0, R7
     MOV [0x39], R0
-    MOV R0, [${__bc_f32_tmp+3}]
+    MOV R0, [${__nib_f32_tmp+3}]
     MOV [0x28], R0
-    MOV R0, [${__bc_f32_tmp+4}]
+    MOV R0, [${__nib_f32_tmp+4}]
     MOV [0x29], R0
-    MOV R0, [${__bc_f32_tmp+5}]
+    MOV R0, [${__nib_f32_tmp+5}]
     MOV [0x2A], R0
     MOV R4, 2
     MOV R5, 0
     MOV R6, 2
     MOV R7, 8
-    GOSUB __bc_mul32
+    GOSUB __nib_mul32
     MOV R0, [0x36]
     ADD R0, R1
     MOV [0x36], R0
@@ -2328,17 +2328,17 @@ fn___bc_f32_core:
     GOTO .mul_no_shift_p
 .mul_no_shift_p:
     MOV R1, 1
-    MOV R0, [${__bc_f32_tmp+0}]
+    MOV R0, [${__nib_f32_tmp+0}]
     ADD R0, R1
-    MOV [${__bc_f32_tmp+0}], R0
+    MOV [${__nib_f32_tmp+0}], R0
     MOV R1, 0
-    MOV R0, [${__bc_f32_tmp+1}]
+    MOV R0, [${__nib_f32_tmp+1}]
     ADC R0, R1
-    MOV [${__bc_f32_tmp+1}], R0
+    MOV [${__nib_f32_tmp+1}], R0
     MOV R1, 0
-    MOV R0, [${__bc_f32_tmp+2}]
+    MOV R0, [${__nib_f32_tmp+2}]
     ADC R0, R1
-    MOV [${__bc_f32_tmp+2}], R0
+    MOV [${__nib_f32_tmp+2}], R0
     GOTO .mul_wrapup
 .mul_shift_p:
     MOV R0, [0x30]
@@ -2387,7 +2387,7 @@ fn___bc_f32_core:
     MOV R0, [0x33]
     OR R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+6}], R0
+    MOV [${__nib_f32_tmp+6}], R0
     MOV R0, [0x34]
     MOV [0x30], R0
     MOV R0, [0x35]
@@ -2404,47 +2404,47 @@ fn___bc_f32_core:
     MOV [0x36], R0
     MOV R0, [0x3B]
     MOV [0x37], R0
-    MOV R0, [${__bc_f32_tmp+6}]
+    MOV R0, [${__nib_f32_tmp+6}]
     MOV [0x38], R0
-    MOV R0, [${__bc_f32_tmp2+0}]
+    MOV R0, [${__nib_f32_tmp2+0}]
     MOV R8, R0
-    MOV R0, [${__bc_f32_tmp+0}]
+    MOV R0, [${__nib_f32_tmp+0}]
     MOV [0x39], R0
-    MOV R0, [${__bc_f32_tmp+1}]
+    MOV R0, [${__nib_f32_tmp+1}]
     MOV [0x3A], R0
-    MOV R0, [${__bc_f32_tmp+2}]
+    MOV R0, [${__nib_f32_tmp+2}]
     MOV [0x3B], R0
     MOV R0, 0
     MOV [0x3F], R0
     GOTO .normalize
-; @badgec-f32: mul-calc-end
+; @niblick-f32: mul-calc-end
 .div_calc:
-; @badgec-f32: div-calc-begin
+; @niblick-f32: div-calc-begin
     MOV R0, R8
     XOR R0, R9
-    MOV [${__bc_f32_tmp+5}], R0
+    MOV [${__nib_f32_tmp+5}], R0
     MOV R0, [0x39]
     MOV R1, R0
     MOV R0, [0x3C]
     SUB R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+0}], R0
+    MOV [${__nib_f32_tmp+0}], R0
     MOV R0, [0x3A]
     MOV R1, R0
     MOV R0, [0x3D]
     SBB R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+1}], R0
+    MOV [${__nib_f32_tmp+1}], R0
     MOV R0, [0x3B]
     MOV R1, R0
     MOV R0, [0x3E]
     SBB R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+2}], R0
+    MOV [${__nib_f32_tmp+2}], R0
     MOV R1, 1
-    MOV R0, [${__bc_f32_tmp+2}]
+    MOV R0, [${__nib_f32_tmp+2}]
     ADD R0, R1
-    MOV [${__bc_f32_tmp+2}], R0
+    MOV [${__nib_f32_tmp+2}], R0
     MOV R0, [0x22]
     MOV [0x30], R0
     MOV R0, [0x23]
@@ -2535,7 +2535,7 @@ fn___bc_f32_core:
     GOTO .div_ge
 .div_ge:
     MOV R0, 1
-    MOV [${__bc_f32_tmp+3}], R0
+    MOV [${__nib_f32_tmp+3}], R0
     MOV R0, [0x30]
     MOV R1, R0
     MOV R0, [0x2A]
@@ -2575,7 +2575,7 @@ fn___bc_f32_core:
     GOTO .div_saved
 .div_less:
     MOV R0, 0
-    MOV [${__bc_f32_tmp+3}], R0
+    MOV [${__nib_f32_tmp+3}], R0
 .div_saved:
     MOV R0, [0x2A]
     MOV [0x20], R0
@@ -2632,7 +2632,7 @@ fn___bc_f32_core:
     MOV R5, 8
     MOV R6, 3
     MOV R7, 0
-    GOSUB __bc_divmod32
+    GOSUB __nib_divmod32
     MOV R0, [0x3D]
     MOV [0x3F], R0
     MOV R0, [0x3C]
@@ -2683,7 +2683,7 @@ fn___bc_f32_core:
     MOV R5, 8
     MOV R6, 3
     MOV R7, 0
-    GOSUB __bc_divmod32
+    GOSUB __nib_divmod32
     MOV R0, [0x3D]
     MOV [0x3F], R0
     MOV R0, [0x3C]
@@ -2734,7 +2734,7 @@ fn___bc_f32_core:
     MOV R5, 8
     MOV R6, 3
     MOV R7, 0
-    GOSUB __bc_divmod32
+    GOSUB __nib_divmod32
     MOV R0, [0x3D]
     MOV [0x3F], R0
     MOV R0, [0x3C]
@@ -2785,7 +2785,7 @@ fn___bc_f32_core:
     MOV R5, 8
     MOV R6, 3
     MOV R7, 0
-    GOSUB __bc_divmod32
+    GOSUB __nib_divmod32
     MOV R0, [0x3D]
     MOV [0x3F], R0
     MOV R0, [0x3C]
@@ -2815,7 +2815,7 @@ fn___bc_f32_core:
     MOV R0, [0x35]
     OR R1, R0
     MOV R0, R1
-    MOV [${__bc_f32_tmp+4}], R0
+    MOV [${__nib_f32_tmp+4}], R0
     MOV R0, 0
     ADD R0, 0
     MOV R0, [0x3F]
@@ -2845,11 +2845,11 @@ fn___bc_f32_core:
     MOV R0, 0
     ADC R0, R0
     MOV R1, R0
-    MOV R0, [${__bc_f32_tmp+4}]
+    MOV R0, [${__nib_f32_tmp+4}]
     OR R1, R0
     MOV R0, R1
     MOV [0x38], R0
-    MOV R0, [${__bc_f32_tmp+3}]
+    MOV R0, [${__nib_f32_tmp+3}]
     CP R0, 0
     SKIP Z, 2
     GOTO .div_set_q0
@@ -2859,19 +2859,19 @@ fn___bc_f32_core:
     OR R0, 8
     MOV [0x37], R0
 .div_no_q0:
-    MOV R0, [${__bc_f32_tmp+5}]
+    MOV R0, [${__nib_f32_tmp+5}]
     MOV R8, R0
-    MOV R0, [${__bc_f32_tmp+0}]
+    MOV R0, [${__nib_f32_tmp+0}]
     MOV [0x39], R0
-    MOV R0, [${__bc_f32_tmp+1}]
+    MOV R0, [${__nib_f32_tmp+1}]
     MOV [0x3A], R0
-    MOV R0, [${__bc_f32_tmp+2}]
+    MOV R0, [${__nib_f32_tmp+2}]
     MOV [0x3B], R0
     MOV R0, 0
     MOV [0x3F], R0
     GOTO .normalize
-; @badgec-f32: div-calc-end
-; @badgec-f32: muldiv-end
+; @niblick-f32: div-calc-end
+; @niblick-f32: muldiv-end
 .return_a:
     MOV R0, [0x20]
     MOV R1, R0
@@ -2910,8 +2910,8 @@ fn___bc_f32_core:
     RET R0, 0
 
 
-; nibble __bc_f32_cmp(float a, float b)
-fn___bc_f32_cmp:
+; nibble __nib_f32_cmp(float a, float b)
+fn___nib_f32_cmp:
     ; -0 and +0 compare equal.
     MOV R0, [${a}]
     MOV R1, R0
@@ -3070,8 +3070,8 @@ fn___bc_f32_cmp:
     MOV R1, 1
     RET R0, 0
 
-; bool __bc_f32_is_zero(float a)
-fn___bc_f32_is_zero:
+; bool __nib_f32_is_zero(float a)
+fn___nib_f32_is_zero:
     MOV R0, [${a}]
     MOV R1, R0
     MOV R0, [${a+1}]
@@ -3097,7 +3097,7 @@ fn___bc_f32_is_zero:
     INC R1
     RET R0, 0
 
-fn___bc_u32_to_f32:
+fn___nib_u32_to_f32:
     MOV R0, [${v+0}]
     MOV [0x20], R0
     MOV R0, [${v+1}]
@@ -3116,8 +3116,8 @@ fn___bc_u32_to_f32:
     MOV [0x27], R0
     MOV R0, 0
     MOV [0x3A], R0
-    GOTO fn___bc_f32_int32_core
-fn___bc_i32_to_f32:
+    GOTO fn___nib_f32_int32_core
+fn___nib_i32_to_f32:
     MOV R0, [${v+0}]
     MOV [0x20], R0
     MOV R0, [${v+1}]
@@ -3143,7 +3143,7 @@ fn___bc_i32_to_f32:
 .i32p_1:
     MOV R0, 0
     MOV [0x3A], R0
-    GOTO fn___bc_f32_int32_core
+    GOTO fn___nib_f32_int32_core
 .i32n_2:
     MOV R0, 8
     MOV [0x3A], R0
@@ -3203,8 +3203,8 @@ fn___bc_i32_to_f32:
     MOV R0, [0x27]
     ADC R0, R1
     MOV [0x27], R0
-    GOTO fn___bc_f32_int32_core
-fn___bc_f32_int32_core:
+    GOTO fn___nib_f32_int32_core
+fn___nib_f32_int32_core:
     MOV R0, [0x20]
     MOV R1, R0
     MOV R0, [0x21]
@@ -3412,7 +3412,7 @@ fn___bc_f32_int32_core:
     OR R0, R9
     MOV R8, R0
     RET R0, 0
-fn___bc_u64_to_f32:
+fn___nib_u64_to_f32:
     MOV R0, [${v+0}]
     MOV [0x20], R0
     MOV R0, [${v+1}]
@@ -3447,8 +3447,8 @@ fn___bc_u64_to_f32:
     MOV [0x2F], R0
     MOV R0, 0
     MOV [0x32], R0
-    GOTO fn___bc_f32_int64_core
-fn___bc_i64_to_f32:
+    GOTO fn___nib_f32_int64_core
+fn___nib_i64_to_f32:
     MOV R0, [${v+0}]
     MOV [0x20], R0
     MOV R0, [${v+1}]
@@ -3490,7 +3490,7 @@ fn___bc_i64_to_f32:
 .i64p_15:
     MOV R0, 0
     MOV [0x32], R0
-    GOTO fn___bc_f32_int64_core
+    GOTO fn___nib_f32_int64_core
 .i64n_16:
     MOV R0, 8
     MOV [0x32], R0
@@ -3606,8 +3606,8 @@ fn___bc_i64_to_f32:
     MOV R0, [0x2F]
     ADC R0, R1
     MOV [0x2F], R0
-    GOTO fn___bc_f32_int64_core
-fn___bc_f32_int64_core:
+    GOTO fn___nib_f32_int64_core
+fn___nib_f32_int64_core:
     MOV R0, [0x20]
     MOV R1, R0
     MOV R0, [0x21]
@@ -3871,7 +3871,7 @@ fn___bc_f32_int64_core:
     OR R0, R9
     MOV R8, R0
     RET R0, 0
-fn___bc_f32_to_u32:
+fn___nib_f32_to_u32:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -4168,7 +4168,7 @@ fn___bc_f32_to_u32:
     MOV R7, 0
     MOV R8, 8
     RET R0, 0
-fn___bc_f32_to_i32:
+fn___nib_f32_to_i32:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -4530,7 +4530,7 @@ fn___bc_f32_to_i32:
     MOV R7, 0
     MOV R8, 8
     RET R0, 0
-fn___bc_f32_to_u64_asm:
+fn___nib_f32_to_u64_asm:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -4840,100 +4840,100 @@ fn___bc_f32_to_u64_asm:
     GOTO .f2l_loop_97
 .f2l_done_99:
     MOV R0, [0x30]
-    MOV [${__bc_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+0}], R0
     MOV R0, [0x31]
-    MOV [${__bc_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+1}], R0
     MOV R0, [0x32]
-    MOV [${__bc_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+2}], R0
     MOV R0, [0x33]
-    MOV [${__bc_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+3}], R0
     MOV R0, [0x34]
-    MOV [${__bc_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+4}], R0
     MOV R0, [0x35]
-    MOV [${__bc_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+5}], R0
     MOV R0, [0x36]
-    MOV [${__bc_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+6}], R0
     MOV R0, [0x37]
-    MOV [${__bc_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+7}], R0
     MOV R0, [0x38]
-    MOV [${__bc_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+8}], R0
     MOV R0, [0x39]
-    MOV [${__bc_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+9}], R0
     MOV R0, [0x3A]
-    MOV [${__bc_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+10}], R0
     MOV R0, [0x3B]
-    MOV [${__bc_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+11}], R0
     MOV R0, [0x3C]
-    MOV [${__bc_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+12}], R0
     MOV R0, [0x3D]
-    MOV [${__bc_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+13}], R0
     MOV R0, [0x3E]
-    MOV [${__bc_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+14}], R0
     MOV R0, [0x3F]
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
 .f2l_zero_83:
     MOV R0, 0
-    MOV [${__bc_conv64_f32+0}], R0
-    MOV [${__bc_conv64_f32+1}], R0
-    MOV [${__bc_conv64_f32+2}], R0
-    MOV [${__bc_conv64_f32+3}], R0
-    MOV [${__bc_conv64_f32+4}], R0
-    MOV [${__bc_conv64_f32+5}], R0
-    MOV [${__bc_conv64_f32+6}], R0
-    MOV [${__bc_conv64_f32+7}], R0
-    MOV [${__bc_conv64_f32+8}], R0
-    MOV [${__bc_conv64_f32+9}], R0
-    MOV [${__bc_conv64_f32+10}], R0
-    MOV [${__bc_conv64_f32+11}], R0
-    MOV [${__bc_conv64_f32+12}], R0
-    MOV [${__bc_conv64_f32+13}], R0
-    MOV [${__bc_conv64_f32+14}], R0
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
 .f2l_sat_78:
     GOTO .f2l_smax_79
 .f2l_smax_79:
     MOV R0, 15
-    MOV [${__bc_conv64_f32+0}], R0
-    MOV [${__bc_conv64_f32+1}], R0
-    MOV [${__bc_conv64_f32+2}], R0
-    MOV [${__bc_conv64_f32+3}], R0
-    MOV [${__bc_conv64_f32+4}], R0
-    MOV [${__bc_conv64_f32+5}], R0
-    MOV [${__bc_conv64_f32+6}], R0
-    MOV [${__bc_conv64_f32+7}], R0
-    MOV [${__bc_conv64_f32+8}], R0
-    MOV [${__bc_conv64_f32+9}], R0
-    MOV [${__bc_conv64_f32+10}], R0
-    MOV [${__bc_conv64_f32+11}], R0
-    MOV [${__bc_conv64_f32+12}], R0
-    MOV [${__bc_conv64_f32+13}], R0
-    MOV [${__bc_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+14}], R0
     MOV R0, 15
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
 .f2l_smin_80:
     MOV R0, 0
-    MOV [${__bc_conv64_f32+0}], R0
-    MOV [${__bc_conv64_f32+1}], R0
-    MOV [${__bc_conv64_f32+2}], R0
-    MOV [${__bc_conv64_f32+3}], R0
-    MOV [${__bc_conv64_f32+4}], R0
-    MOV [${__bc_conv64_f32+5}], R0
-    MOV [${__bc_conv64_f32+6}], R0
-    MOV [${__bc_conv64_f32+7}], R0
-    MOV [${__bc_conv64_f32+8}], R0
-    MOV [${__bc_conv64_f32+9}], R0
-    MOV [${__bc_conv64_f32+10}], R0
-    MOV [${__bc_conv64_f32+11}], R0
-    MOV [${__bc_conv64_f32+12}], R0
-    MOV [${__bc_conv64_f32+13}], R0
-    MOV [${__bc_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+14}], R0
     MOV R0, 8
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
-fn___bc_f32_to_i64_asm:
+fn___nib_f32_to_i64_asm:
     MOV R0, [${a+0}]
     MOV [0x20], R0
     MOV R0, [${a+1}]
@@ -5363,56 +5363,56 @@ fn___bc_f32_to_i64_asm:
 .f2l_sp_126:
 .f2l_sd_128:
     MOV R0, [0x30]
-    MOV [${__bc_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+0}], R0
     MOV R0, [0x31]
-    MOV [${__bc_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+1}], R0
     MOV R0, [0x32]
-    MOV [${__bc_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+2}], R0
     MOV R0, [0x33]
-    MOV [${__bc_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+3}], R0
     MOV R0, [0x34]
-    MOV [${__bc_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+4}], R0
     MOV R0, [0x35]
-    MOV [${__bc_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+5}], R0
     MOV R0, [0x36]
-    MOV [${__bc_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+6}], R0
     MOV R0, [0x37]
-    MOV [${__bc_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+7}], R0
     MOV R0, [0x38]
-    MOV [${__bc_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+8}], R0
     MOV R0, [0x39]
-    MOV [${__bc_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+9}], R0
     MOV R0, [0x3A]
-    MOV [${__bc_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+10}], R0
     MOV R0, [0x3B]
-    MOV [${__bc_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+11}], R0
     MOV R0, [0x3C]
-    MOV [${__bc_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+12}], R0
     MOV R0, [0x3D]
-    MOV [${__bc_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+13}], R0
     MOV R0, [0x3E]
-    MOV [${__bc_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+14}], R0
     MOV R0, [0x3F]
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
 .f2l_zero_108:
     MOV R0, 0
-    MOV [${__bc_conv64_f32+0}], R0
-    MOV [${__bc_conv64_f32+1}], R0
-    MOV [${__bc_conv64_f32+2}], R0
-    MOV [${__bc_conv64_f32+3}], R0
-    MOV [${__bc_conv64_f32+4}], R0
-    MOV [${__bc_conv64_f32+5}], R0
-    MOV [${__bc_conv64_f32+6}], R0
-    MOV [${__bc_conv64_f32+7}], R0
-    MOV [${__bc_conv64_f32+8}], R0
-    MOV [${__bc_conv64_f32+9}], R0
-    MOV [${__bc_conv64_f32+10}], R0
-    MOV [${__bc_conv64_f32+11}], R0
-    MOV [${__bc_conv64_f32+12}], R0
-    MOV [${__bc_conv64_f32+13}], R0
-    MOV [${__bc_conv64_f32+14}], R0
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
 .f2l_sat_103:
     MOV R0, [0x2F]
@@ -5422,41 +5422,41 @@ fn___bc_f32_to_i64_asm:
     GOTO .f2l_smax_104
 .f2l_smax_104:
     MOV R0, 15
-    MOV [${__bc_conv64_f32+0}], R0
-    MOV [${__bc_conv64_f32+1}], R0
-    MOV [${__bc_conv64_f32+2}], R0
-    MOV [${__bc_conv64_f32+3}], R0
-    MOV [${__bc_conv64_f32+4}], R0
-    MOV [${__bc_conv64_f32+5}], R0
-    MOV [${__bc_conv64_f32+6}], R0
-    MOV [${__bc_conv64_f32+7}], R0
-    MOV [${__bc_conv64_f32+8}], R0
-    MOV [${__bc_conv64_f32+9}], R0
-    MOV [${__bc_conv64_f32+10}], R0
-    MOV [${__bc_conv64_f32+11}], R0
-    MOV [${__bc_conv64_f32+12}], R0
-    MOV [${__bc_conv64_f32+13}], R0
-    MOV [${__bc_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+14}], R0
     MOV R0, 7
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0
 .f2l_smin_105:
     MOV R0, 0
-    MOV [${__bc_conv64_f32+0}], R0
-    MOV [${__bc_conv64_f32+1}], R0
-    MOV [${__bc_conv64_f32+2}], R0
-    MOV [${__bc_conv64_f32+3}], R0
-    MOV [${__bc_conv64_f32+4}], R0
-    MOV [${__bc_conv64_f32+5}], R0
-    MOV [${__bc_conv64_f32+6}], R0
-    MOV [${__bc_conv64_f32+7}], R0
-    MOV [${__bc_conv64_f32+8}], R0
-    MOV [${__bc_conv64_f32+9}], R0
-    MOV [${__bc_conv64_f32+10}], R0
-    MOV [${__bc_conv64_f32+11}], R0
-    MOV [${__bc_conv64_f32+12}], R0
-    MOV [${__bc_conv64_f32+13}], R0
-    MOV [${__bc_conv64_f32+14}], R0
+    MOV [${__nib_conv64_f32+0}], R0
+    MOV [${__nib_conv64_f32+1}], R0
+    MOV [${__nib_conv64_f32+2}], R0
+    MOV [${__nib_conv64_f32+3}], R0
+    MOV [${__nib_conv64_f32+4}], R0
+    MOV [${__nib_conv64_f32+5}], R0
+    MOV [${__nib_conv64_f32+6}], R0
+    MOV [${__nib_conv64_f32+7}], R0
+    MOV [${__nib_conv64_f32+8}], R0
+    MOV [${__nib_conv64_f32+9}], R0
+    MOV [${__nib_conv64_f32+10}], R0
+    MOV [${__nib_conv64_f32+11}], R0
+    MOV [${__nib_conv64_f32+12}], R0
+    MOV [${__nib_conv64_f32+13}], R0
+    MOV [${__nib_conv64_f32+14}], R0
     MOV R0, 8
-    MOV [${__bc_conv64_f32+15}], R0
+    MOV [${__nib_conv64_f32+15}], R0
     RET R0, 0

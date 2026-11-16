@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Send a BadgeC .hex file to a Supercon.6 badge over a 3.3 V UART.
+"""Send a Niblick .hex file to a Supercon.6 badge over a 3.3 V UART.
 
 Usage:
     python3 scripts/flash.py /dev/ttyUSB0 examples/hello.hex

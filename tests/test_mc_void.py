@@ -1,4 +1,4 @@
-"""End-to-end protocol test for examples/mc_void.badge.
+"""End-to-end protocol test for examples/mc_void.nbl.
 
 A localhost Minecraft 1.8.9 client talks to the badge firmware running in the
 headless emulator through a small W5500/TCP model.
@@ -12,9 +12,9 @@ import threading
 import time
 from pathlib import Path
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.loader import load_program
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.loader import load_program
 
 from w5500_sim import W5500Emulator, W5500Model
 
@@ -227,7 +227,7 @@ def login_test() -> None:
 
 
 def test_mc_void_status_and_login(tmp_path: Path) -> None:
-    source = ROOT / "examples" / "mc_void.badge"
+    source = ROOT / "examples" / "mc_void.nbl"
     compiler = Compiler(load_program(source), str(source))
     asm = compiler.compile()
     asm_path = tmp_path / "mc_void.asm"

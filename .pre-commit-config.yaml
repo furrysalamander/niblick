@@ -8,5 +8,5 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
-        args: ["badgec/compiler.py", "badgec/format.py", "badgec/inline.py", "badgec/asm_opt.py", "badgec/loader.py", "badgec/emulator.py", "badgec/parser.py", "badgec/types.py"]
+        args: ["niblick/compiler.py", "niblick/format.py", "niblick/inline.py", "niblick/asm_opt.py", "niblick/loader.py", "niblick/emulator.py", "niblick/parser.py", "niblick/types.py"]
         pass_filenames: false

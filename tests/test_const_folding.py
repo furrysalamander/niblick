@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from badgec.assembler import assemble_file
-from badgec.compiler import Compiler
-from badgec.emulator import Emulator
-from badgec.errors import BadgeTypeError
-from badgec.parser import parse
+from niblick.assembler import assemble_file
+from niblick.compiler import Compiler
+from niblick.emulator import Emulator
+from niblick.errors import NiblickTypeError
+from niblick.parser import parse
 
 
 def build(tmp_path: Path, source: str, name: str = "const"):
-    path = tmp_path / f"{name}.badge"
+    path = tmp_path / f"{name}.nbl"
     path.write_text(source)
     compiler = Compiler(parse(source, str(path)), str(path))
     asm_path = tmp_path / f"{name}.asm"
@@ -67,8 +67,8 @@ def test_scalar_const_globals_have_no_ram_storage(tmp_path: Path) -> None:
 
     assert "BSET R3, 0" in asm
     assert "BSET R3, 1" in asm
-    assert "GOSUB __bc_gpio_set" not in asm
-    assert not any(entry.startswith("__bc_gpio_") for entry in compiler.used_runtime)
+    assert "GOSUB __nib_gpio_set" not in asm
+    assert not any(entry.startswith("__nib_gpio_") for entry in compiler.used_runtime)
 
     out = compiler.globals["out"].address
     assert out is not None
@@ -217,7 +217,7 @@ def test_const_folding_matches_runtime_expressions(tmp_path: Path) -> None:
 
 
 def test_dynamic_scalar_const_is_rejected(tmp_path: Path) -> None:
-    path = tmp_path / "dynamic.badge"
+    path = tmp_path / "dynamic.nbl"
     source = """
     nibble x;
     nibble r;
@@ -225,21 +225,21 @@ def test_dynamic_scalar_const_is_rejected(tmp_path: Path) -> None:
     fn main() { x = 1; r = A; }
     """
     path.write_text(source)
-    with pytest.raises(BadgeTypeError, match="compile-time constant"):
+    with pytest.raises(NiblickTypeError, match="compile-time constant"):
         Compiler(parse(source, str(path)), str(path)).compile()
 
 
 def test_const_address_and_assignment_are_rejected(tmp_path: Path) -> None:
     address_source = "const nibble A = 1; nibble x; fn main() { x = &A; }"
-    path = tmp_path / "address.badge"
+    path = tmp_path / "address.nbl"
     path.write_text(address_source)
-    with pytest.raises(BadgeTypeError, match="address of const"):
+    with pytest.raises(NiblickTypeError, match="address of const"):
         Compiler(parse(address_source, str(path)), str(path)).compile()
 
     assign_source = "const nibble A = 1; fn main() { A = 2; }"
-    path = tmp_path / "assign.badge"
+    path = tmp_path / "assign.nbl"
     path.write_text(assign_source)
-    with pytest.raises(BadgeTypeError, match="cannot assign to const"):
+    with pytest.raises(NiblickTypeError, match="cannot assign to const"):
         Compiler(parse(assign_source, str(path)), str(path)).compile()
 
 

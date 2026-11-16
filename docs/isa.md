@@ -170,7 +170,7 @@ semicolon cannot appear in the string because it starts a comment. `BYTE` takes
 > `BYTE` or `ASCII` directive as **one** word when resolving a later label,
 > even though the second pass emits **two** words. A label placed after
 > `BYTE`/`ASCII` data therefore resolves one word too low per directive.
-> BadgeC avoids the bug by emitting flash bytes as pairs of `NIBBLE`
+> Niblick avoids the bug by emitting flash bytes as pairs of `NIBBLE`
 > directives. If you hand-write tables and use labels after `BYTE`, either
 > switch to `NIBBLE` or calculate the address explicitly.
 

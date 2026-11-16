@@ -1,0 +1,260 @@
+// Minimal W5500 register access over SPI.
+//
+// Wiring lives in lib/boards/voja4.nbl:
+//   OUT0 = W5500 RST
+//   OUT1 = W5500 CS
+//   OUT2 = SCLK
+//   OUT3 = MOSI
+//   IN0  = MISO
+//
+// This module only implements reset and register read/write.  Socket setup
+// and UDP/TCP helpers can be layered on top.
+
+import "lib/boards/voja4.nbl";
+import "lib/spi.nbl";
+import "lib/drivers/asm/w5500.asm";
+
+extern fn uint16_t w5500_tx_pointer();
+extern fn void w5500_delay();
+extern fn char w5500_rx_peek(uint16_t offset);
+extern fn void w5500_rx_consume(uint16_t count);
+
+char w5500_scratch[4];
+
+fn void w5500_reset() {
+    gpio_clear(W5500_RST);
+    delay(15);
+    delay(15);
+    gpio_set(W5500_RST);
+    delay(15);
+    delay(15);
+    delay(15);
+}
+
+// bsb: 0 = common registers; for socket n: 3n+1 = registers,
+//      3n+2 = TX buffer, 3n+3 = RX buffer.
+fn char w5500_read(nibble bsb, char addr_hi, char addr_lo) {
+    char value;
+
+    gpio_clear(W5500_CS);
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast((char)bsb << 3);       // read; OM = 00
+    value = w5500_spi_xfer_fast(0);
+    gpio_set(W5500_CS);
+    return value;
+}
+
+fn void w5500_write(nibble bsb, char addr_hi, char addr_lo, char value) {
+    gpio_clear(W5500_CS);
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast(((char)bsb << 3) | 4);   // write; OM = 00
+    w5500_spi_xfer_fast(value);
+    gpio_set(W5500_CS);
+}
+
+// Set a socket's TX buffer size.  The BSB for socket n is 3n+1, which can
+// exceed the 4-bit `nibble` type used by the generic register helpers.
+fn void w5500_set_tx_size(char socket, char size) {
+    char bsb;
+
+    bsb = (char)(3 * socket + 1);
+    gpio_clear(W5500_CS);
+    w5500_spi_xfer_fast(0x00);
+    w5500_spi_xfer_fast(0x1F);
+    w5500_spi_xfer_fast((char)((bsb << 3) | 4));
+    w5500_spi_xfer_fast(size);
+    gpio_set(W5500_CS);
+}
+
+fn char w5500_version() {
+    return w5500_read(0, 0x00, 0x39);
+}
+
+fn char w5500_phy() {
+    return w5500_read(0, 0x00, 0x2E);
+}
+
+fn uint16_t w5500_read16(nibble bsb, char addr_hi, char addr_lo) {
+    char hi;
+    char lo;
+    hi = w5500_read(bsb, addr_hi, addr_lo);
+    lo = w5500_read(bsb, addr_hi, addr_lo + 1);
+    return ((uint16_t)hi << 8) | lo;
+}
+
+fn void w5500_write16(nibble bsb, char addr_hi, char addr_lo, uint16_t value) {
+    w5500_write(bsb, addr_hi, addr_lo, (char)(value >> 8));
+    w5500_write(bsb, addr_hi, addr_lo + 1, (char)value);
+}
+
+// Open socket 0 as UDP with the given local port.
+fn void w5500_open_udp(char port_hi, char port_lo) {
+    // The W5500 may have stayed powered across a badge reset, so close any
+    // socket left open by a previous run before opening it again.
+    w5500_write(1, 0x00, 0x01, 0x10);   // CLOSE
+    delay(5);
+
+    w5500_write(1, 0x00, 0x00, 0x02);   // Sn_MR = UDP
+    w5500_write(1, 0x00, 0x04, port_hi);
+    w5500_write(1, 0x00, 0x05, port_lo);
+    w5500_write(1, 0x00, 0x01, 0x01);   // OPEN
+    while (w5500_read(1, 0x00, 0x03) != 0x22) {
+        delay(1);
+    }
+}
+
+fn void w5500_open_tcp(char port_hi, char port_lo) {
+    w5500_write(1, 0x00, 0x01, 0x10);   // CLOSE
+    delay(15);
+    delay(15);
+    delay(15);
+    delay(15);
+    delay(15);
+    delay(15);
+
+    w5500_write(1, 0x00, 0x00, 0x01);   // Sn_MR = TCP
+    w5500_write(1, 0x00, 0x04, port_hi);
+    w5500_write(1, 0x00, 0x05, port_lo);
+    delay(15);
+    w5500_write(1, 0x00, 0x01, 0x01);   // OPEN
+    delay(15);
+    w5500_write(1, 0x00, 0x01, 0x02);   // LISTEN
+    delay(15);
+}
+
+// Send a flash string through the socket 0 TX buffer.  Returns 1 if the
+// SEND command was issued, 0 if the TX buffer did not have room.
+fn nibble w5500_send_flash(flashptr msg) {
+    flashptr p;
+    uint16_t len;
+    char c;
+    char ahi;
+    char alo;
+    uint16_t fsr;
+    uint16_t wr;
+
+    len = 0;
+    p = msg;
+    while (flash_next(&p) != 255) {
+        len = len + 1;
+    }
+    if (len == 0) {
+        return 0;
+    }
+
+    fsr = w5500_read16(1, 0x00, 0x20);
+    if (fsr < len) {
+        return 0;
+    }
+
+    wr = w5500_read16(1, 0x00, 0x24);
+    ahi = (char)(wr >> 8);
+    alo = (char)wr;
+
+    p = msg;
+    c = flash_next(&p);
+    while (c != 255) {
+        w5500_write(2, ahi, alo, c);
+        alo = alo + 1;
+        if (alo == 0) {
+            ahi = ahi + 1;
+        }
+        c = flash_next(&p);
+    }
+
+    w5500_write16(1, 0x00, 0x24, wr + len);
+    w5500_write(1, 0x00, 0x01, 0x20);   // SEND
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Byte-level socket buffer access
+// ---------------------------------------------------------------------------
+
+fn uint16_t w5500_rx_available() {
+    return ((uint16_t)w5500_read(1, 0x00, 0x26) << 8) |
+           (uint16_t)w5500_read(1, 0x00, 0x27);
+}
+
+fn uint16_t w5500_rx_pointer() {
+    return ((uint16_t)w5500_read(1, 0x00, 0x28) << 8) |
+           (uint16_t)w5500_read(1, 0x00, 0x29);
+}
+
+fn uint16_t w5500_tx_free() {
+    return ((uint16_t)w5500_read(1, 0x00, 0x20) << 8) |
+           (uint16_t)w5500_read(1, 0x00, 0x21);
+}
+
+fn void w5500_tx_set_pointer(uint16_t pointer) {
+    w5500_write(1, 0x00, 0x24, (char)(pointer >> 8));
+    w5500_write(1, 0x00, 0x25, (char)pointer);
+}
+
+// Start a write burst into the socket 0 TX buffer at the given address.
+fn void w5500_tx_stream_begin(char addr_hi, char addr_lo) {
+    gpio_clear(W5500_CS);
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast(0x14);                // BSB 2, write
+}
+
+// Start a read burst from the socket 0 RX buffer at the given address.
+fn void w5500_rx_stream_begin(char addr_hi, char addr_lo) {
+    gpio_clear(W5500_CS);
+    w5500_spi_xfer_fast(addr_hi);
+    w5500_spi_xfer_fast(addr_lo);
+    w5500_spi_xfer_fast(0x18);                // BSB 3, read
+}
+
+fn void w5500_stream_end() {
+    gpio_set(W5500_CS);
+}
+
+// Issue a SEND command for everything currently between TX_RD and TX_WR.
+fn void w5500_send_command() {
+    w5500_write(1, 0x00, 0x01, 0x20);   // SEND
+    while (w5500_read(1, 0x00, 0x01) != 0) {
+        delay(1);
+    }
+}
+
+// Discard up to 200 bytes of received request data.
+fn void w5500_discard_rx() {
+    uint16_t rsr;
+    uint16_t rd;
+    char len;
+    char ahi;
+    char alo;
+    char i;
+
+    rsr = w5500_read16(1, 0x00, 0x26);
+    if (rsr == 0) {
+        return;
+    }
+    if (rsr > 200) {
+        len = 200;
+    } else {
+        len = (char)rsr;
+    }
+    if (len == 0) {
+        return;
+    }
+
+    rd = w5500_read16(1, 0x00, 0x28);
+    ahi = (char)(rd >> 8);
+    alo = (char)rd;
+    i = 0;
+    while (i < len) {
+        w5500_read(3, ahi, alo);
+        alo = alo + 1;
+        if (alo == 0) {
+            ahi = ahi + 1;
+        }
+        i = i + 1;
+    }
+    w5500_write16(1, 0x00, 0x28, rd + (uint16_t)len);
+    w5500_write(1, 0x00, 0x01, 0x40);   // RECV
+}

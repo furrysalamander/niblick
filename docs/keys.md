@@ -2,9 +2,9 @@
 
 `KeyReg` at `0xFD` reports a 4-bit code for the last key pressed. The
 physical mapping is not the obvious button-label order, so it was measured
-on hardware with `examples/keymap.badge`.
+on hardware with `examples/keymap.nbl`.
 
-Import `lib/key.badge` to use the helpers below. `lib/key.badge` only names
+Import `lib/key.nbl` to use the helpers below. `lib/key.nbl` only names
 the five codes that have been confirmed on hardware; the raw `key_status()`
 and `key_code()` intrinsics work for any code.
 
@@ -32,7 +32,7 @@ edge. The upstream
 [User Manual](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/blob/main/manuals/1.User_Manual_v4.pdf)
 has the complete mode-by-mode command table.
 
-BadgeC does not model the front-panel controller's mode state. It only
+Niblick does not model the front-panel controller's mode state. It only
 exposes `KeyReg` and `KeyStatus`; `ALT` is reported through
 `KeyStatus.AltPress`, and `ON-OFF` does not report a key code.
 
@@ -68,10 +68,10 @@ already-read status value.
 
 ## Measuring more keys
 
-Build and load `examples/keymap.badge`, then press buttons one at a time:
+Build and load `examples/keymap.nbl`, then press buttons one at a time:
 
 ```bash
-python3 -m badgec examples/keymap.badge
+python3 -m niblick examples/keymap.nbl
 # load examples/keymap.hex, press RUN
 python3 scripts/monitor.py /dev/ttyUSB0
 ```

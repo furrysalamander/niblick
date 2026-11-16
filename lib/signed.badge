@@ -1,11 +1,14 @@
-// Signed integer helpers for the existing unsigned storage types.
+// Raw-bit signed helpers retained for fixed point and bit-oriented code.
 //
-// BadgeC has no native signed types yet.  These helpers interpret the raw
-// bits of the normal types as two's complement:
+// Native signed types (i4/i8/i16/i32, int8_t/int16_t/int32_t, int, long)
+// now exist, so ordinary signed arithmetic should use them directly.  These
+// helpers still interpret the raw bits of the unsigned types as two's
+// complement, which is useful for masks, fixed-point storage, and code that
+// wants explicit control over sign extension:
 //
 //     nibble   4-bit signed   -8..7
 //     char     8-bit signed   -128..127
-//     word     16-bit signed  -32768..32767
+//     uint16_t 16-bit signed  -32768..32767
 //
 // Negative values are passed and returned as their raw unsigned bit
 // patterns, e.g. -1 is 15, 255, or 0xFFFF depending on width.  Unused
@@ -23,7 +26,7 @@ fn char s_neg8(char v) {
     return 0 - v;
 }
 
-fn word s_neg16(word v) {
+fn uint16_t s_neg16(uint16_t v) {
     return 0 - v;
 }
 
@@ -41,7 +44,7 @@ fn char s_abs8(char v) {
     return v;
 }
 
-fn word s_abs16(word v) {
+fn uint16_t s_abs16(uint16_t v) {
     if ((v & 0x8000) != 0) {
         return 0 - v;
     }
@@ -56,7 +59,7 @@ fn nibble s_is_neg8(char v) {
     return (v & 128) != 0;
 }
 
-fn nibble s_is_neg16(word v) {
+fn nibble s_is_neg16(uint16_t v) {
     return (v & 0x8000) != 0;
 }
 
@@ -98,19 +101,19 @@ fn nibble s_ge8(char a, char b) {
     return (a ^ 128) >= (b ^ 128);
 }
 
-fn nibble s_lt16(word a, word b) {
+fn nibble s_lt16(uint16_t a, uint16_t b) {
     return (a ^ 0x8000) < (b ^ 0x8000);
 }
 
-fn nibble s_le16(word a, word b) {
+fn nibble s_le16(uint16_t a, uint16_t b) {
     return (a ^ 0x8000) <= (b ^ 0x8000);
 }
 
-fn nibble s_gt16(word a, word b) {
+fn nibble s_gt16(uint16_t a, uint16_t b) {
     return (a ^ 0x8000) > (b ^ 0x8000);
 }
 
-fn nibble s_ge16(word a, word b) {
+fn nibble s_ge16(uint16_t a, uint16_t b) {
     return (a ^ 0x8000) >= (b ^ 0x8000);
 }
 
@@ -142,14 +145,14 @@ fn char s_max8(char a, char b) {
     return b;
 }
 
-fn word s_min16(word a, word b) {
+fn uint16_t s_min16(uint16_t a, uint16_t b) {
     if (s_lt16(a, b) != 0) {
         return a;
     }
     return b;
 }
 
-fn word s_max16(word a, word b) {
+fn uint16_t s_max16(uint16_t a, uint16_t b) {
     if (s_gt16(a, b) != 0) {
         return a;
     }
@@ -176,7 +179,7 @@ fn char s_clamp8(char v, char low, char high) {
     return v;
 }
 
-fn word s_clamp16(word v, word low, word high) {
+fn uint16_t s_clamp16(uint16_t v, uint16_t low, uint16_t high) {
     if (s_lt16(v, low) != 0) {
         return low;
     }
@@ -197,18 +200,18 @@ fn char s_ext4(nibble v) {
     return (char)v;
 }
 
-fn word s_ext8(char v) {
+fn uint16_t s_ext8(char v) {
     if ((v & 128) != 0) {
-        return (word)(v | 0xFF00);
+        return (uint16_t)(v | 0xFF00);
     }
-    return (word)v;
+    return (uint16_t)v;
 }
 
-fn dword s_ext16(word v) {
+fn uint32_t s_ext16(uint16_t v) {
     if ((v & 0x8000) != 0) {
-        return (dword)(v | 0xFFFF0000);
+        return (uint32_t)(v | 0xFFFF0000);
     }
-    return (dword)v;
+    return (uint32_t)v;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +242,7 @@ fn char s_sar8(char v, nibble n) {
     return v;
 }
 
-fn word s_sar16(word v, nibble n) {
+fn uint16_t s_sar16(uint16_t v, nibble n) {
     while (n != 0) {
         if ((v & 0x8000) != 0) {
             v = (v >> 1) | 0x8000;
@@ -272,7 +275,7 @@ fn char s_mul8(char a, char b) {
     return (char)(s_ext8(a) * s_ext8(b));
 }
 
-fn word s_mul16(word a, word b) {
+fn uint16_t s_mul16(uint16_t a, uint16_t b) {
     return a * b;
 }
 
@@ -318,7 +321,7 @@ fn char s_mod8(char a, char b) {
     return a;
 }
 
-fn word s_div16(word a, word b) {
+fn uint16_t s_div16(uint16_t a, uint16_t b) {
     nibble neg;
     neg = 0;
     if (s_is_neg16(a) != 0) {
@@ -339,7 +342,7 @@ fn word s_div16(word a, word b) {
     return a;
 }
 
-fn word s_mod16(word a, word b) {
+fn uint16_t s_mod16(uint16_t a, uint16_t b) {
     nibble neg;
     neg = s_is_neg16(a);
     if (neg != 0) {

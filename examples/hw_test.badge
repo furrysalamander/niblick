@@ -71,8 +71,8 @@ fn run_tests() {
     nibble r2;
     nibble r3;
     char cc;
-    word wa;
-    word we;
+    uint16_t wa;
+    uint16_t we;
 
     pass_count = 0;
     fail_count = 0;

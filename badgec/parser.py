@@ -8,10 +8,10 @@ from typing import Optional
 from . import ast_nodes as ast
 from .errors import BadgeSyntaxError, location
 from .lexer import Token, tokenize
-from .types import SCALAR_TYPES, StructField, StructType, Type, type_from_name
+from .types import SCALAR_TYPES, U8, StructField, StructType, Type, type_from_name
 
 
-TYPE_NAMES = {"nibble", "char", "word", "dword", "flashptr", "void"}
+TYPE_NAMES = set(SCALAR_TYPES)
 
 # Binding powers.  Assignment is handled at statement level, not here.
 BINARY_PRECEDENCE = {
@@ -311,7 +311,7 @@ class Parser:
 
         if self.current().kind == "string":
             init_string = str(self.advance().value)
-            if type_.name != "char":
+            if type_ is not U8:
                 raise self.error("string literals can only initialize const char arrays")
         elif self.match("{"):
             init_list = []
@@ -685,10 +685,24 @@ class Parser:
                 int(token.value), line=token.line, column=token.column
             )
 
+        if token.kind == "float":
+            self.advance()
+            return ast.FloatLiteral(
+                float(token.value), line=token.line, column=token.column
+            )
+
         if token.kind == "string":
             self.advance()
             return ast.StringLiteral(
                 str(token.value), line=token.line, column=token.column
+            )
+
+        if token.kind == "keyword" and token.value in ("true", "false"):
+            self.advance()
+            return ast.Number(
+                1 if token.value == "true" else 0,
+                line=token.line,
+                column=token.column,
             )
 
         if token.kind in ("ident", "keyword"):

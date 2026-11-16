@@ -68,8 +68,8 @@ def test_print_core_formats(tmp_path: Path) -> None:
 
         nibble n;
         char c;
-        word w;
-        dword d;
+        uint16_t w;
+        uint32_t d;
         char buf[8];
 
         fn main() {
@@ -103,8 +103,8 @@ def test_print_decimal_widths(tmp_path: Path) -> None:
 
         nibble n;
         char c;
-        word w;
-        dword d;
+        uint16_t w;
+        uint32_t d;
 
         fn main() {
             uart_route(1);
@@ -262,3 +262,27 @@ def test_print_is_reserved(tmp_path: Path) -> None:
         """,
         BadgeCompileError,
     )
+
+
+def test_print_signed_and_bool_types(tmp_path: Path) -> None:
+    _, emu, _ = compile_source(
+        tmp_path,
+        """
+        import "lib/uart.badge";
+        int8_t a;
+        int16_t b;
+        int32_t c;
+        bool flag;
+        fn main() {
+            uart_route(1);
+            uart_init(3);
+            a = -7;
+            b = -20000;
+            c = -100000;
+            flag = 2;
+            print("{} {} {} {} {}\n", a, b, c, flag, b < a);
+        }
+        """,
+    )
+    emu.run(4_000_000)
+    assert bytes(emu.uart_tx) == b"-7 -20000 -100000 1 1\n"

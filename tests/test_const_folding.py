@@ -36,12 +36,12 @@ def test_scalar_const_globals_have_no_ram_storage(tmp_path: Path) -> None:
         const nibble SRCLK = 2;
         const nibble MASK = SER | SRCLK;
         const char HIGH = (char)0x1FF;
-        const word W = 0x1234;
-        const dword D = 0x12345678;
+        const uint16_t W = 0x1234;
+        const uint32_t D = 0x12345678;
         nibble out;
         char h;
-        word w;
-        dword d;
+        uint16_t w;
+        uint32_t d;
         fn main() {
             gpio_set(SER);
             gpio_set(MASK);
@@ -85,17 +85,17 @@ def test_const_folding_matches_runtime_width_rules(tmp_path: Path) -> None:
     compiler, _, emu = build(
         tmp_path,
         """
-        const word W = 0x100;
-        const word M = W * W;
+        const uint16_t W = 0x100;
+        const uint16_t M = W * W;
         const nibble N = (nibble)0x1FF;
         const nibble NEG = -1;
         const char C = 0xFF;
-        const dword D = 0xFFFFFFFF;
-        word w;
+        const uint32_t D = 0xFFFFFFFF;
+        uint16_t w;
         nibble n;
         nibble neg;
         char c;
-        dword d;
+        uint32_t d;
         fn main() {
             w = M;
             n = N;
@@ -153,24 +153,24 @@ def test_const_folding_matches_runtime_expressions(tmp_path: Path) -> None:
         const nibble B = 5;
         const char C = 200;
         const char D = 7;
-        const word W = 0x1234;
-        const dword X = 0x12345678;
+        const uint16_t W = 0x1234;
+        const uint32_t X = 0x12345678;
         nibble a;
         nibble b;
         char c;
         char d;
-        word w;
-        dword x;
+        uint16_t w;
+        uint32_t x;
         nibble nd;
         nibble nc;
         char rd;
         char rc;
-        word md;
-        word mc;
-        word sd;
-        word sc;
-        dword ad;
-        dword ac;
+        uint16_t md;
+        uint16_t mc;
+        uint16_t sd;
+        uint16_t sc;
+        uint32_t ad;
+        uint32_t ac;
         fn main() {
             a = 13;
             b = 5;
@@ -195,7 +195,7 @@ def test_const_folding_matches_runtime_expressions(tmp_path: Path) -> None:
 
     def value(name: str) -> int:
         symbol = compiler.globals[name]
-        width = {"nibble": 1, "char": 2, "word": 4, "dword": 8}[symbol.type.name]
+        width = {"nibble": 1, "char": 2, "uint16_t": 4, "uint32_t": 8}[symbol.type.name]
         return sum(
             emu.ram[symbol.address + index] << (4 * index)
             for index in range(width)

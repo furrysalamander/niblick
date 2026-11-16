@@ -128,7 +128,7 @@ def test_signed_8bit_helpers(tmp_path: Path) -> None:
 
         nibble r[8];
         char q[24];
-        word w[2];
+        uint16_t w[2];
         char done;
 
         fn main() {
@@ -203,7 +203,7 @@ def test_signed_16bit_compare_and_clamp(tmp_path: Path) -> None:
         import "lib/signed.badge";
 
         nibble r[8];
-        word w[16];
+        uint16_t w[16];
         char done;
 
         fn main() {
@@ -243,8 +243,8 @@ def test_signed_16bit_math(tmp_path: Path) -> None:
         import "lib/signed.badge";
 
         nibble r[4];
-        word w[16];
-        dword d[2];
+        uint16_t w[16];
+        uint32_t d[2];
         char done;
 
         fn main() {

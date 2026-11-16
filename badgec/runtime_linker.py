@@ -41,6 +41,8 @@ ROUTINE_LABELS = {
     "__bc_mul16",
     "__bc_divmod8",
     "__bc_divmod16",
+    "__bc_sdivmod8",
+    "__bc_sdivmod16",
     "__bc_mul32",
     "__bc_divmod32",
 }

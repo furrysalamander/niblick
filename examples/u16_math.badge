@@ -1,12 +1,12 @@
-// 16-bit words, casts, and the multiply/divide/modulo operators.
+// 16-bit integers, casts, and the multiply/divide/modulo operators.
 
 import "lib/uart.badge";
 
-word a;
-word b;
-word product;
-word quotient;
-word remainder;
+uint16_t a;
+uint16_t b;
+uint16_t product;
+uint16_t quotient;
+uint16_t remainder;
 char packed;
 nibble low;
 

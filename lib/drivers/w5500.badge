@@ -14,10 +14,10 @@ import "lib/boards/voja4.badge";
 import "lib/spi.badge";
 import "lib/drivers/asm/w5500.asm";
 
-extern fn word w5500_tx_pointer();
+extern fn uint16_t w5500_tx_pointer();
 extern fn void w5500_delay();
-extern fn char w5500_rx_peek(word offset);
-extern fn void w5500_rx_consume(word count);
+extern fn char w5500_rx_peek(uint16_t offset);
+extern fn void w5500_rx_consume(uint16_t count);
 
 char w5500_scratch[4];
 
@@ -76,15 +76,15 @@ fn char w5500_phy() {
     return w5500_read(0, 0x00, 0x2E);
 }
 
-fn word w5500_read16(nibble bsb, char addr_hi, char addr_lo) {
+fn uint16_t w5500_read16(nibble bsb, char addr_hi, char addr_lo) {
     char hi;
     char lo;
     hi = w5500_read(bsb, addr_hi, addr_lo);
     lo = w5500_read(bsb, addr_hi, addr_lo + 1);
-    return ((word)hi << 8) | lo;
+    return ((uint16_t)hi << 8) | lo;
 }
 
-fn void w5500_write16(nibble bsb, char addr_hi, char addr_lo, word value) {
+fn void w5500_write16(nibble bsb, char addr_hi, char addr_lo, uint16_t value) {
     w5500_write(bsb, addr_hi, addr_lo, (char)(value >> 8));
     w5500_write(bsb, addr_hi, addr_lo + 1, (char)value);
 }
@@ -128,12 +128,12 @@ fn void w5500_open_tcp(char port_hi, char port_lo) {
 // SEND command was issued, 0 if the TX buffer did not have room.
 fn nibble w5500_send_flash(flashptr msg) {
     flashptr p;
-    word len;
+    uint16_t len;
     char c;
     char ahi;
     char alo;
-    word fsr;
-    word wr;
+    uint16_t fsr;
+    uint16_t wr;
 
     len = 0;
     p = msg;
@@ -173,22 +173,22 @@ fn nibble w5500_send_flash(flashptr msg) {
 // Byte-level socket buffer access
 // ---------------------------------------------------------------------------
 
-fn word w5500_rx_available() {
-    return ((word)w5500_read(1, 0x00, 0x26) << 8) |
-           (word)w5500_read(1, 0x00, 0x27);
+fn uint16_t w5500_rx_available() {
+    return ((uint16_t)w5500_read(1, 0x00, 0x26) << 8) |
+           (uint16_t)w5500_read(1, 0x00, 0x27);
 }
 
-fn word w5500_rx_pointer() {
-    return ((word)w5500_read(1, 0x00, 0x28) << 8) |
-           (word)w5500_read(1, 0x00, 0x29);
+fn uint16_t w5500_rx_pointer() {
+    return ((uint16_t)w5500_read(1, 0x00, 0x28) << 8) |
+           (uint16_t)w5500_read(1, 0x00, 0x29);
 }
 
-fn word w5500_tx_free() {
-    return ((word)w5500_read(1, 0x00, 0x20) << 8) |
-           (word)w5500_read(1, 0x00, 0x21);
+fn uint16_t w5500_tx_free() {
+    return ((uint16_t)w5500_read(1, 0x00, 0x20) << 8) |
+           (uint16_t)w5500_read(1, 0x00, 0x21);
 }
 
-fn void w5500_tx_set_pointer(word pointer) {
+fn void w5500_tx_set_pointer(uint16_t pointer) {
     w5500_write(1, 0x00, 0x24, (char)(pointer >> 8));
     w5500_write(1, 0x00, 0x25, (char)pointer);
 }
@@ -223,8 +223,8 @@ fn void w5500_send_command() {
 
 // Discard up to 200 bytes of received request data.
 fn void w5500_discard_rx() {
-    word rsr;
-    word rd;
+    uint16_t rsr;
+    uint16_t rd;
     char len;
     char ahi;
     char alo;
@@ -255,6 +255,6 @@ fn void w5500_discard_rx() {
         }
         i = i + 1;
     }
-    w5500_write16(1, 0x00, 0x28, rd + (word)len);
+    w5500_write16(1, 0x00, 0x28, rd + (uint16_t)len);
     w5500_write(1, 0x00, 0x01, 0x40);   // RECV
 }

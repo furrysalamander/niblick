@@ -36,7 +36,7 @@ Names resolve against the current lexical scope first, then globals. Locals
 must be declared before the `asm` block. Comments are not substituted.
 
 A `char` parameter or variable at `${p}` occupies two nibbles: `${p}` is low
-and `${p+1}` is high. A `word` occupies four nibbles, and so on.
+and `${p+1}` is high. A `uint16_t` occupies four nibbles, and so on.
 
 ## Labels and calls
 

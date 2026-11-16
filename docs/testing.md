@@ -158,7 +158,7 @@ are measured.
 
 ## 32-bit math test
 
-`examples/math32_test.badge` exercises dword storage, shifts, casts,
+`examples/math32_test.badge` exercises 32-bit storage, shifts, casts,
 multiply, divide, and modulo. It uses the same `0x01` start byte as the main
 self-test:
 

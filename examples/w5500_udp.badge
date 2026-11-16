@@ -21,8 +21,8 @@ char len;
 char c;
 char ahi;
 char alo;
-word fsr;
-word wr;
+uint16_t fsr;
+uint16_t wr;
 
 fn main() {
     spi_init();
@@ -92,7 +92,7 @@ fn main() {
         }
 
         fsr = w5500_read16(1, 0x00, 0x20);
-        if (fsr >= (word)len) {
+        if (fsr >= (uint16_t)len) {
             wr = w5500_read16(1, 0x00, 0x24);
             ahi = (char)(wr >> 8);
             alo = (char)wr;
@@ -108,7 +108,7 @@ fn main() {
                 c = flash_next(&p);
             }
 
-            w5500_write16(1, 0x00, 0x24, wr + (word)len);
+            w5500_write16(1, 0x00, 0x24, wr + (uint16_t)len);
             w5500_write(1, 0x00, 0x01, 0x20);   // SEND
             uart_puts("sent\n");
         }

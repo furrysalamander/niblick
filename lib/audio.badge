@@ -15,7 +15,7 @@ const nibble AUDIO_MASK = 1;
 const char NOTE_REST = 0xFE;
 
 // Half-period loop counts for C4..D#5 at Clock=100 kHz.
-const word audio_note_half_periods[] = {
+const uint16_t audio_note_half_periods[] = {
     12, 11, 11, 10, 9, 9, 8, 8,
     8, 7, 7, 6, 6, 6, 5, 5
 };
@@ -30,8 +30,8 @@ fn void audio_silence() {
 
 // Raw tone.  half_period is the inner-loop count; cycles is the number of
 // half periods (two cycles = one full wave).
-fn void audio_tone_raw(word half_period, word cycles) {
-    word n;
+fn void audio_tone_raw(uint16_t half_period, uint16_t cycles) {
+    uint16_t n;
     while (cycles != 0) {
         gpio_toggle(AUDIO_MASK);
         n = half_period;
@@ -44,7 +44,7 @@ fn void audio_tone_raw(word half_period, word cycles) {
 
 // Play one note from the table.  Notes 0..15 are C4..D#5; NOTE_REST is
 // silent, and 0xFF terminates a melody.
-fn void audio_note(char note, word cycles) {
+fn void audio_note(char note, uint16_t cycles) {
     if (note == NOTE_REST || note > 15) {
         audio_silence();
         return;
@@ -66,7 +66,7 @@ fn void audio_play(flashptr melody) {
             }
             delay((nibble)duration);
         } else {
-            audio_note((nibble)note, (word)duration);
+            audio_note((nibble)note, (uint16_t)duration);
         }
         note = flash_next(&melody);
     }

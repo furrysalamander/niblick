@@ -19,8 +19,8 @@ fn char rand_byte() {
     return ((char)random() << 4) | random();
 }
 
-fn word rand_word() {
-    return ((word)rand_byte() << 8) | rand_byte();
+fn uint16_t rand_word() {
+    return ((uint16_t)rand_byte() << 8) | rand_byte();
 }
 
 // Uniform 0..n-1.  n = 0 or 1 returns 0.

@@ -31,7 +31,7 @@ fn char q4_4_mul(char a, char b) {
 }
 
 fn char q4_4_div(char a, char b) {
-    return (char)s_div16((word)s_ext8(a) << 4, s_ext8(b));
+    return (char)s_div16((uint16_t)s_ext8(a) << 4, s_ext8(b));
 }
 
 // Convert a signed integer nibble (-8..7) to Q4.4.

@@ -21,13 +21,13 @@ nibble vfb[64];
 nibble bitmask[4];
 
 char angle;
-word cb;
-word sb;
+uint16_t cb;
+uint16_t sb;
 nibble vx[8];
 nibble vy[8];
 
 // sin(k * 90 / 32), Q8.8 (256 = 1.0)
-const word sin_q8[] = {
+const uint16_t sin_q8[] = {
       0,  13,  25,  38,  50,  62,  74,  86,
      98, 109, 121, 132, 142, 152, 162, 172,
     181, 190, 198, 206, 213, 220, 226, 231,
@@ -144,8 +144,8 @@ fn void build_vertices() {
     nibble tx;
     char dxb;
     char dyb;
-    word bx;
-    word by;
+    uint16_t bx;
+    uint16_t by;
 
     i = 0;
     while (i < 8) {

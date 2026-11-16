@@ -30,6 +30,7 @@ except ImportError as exc:  # pragma: no cover - exercised when the extra is abs
     ) from exc
 
 from .analysis import Analysis, Diagnostic, Symbol, analyze_asm
+from .types import SCALAR_TYPES
 
 LOGGER = logging.getLogger(__name__)
 DEBOUNCE_SECONDS = 0.25
@@ -49,7 +50,7 @@ ASM_REGISTERS = [f"R{index}" for index in range(16)] + [
     "KEYREG", "DIMMER", "RANDOM",
 ]
 BADGEC_KEYWORDS = [
-    "fn", "nibble", "char", "word", "dword", "flashptr", "void",
+    "fn", *SCALAR_TYPES.keys(),
     "const", "if", "else", "while", "for", "return", "break",
     "continue", "import", "extern", "true", "false", "struct",
 ]

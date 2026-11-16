@@ -393,7 +393,7 @@ def test_w5500_tx_pointer_moved_to_library(tmp_path: Path) -> None:
     entry.write_text(
         """
         import "lib/drivers/w5500.badge";
-        word pointer;
+        uint16_t pointer;
         fn main() {
             pointer = w5500_tx_pointer();
             while (1) { }

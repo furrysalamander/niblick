@@ -1,14 +1,14 @@
-// 32-bit words, casts, and the full operator set.
+// 32-bit integers, casts, and the full operator set.
 
 import "lib/uart.badge";
 
-dword a;
-dword b;
-dword product;
-dword quotient;
-dword remainder;
-word high;
-word low;
+uint32_t a;
+uint32_t b;
+uint32_t product;
+uint32_t quotient;
+uint32_t remainder;
+uint16_t high;
+uint16_t low;
 
 fn main() {
     uart_route(1);
@@ -35,8 +35,8 @@ fn main() {
     uart_print_hex32(product);
     uart_nl();
 
-    high = (word)(product >> 16);
-    low = (word)product;
+    high = (uint16_t)(product >> 16);
+    low = (uint16_t)product;
     uart_puts("high ");
     uart_print_hex16(high);
     uart_puts(" low ");

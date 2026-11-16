@@ -68,7 +68,7 @@ def test_parser_accepts_extern_function_declarations() -> None:
     program = parse(
         """
         extern fn char convert(char value);
-        extern word read16(nibble addr);
+        extern uint16_t read16(nibble addr);
         fn main() { }
         """,
         "test.badge",
@@ -80,7 +80,7 @@ def test_parser_accepts_extern_function_declarations() -> None:
     assert convert.params[0].name == "value"
     assert convert.return_type.name == "char"
     assert read16.is_extern
-    assert read16.return_type.name == "word"
+    assert read16.return_type.name == "uint16_t"
     assert not main.is_extern
 
 

@@ -104,7 +104,7 @@
     "function-definitions": {
       "patterns": [
         {
-          "match": "\\b(fn)\\s+(?:(nibble|char|word|dword|flashptr|void)\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "match": "\\b(fn)\\s+(?:(nibble|u4|i4|char|uint8_t|int8_t|int_least8_t|int_fast8_t|uint_least8_t|uint_fast8_t|u8|i8|uint16_t|int16_t|int_least16_t|int_fast16_t|uint_least16_t|uint_fast16_t|u16|i16|short|int|uint32_t|int32_t|int_least32_t|int_fast32_t|uint_least32_t|uint_fast32_t|intmax_t|uintmax_t|u32|i32|long|uint64_t|int64_t|uint_least64_t|int_least64_t|uint_fast64_t|int_fast64_t|u64|i64|bool|flashptr|void)\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
           "captures": {
             "1": { "name": "keyword.other.fn.badgec" },
             "2": { "name": "storage.type.badgec" },
@@ -112,7 +112,7 @@
           }
         },
         {
-          "match": "\\b(nibble|char|word|dword|flashptr|void)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "match": "\\b(nibble|u4|i4|char|uint8_t|int8_t|int_least8_t|int_fast8_t|uint_least8_t|uint_fast8_t|u8|i8|uint16_t|int16_t|int_least16_t|int_fast16_t|uint_least16_t|uint_fast16_t|u16|i16|short|int|uint32_t|int32_t|int_least32_t|int_fast32_t|uint_least32_t|uint_fast32_t|intmax_t|uintmax_t|u32|i32|long|uint64_t|int64_t|uint_least64_t|int_least64_t|uint_fast64_t|int_fast64_t|u64|i64|bool|flashptr|void)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
           "captures": {
             "1": { "name": "storage.type.badgec" },
             "2": { "name": "entity.name.function.badgec" }
@@ -140,7 +140,7 @@
       "patterns": [
         {
           "name": "storage.type.badgec",
-          "match": "\\b(nibble|char|word|dword|flashptr|void)\\b"
+          "match": "\\b(nibble|u4|i4|char|uint8_t|int8_t|int_least8_t|int_fast8_t|uint_least8_t|uint_fast8_t|u8|i8|uint16_t|int16_t|int_least16_t|int_fast16_t|uint_least16_t|uint_fast16_t|u16|i16|short|int|uint32_t|int32_t|int_least32_t|int_fast32_t|uint_least32_t|uint_fast32_t|intmax_t|uintmax_t|u32|i32|long|uint64_t|int64_t|uint_least64_t|int_least64_t|uint_fast64_t|int_fast64_t|u64|i64|bool|flashptr|void)\\b"
         }
       ]
     },

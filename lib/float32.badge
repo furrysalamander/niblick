@@ -1,0 +1,44 @@
+// Native binary32 soft-float helpers.
+//
+// Arithmetic and comparisons are implemented in lib/float32.asm for exact
+// IEEE-754 behaviour: round-to-nearest-even, subnormals, signed zero,
+// infinities, and NaN.  Values are passed as IEEE-754 bit patterns in
+// `float` parameters and results.
+
+import "lib/float32.asm";
+
+extern fn nibble __bc_f32_cmp(float a, float b);
+extern fn bool __bc_f32_is_zero(float a);
+extern fn float __bc_f32_add(float a, float b);
+extern fn float __bc_f32_sub(float a, float b);
+extern fn float __bc_f32_mul(float a, float b);
+extern fn float __bc_f32_div(float a, float b);
+// Internal entry point shared by the assembly arithmetic paths.
+extern fn float __bc_f32_core();
+
+extern fn float __bc_u32_to_f32(uint32_t v);
+extern fn float __bc_i32_to_f32(int32_t v);
+extern fn float __bc_u64_to_f32(uint64_t v);
+extern fn float __bc_i64_to_f32(int64_t v);
+extern fn uint32_t __bc_f32_to_u32(float a);
+extern fn int32_t __bc_f32_to_i32(float a);
+extern fn void __bc_f32_to_u64_asm(float a);
+extern fn void __bc_f32_to_i64_asm(float a);
+extern fn float __bc_f32_int32_core();
+extern fn float __bc_f32_int64_core();
+
+uint64_t __bc_conv64_f32;
+
+// Spill space used by the assembly multiply/divide paths.
+uint32_t __bc_f32_tmp;
+uint32_t __bc_f32_tmp2;
+
+fn uint64_t __bc_f32_to_u64(float a) {
+    __bc_f32_to_u64_asm(a);
+    return __bc_conv64_f32;
+}
+
+fn int64_t __bc_f32_to_i64(float a) {
+    __bc_f32_to_i64_asm(a);
+    return __bc_conv64_f32;
+}

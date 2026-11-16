@@ -51,8 +51,8 @@ fn void set_pattern(nibble p) {
 }
 
 fn void read_request() {
-    word rsr;
-    word rd;
+    uint16_t rsr;
+    uint16_t rd;
     char ahi;
     char alo;
     char c;

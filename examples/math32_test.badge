@@ -38,9 +38,9 @@ fn check(char actual, char expected) {
 }
 
 fn run_tests() {
-    dword a;
-    dword b;
-    dword q;
+    uint32_t a;
+    uint32_t b;
+    uint32_t q;
 
     pass_count = 0;
     fail_count = 0;

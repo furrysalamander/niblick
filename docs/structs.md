@@ -19,9 +19,9 @@ fn main() {
 }
 ```
 
-Fields are accessed with `.`. A struct variable or struct array element can be
-used anywhere a scalar field is expected; the struct value itself cannot be
-copied, passed, returned, or printed.
+Fields are accessed with `.`. Struct values can be assigned, passed to
+functions by value, and returned from functions. A returned struct can be used
+directly through a field, for example `make_point().x`.
 
 ## Layout
 
@@ -34,9 +34,9 @@ Example:
 
 ```c
 struct Mixed {
-    char a;     // offset 0, two nibbles
-    nibble b;   // offset 2
-    word c;     // offset 3, four nibbles
+    char a;       // offset 0, two nibbles
+    nibble b;     // offset 2
+    uint16_t c;   // offset 3, four nibbles
 };
 ```
 
@@ -50,14 +50,17 @@ are unused.
 - arrays of structs
 - field reads and writes
 - `arr[index].field`
+- whole-struct assignment, including array elements
+- struct parameters, copied by value
+- struct return values
+- direct field access on a returned struct, e.g. `make_point().x`
 - struct fields in `print()` placeholders
 
-## Not supported yet
+## Not supported
 
 - struct fields that are arrays
 - nested struct fields
-- struct parameters and return values
-- whole-struct assignment or comparison
+- whole-struct comparison
 - aggregate initializers such as `Point p = { 1, 2 };`
 - `const` structs
 - structs in flash tables
@@ -70,7 +73,9 @@ own structs internally.
 ## Memory cost
 
 A struct occupies its padded size in RAM, whether it is a single variable or
-an array element. Keep structs small; the badge has only about 176 usable
+an array element. Struct parameters are copied into the called function's
+frame, and struct returns use a shared result buffer sized to the largest
+struct in the program. Keep structs small; the badge has only about 176 usable
 nibbles of data RAM after globals and function frames.
 
 For a one-off group of values that is never indexed, separate variables may be

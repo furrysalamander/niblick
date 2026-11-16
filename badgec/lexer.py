@@ -9,10 +9,55 @@ from .errors import BadgeSyntaxError, location
 
 KEYWORDS = {
     "fn",
+    "u4",
+    "i4",
     "nibble",
+    "u8",
+    "i8",
     "char",
-    "word",
-    "dword",
+    "uint8_t",
+    "int8_t",
+    "int_least8_t",
+    "int_fast8_t",
+    "uint_least8_t",
+    "uint_fast8_t",
+    "u16",
+    "i16",
+    "uint16_t",
+    "int16_t",
+    "int_least16_t",
+    "int_fast16_t",
+    "uint_least16_t",
+    "uint_fast16_t",
+    "short",
+    "int",
+    "u32",
+    "i32",
+    "uint32_t",
+    "int32_t",
+    "u64",
+    "i64",
+    "uint64_t",
+    "int64_t",
+    "uint_least64_t",
+    "uint_fast64_t",
+    "int_least64_t",
+    "int_fast64_t",
+    "int_least32_t",
+    "int_fast32_t",
+    "uint_least32_t",
+    "uint_fast32_t",
+    "intmax_t",
+    "uintmax_t",
+    "long",
+    "bool",
+    "half",
+    "f16",
+    "_Float16",
+    "float",
+    "f32",
+    "_Float32",
+    "_Float64",
     "flashptr",
     "void",
     "const",
@@ -172,7 +217,9 @@ class Lexer:
                 continue
 
             if ch.isdigit():
-                self.add("number", self.read_number(), line, column)
+                value = self.read_number()
+                kind = "float" if isinstance(value, float) else "number"
+                self.add(kind, value, line, column)
                 continue
 
             if ch == "'":
@@ -210,7 +257,7 @@ class Lexer:
             self.advance()
         return self.source[start:self.pos]
 
-    def read_number(self) -> int:
+    def read_number(self) -> int | float:
         start = self.pos
         if self.peek() == "0" and self.peek(1) and self.peek(1) in "xX":
             self.advance()
@@ -232,9 +279,26 @@ class Lexer:
                 raise self.error("expected binary digits")
             return int(self.source[digits:self.pos], 2)
 
-        # Allow 0x/0b style only; ordinary decimal otherwise.
+        # Ordinary decimal, optionally with a fraction and/or exponent.
         while self.peek().isdigit():
             self.advance()
+        is_float = False
+        if self.peek() == "." and self.peek(1).isdigit():
+            is_float = True
+            self.advance()
+            while self.peek().isdigit():
+                self.advance()
+        if self.peek() and self.peek() in "eE":
+            is_float = True
+            self.advance()
+            if self.peek() and self.peek() in "+-":
+                self.advance()
+            if not self.peek().isdigit():
+                raise self.error("expected exponent digits")
+            while self.peek().isdigit():
+                self.advance()
+        if is_float:
+            return float(self.source[start:self.pos])
         return int(self.source[start:self.pos], 10)
 
     def read_char_literal(self) -> int:

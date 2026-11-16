@@ -31,7 +31,7 @@ def val(compiler: Compiler, emu: Emulator, name: str) -> int:
         return emu.ram[symbol.address]
     if symbol.type.name == "char":
         return emu.ram[symbol.address] | (emu.ram[symbol.address + 1] << 4)
-    width = 8 if symbol.type.name == "dword" else 4
+    width = 8 if symbol.type.name == "uint32_t" else 4
     return sum(emu.ram[symbol.address + i] << (4 * i) for i in range(width))
 
 
@@ -39,17 +39,17 @@ def test_word_literals_arithmetic_and_shifts(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        word a;
-        word b;
-        word sum;
-        word diff;
-        word band;
-        word bor;
-        word bxor;
-        word shl;
-        word shr;
-        word neg;
-        word inv;
+        uint16_t a;
+        uint16_t b;
+        uint16_t sum;
+        uint16_t diff;
+        uint16_t band;
+        uint16_t bor;
+        uint16_t bxor;
+        uint16_t shl;
+        uint16_t shr;
+        uint16_t neg;
+        uint16_t inv;
         nibble lt;
         nibble eq;
         nibble gt;
@@ -89,10 +89,10 @@ def test_casts_widen_and_narrow(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        word w;
+        uint16_t w;
         char c;
         nibble n;
-        word back;
+        uint16_t back;
         char from_word;
         nibble low;
         fn main() {
@@ -100,16 +100,16 @@ def test_casts_widen_and_narrow(tmp_path: Path) -> None:
             from_word = (char)w;
             low = (nibble)w;
             c = 0xAB;
-            back = (word)c;
+            back = (uint16_t)c;
             n = 9;
-            w = (word)n << 4;
+            w = (uint16_t)n << 4;
         }
         """,
     )
     assert val(compiler, emu, "from_word") == 0x34
     assert val(compiler, emu, "low") == 4
     assert val(compiler, emu, "back") == 0x00AB
-    # w was overwritten by (word)n << 4 at the end.
+    # w was overwritten by (uint16_t)n << 4 at the end.
     assert val(compiler, emu, "w") == 0x0090
 
 
@@ -122,10 +122,10 @@ def test_widening_multiplication(tmp_path: Path) -> None:
         char small;
         char c;
         char d;
-        word medium;
-        word e;
-        word f;
-        word large;
+        uint16_t medium;
+        uint16_t e;
+        uint16_t f;
+        uint16_t large;
         fn main() {
             a = 15;
             b = 15;
@@ -155,14 +155,14 @@ def test_mul_div_mod_across_widths(tmp_path: Path) -> None:
         nibble nr;
         char c;
         char d;
-        word cp;
+        uint16_t cp;
         char cq;
         char cr;
-        word e;
-        word f;
-        word wp;
-        word wq;
-        word wr;
+        uint16_t e;
+        uint16_t f;
+        uint16_t wp;
+        uint16_t wq;
+        uint16_t wr;
         char zeroq;
         char zeror;
         fn main() {
@@ -201,16 +201,16 @@ def test_constant_strength_reduction(tmp_path: Path) -> None:
         tmp_path,
         """
         char c;
-        word w;
+        uint16_t w;
         char c2;
         char c0;
         char cd2;
         char cm4;
-        word w2;
-        word w0;
-        word wd16;
-        word wm8;
-        word folded;
+        uint16_t w2;
+        uint16_t w0;
+        uint16_t wd16;
+        uint16_t wm8;
+        uint16_t folded;
         fn main() {
             c = 201;
             w = 50000;
@@ -241,14 +241,14 @@ def test_word_arrays_params_returns_and_flash(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        const word table[] = { 0x1234, 0xABCD, 0x0001 };
-        word arr[4];
+        const uint16_t table[] = { 0x1234, 0xABCD, 0x0001 };
+        uint16_t arr[4];
         char i;
-        word from_flash;
-        word from_array;
-        word from_function;
-        fn word add_word(word a, word b) {
-            word r;
+        uint16_t from_flash;
+        uint16_t from_array;
+        uint16_t from_function;
+        fn uint16_t add_word(uint16_t a, uint16_t b) {
+            uint16_t r;
             r = a + b;
             return r;
         }
@@ -271,8 +271,8 @@ def test_word_comparison_edges(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        word a;
-        word b;
+        uint16_t a;
+        uint16_t b;
         nibble eq;
         nibble ne;
         nibble lt;
@@ -309,17 +309,17 @@ def test_dword_arithmetic_shifts_and_compare(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        dword a;
-        dword b;
-        dword sum;
-        dword diff;
-        dword band;
-        dword bor;
-        dword bxor;
-        dword shl;
-        dword shr;
-        dword neg;
-        dword inv;
+        uint32_t a;
+        uint32_t b;
+        uint32_t sum;
+        uint32_t diff;
+        uint32_t band;
+        uint32_t bor;
+        uint32_t bxor;
+        uint32_t shl;
+        uint32_t shr;
+        uint32_t neg;
+        uint32_t inv;
         nibble lt;
         nibble eq;
         nibble gt;
@@ -359,17 +359,17 @@ def test_dword_arrays_flash_params_and_casts(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        const dword table[] = { 0x12345678, 0xDEADBEEF, 0x00000001 };
-        dword arr[4];
+        const uint32_t table[] = { 0x12345678, 0xDEADBEEF, 0x00000001 };
+        uint32_t arr[4];
         char i;
-        dword from_array;
-        dword from_flash;
-        dword from_function;
+        uint32_t from_array;
+        uint32_t from_flash;
+        uint32_t from_function;
         char low;
-        word mid;
+        uint16_t mid;
         nibble high;
-        fn dword add_word(dword x, dword y) {
-            dword r;
+        fn uint32_t add_word(uint32_t x, uint32_t y) {
+            uint32_t r;
             r = x + y;
             return r;
         }
@@ -381,7 +381,7 @@ def test_dword_arrays_flash_params_and_casts(tmp_path: Path) -> None:
             from_flash = table[1];
             from_function = add_word(from_array, 1);
             low = (char)from_flash;
-            mid = (word)from_flash;
+            mid = (uint16_t)from_flash;
             high = (nibble)(from_flash >> 24);
         }
         """,
@@ -398,16 +398,16 @@ def test_dword_mul_div_mod_edges(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        dword a;
-        dword b;
-        dword product;
-        dword quotient;
-        dword remainder;
-        dword c;
-        dword d;
-        dword product2;
-        dword quotient2;
-        dword remainder2;
+        uint32_t a;
+        uint32_t b;
+        uint32_t product;
+        uint32_t quotient;
+        uint32_t remainder;
+        uint32_t c;
+        uint32_t d;
+        uint32_t product2;
+        uint32_t quotient2;
+        uint32_t remainder2;
         fn main() {
             a = 100000;
             b = 37;
@@ -434,9 +434,9 @@ def test_dword_divide_by_zero(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        dword a;
-        dword q;
-        dword r;
+        uint32_t a;
+        uint32_t q;
+        uint32_t r;
         fn main() {
             a = 123456;
             q = a / 0;
@@ -452,16 +452,16 @@ def test_variable_shift_counts(tmp_path: Path) -> None:
     compiler, emu = build(
         tmp_path,
         """
-        dword x;
+        uint32_t x;
         nibble n;
         char c;
-        word w;
+        uint16_t w;
         nibble v;
         char b;
-        dword y1;
-        dword y2;
-        word w1;
-        word w2;
+        uint32_t y1;
+        uint32_t y2;
+        uint16_t w1;
+        uint16_t w2;
         char b1;
         char b2;
         fn main() {

@@ -8,7 +8,7 @@ runtime while still calling them from normal BadgeC code.
 // lib/drivers/w5500.badge
 import "lib/drivers/asm/w5500.asm";
 
-extern fn word w5500_tx_pointer();
+extern fn uint16_t w5500_tx_pointer();
 ```
 
 ```asm
@@ -30,7 +30,7 @@ Only function declarations are currently supported:
 ```c
 extern fn void spi_init();
 extern fn char spi_xfer(char out);
-extern word read16(nibble addr);       // C-style spelling also works
+extern uint16_t read16(nibble addr);    // C-style spelling also works
 ```
 
 An `extern fn` gets the normal BadgeC calling convention:
@@ -39,7 +39,7 @@ An `extern fn` gets the normal BadgeC calling convention:
 - the caller stores arguments into those slots before `GOSUB fn_name`;
 - the assembly reads them with `${param}` placeholders;
 - the result is left in `R1` (`nibble`), `R1:R2` (`char`), `R1..R4`
-  (`word`), or `R1..R8` (`dword`);
+  (`uint16_t`), or `R1..R8` (`uint32_t`);
 - `void` functions return with `RET R0, 0`.
 
 The assembly must define a matching `fn_<name>:` label. If an extern function
@@ -62,7 +62,7 @@ first, then globals. Outside a function block, only globals are available.
 Assembly comments are not substituted.
 
 A `char` parameter at `${p}` occupies two nibbles: `${p}` is low and
-`${p+1}` is high. A `word` occupies four nibbles, and so on.
+`${p+1}` is high. A `uint16_t` occupies four nibbles, and so on.
 
 Example:
 
@@ -75,6 +75,24 @@ fn_spi_xfer:
     ...
     RET R0, 0
 ```
+
+## Scratch RAM
+
+Addresses `0x20..0x3F` are reserved for imported assembly helpers and compiler
+temporaries. BadgeC variables and arrays start at `0x40`, and the hardware
+call stack lives below `0x20`. A helper may use the reserved block directly:
+
+```asm
+fn___bc_f32_add:
+    MOV R0, [${a}]
+    MOV [0x20], R0
+    ...
+```
+
+The block is shared between helpers, so a routine must not call another
+routine that uses the same scratch addresses and then expect its own values to
+survive. The float helpers instead copy their arguments into it, run a single
+non-reentrant core, and return before the next helper call.
 
 ## Calls and linking
 

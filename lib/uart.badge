@@ -104,14 +104,14 @@ fn void uart_print_bin8(char v) {
     }
 }
 
-fn void uart_print_bin16(word v) {
+fn void uart_print_bin16(uint16_t v) {
     uart_print_bin8((char)(v >> 8));
     uart_print_bin8((char)v);
 }
 
-fn void uart_print_bin32(dword v) {
-    uart_print_bin16((word)(v >> 16));
-    uart_print_bin16((word)v);
+fn void uart_print_bin32(uint32_t v) {
+    uart_print_bin16((uint16_t)(v >> 16));
+    uart_print_bin16((uint16_t)v);
 }
 
 fn void uart_print_dec8(char v) {
@@ -140,12 +140,12 @@ fn void uart_print_dec8(char v) {
     uart_putc('0' + ones);
 }
 
-fn void uart_print_hex16(word v) {
+fn void uart_print_hex16(uint16_t v) {
     uart_print_hex8((char)(v >> 8));
     uart_print_hex8((char)v);
 }
 
-fn void uart_print_dec16(word v) {
+fn void uart_print_dec16(uint16_t v) {
     nibble digit;
     nibble started;
     started = 0;
@@ -185,7 +185,7 @@ fn void uart_print_dec8_signed(char v) {
     uart_print_dec8(v);
 }
 
-fn void uart_print_dec16_signed(word v) {
+fn void uart_print_dec16_signed(uint16_t v) {
     if ((v & 0x8000) != 0) {
         uart_putc('-');
         v = 0 - v;
@@ -193,13 +193,13 @@ fn void uart_print_dec16_signed(word v) {
     uart_print_dec16(v);
 }
 
-fn void uart_print_hex32(dword v) {
-    uart_print_hex16((word)(v >> 16));
-    uart_print_hex16((word)v);
+fn void uart_print_hex32(uint32_t v) {
+    uart_print_hex16((uint16_t)(v >> 16));
+    uart_print_hex16((uint16_t)v);
 }
 
-fn void uart_print_dec32(dword v) {
-    dword divisor;
+fn void uart_print_dec32(uint32_t v) {
+    uint32_t divisor;
     nibble digit;
     nibble started;
 
@@ -214,6 +214,17 @@ fn void uart_print_dec32(dword v) {
         }
         divisor = divisor / 10;
     }
+}
+
+fn void uart_print_dec32_signed(int32_t v) {
+    uint32_t magnitude;
+    if (v < 0) {
+        uart_putc('-');
+        magnitude = 0 - (uint32_t)v;
+    } else {
+        magnitude = (uint32_t)v;
+    }
+    uart_print_dec32(magnitude);
 }
 
 fn void uart_print_str(char addr) {

@@ -20,8 +20,8 @@
 | `audio_demo.badge` | Square-wave melody on OUT0, including `NOTE_REST` |
 | `pdm_demo.badge` | First-order PDM sample playback on OUT1-3 |
 | `inline_asm.badge` | Raw `asm { ... }` block with `${...}` variable placeholders |
-| `word_math.badge` | 16-bit words, casts, and `* / %` |
-| `dword_math.badge` | 32-bit words, casts, and 32-bit arithmetic |
+| `u16_math.badge` | 16-bit integers, casts, and `* / %` |
+| `u32_math.badge` | 32-bit integers, casts, and 32-bit arithmetic |
 | `math32_test.badge` | 32-bit arithmetic self-test; send `0x01` over UART |
 | `pi.badge` | Computes pi to 44 decimal places over UART, then scrolls it on the LED matrix |
 | `w5500_probe.badge` | Read W5500 `VERSIONR`/`PHYCFGR` over SPI and print on UART |

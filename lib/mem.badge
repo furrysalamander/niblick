@@ -119,40 +119,40 @@ fn void mem_swap8(char a, char b) {
 // 16- and 32-bit access (little- and big-endian)
 // ---------------------------------------------------------------------------
 
-fn word mem_peek16_le(char addr) {
-    return ((word)peek8(addr + 2) << 8) | (word)peek8(addr);
+fn uint16_t mem_peek16_le(char addr) {
+    return ((uint16_t)peek8(addr + 2) << 8) | (uint16_t)peek8(addr);
 }
 
-fn word mem_peek16_be(char addr) {
-    return ((word)peek8(addr) << 8) | (word)peek8(addr + 2);
+fn uint16_t mem_peek16_be(char addr) {
+    return ((uint16_t)peek8(addr) << 8) | (uint16_t)peek8(addr + 2);
 }
 
-fn void mem_poke16_le(char addr, word value) {
+fn void mem_poke16_le(char addr, uint16_t value) {
     poke8(addr, (char)value);
     poke8(addr + 2, (char)(value >> 8));
 }
 
-fn void mem_poke16_be(char addr, word value) {
+fn void mem_poke16_be(char addr, uint16_t value) {
     poke8(addr, (char)(value >> 8));
     poke8(addr + 2, (char)value);
 }
 
-fn dword mem_peek32_le(char addr) {
-    return ((dword)mem_peek16_le(addr + 4) << 16) | (dword)mem_peek16_le(addr);
+fn uint32_t mem_peek32_le(char addr) {
+    return ((uint32_t)mem_peek16_le(addr + 4) << 16) | (uint32_t)mem_peek16_le(addr);
 }
 
-fn dword mem_peek32_be(char addr) {
-    return ((dword)mem_peek16_be(addr) << 16) | (dword)mem_peek16_be(addr + 4);
+fn uint32_t mem_peek32_be(char addr) {
+    return ((uint32_t)mem_peek16_be(addr) << 16) | (uint32_t)mem_peek16_be(addr + 4);
 }
 
-fn void mem_poke32_le(char addr, dword value) {
-    mem_poke16_le(addr, (word)value);
-    mem_poke16_le(addr + 4, (word)(value >> 16));
+fn void mem_poke32_le(char addr, uint32_t value) {
+    mem_poke16_le(addr, (uint16_t)value);
+    mem_poke16_le(addr + 4, (uint16_t)(value >> 16));
 }
 
-fn void mem_poke32_be(char addr, dword value) {
-    mem_poke16_be(addr, (word)(value >> 16));
-    mem_poke16_be(addr + 4, (word)value);
+fn void mem_poke32_be(char addr, uint32_t value) {
+    mem_poke16_be(addr, (uint16_t)(value >> 16));
+    mem_poke16_be(addr + 4, (uint16_t)value);
 }
 
 // ---------------------------------------------------------------------------

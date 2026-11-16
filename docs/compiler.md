@@ -26,12 +26,13 @@ IR and optimizer later.
 
 Every expression leaves its result in fixed registers:
 
-| Type | Registers |
+| Width | Registers |
 |---|---|
-| `nibble` | `R1` |
-| `char` | `R1` = low, `R2` = high |
-| `word` | `R1` = low, `R2`, `R3`, `R4` = high |
-| `dword` | `R1` = low through `R8` = high |
+| 4-bit (`nibble`, `i4`, `bool`) | `R1` |
+| 8-bit (`char`/`u8`, `i8`) | `R1` = low, `R2` = high |
+| 16-bit (`uint16_t`/`u16`, `i16`/`int`/`short`) | `R1` = low, `R2`, `R3`, `R4` = high |
+| 32-bit (`uint32_t`/`u32`, `i32`/`long`) | `R1` = low through `R8` = high |
+| 64-bit (`uint64_t`/`u64`, `i64`/`int64_t`) | 16-nibble memory result buffer |
 | `flashptr` | `R1` = low, `R2` = middle, `R3` = high |
 
 `R0` is reserved for the instructions that can only access memory through
@@ -51,8 +52,8 @@ needed; all slot addresses are known at compile time.
 | `0x00..0x0F` | registers and SFRs |
 | `0x10..0x1F` | hardware subroutine stack |
 | `0x20..0x37` | shared expression temporaries (24 nibbles) |
-| `0x38..0x3F` | word multiply/divide runtime scratch (8 nibbles) |
-| user RAM | optional 24-nibble dword mul/div scratch, allocated on demand |
+| `0x38..0x3F` | 16-bit multiply/divide runtime scratch (8 nibbles) |
+| user RAM | optional 24-nibble 32-bit mul/div scratch, allocated on demand |
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays (176 nibbles) |
 | `0xF0..0xFF` | SFR page |
 
@@ -142,20 +143,32 @@ cover it.
 
 ## Types and coercions
 
-BadgeC has scalar `nibble`, `char`, `word`, `dword`, and `flashptr` types.
-`struct` declarations add RAM-only aggregates with scalar fields; see
-[structs.md](structs.md). Struct values can be indexed and their fields loaded
-or stored, but they cannot be passed, returned, copied, or stored in flash.
+BadgeC has explicit-width integer types: `nibble`/`u4`, `i4`, `char`/`u8`,
+`i8`, `uint16_t`/`u16`, `i16`, `uint32_t`/`u32`, `i32`, plus `bool` and
+`flashptr`. C/cstdint aliases include `int8_t`, `uint8_t`, `int16_t`,
+`uint16_t`, `int32_t`, `uint32_t`, `short`, `int`, and `long`. The old
+`word`/`dword` spellings were removed; see [types.md](types.md).
 
-Integer widths are `nibble` (4), `char` (8), `word` (16), and `dword` (32).
-Widening is implicit and zero-extends into the higher result registers.
-Narrowing is rejected unless an explicit cast is used:
+`struct` declarations add RAM-only aggregates with scalar fields; see
+[structs.md](structs.md). Struct values can be indexed, copied, passed by
+value, and returned from functions; they cannot be compared as a whole or
+stored in flash.
+
+There are no implicit C integer promotions. The result width is the wider
+operand, with multiplication widening one step. An expected destination type
+acts as a width floor for the whole expression; it never narrows an expression
+and never changes its signedness. Widening sign-extends signed values and
+zero-extends unsigned values. Narrowing is rejected unless an explicit cast is
+used:
 
 ```c
 char low = (char)wide;
 nibble nib = (nibble)wide;
-word back = (word)byte;
-dword wide = (dword)word_value;
+uint16_t back = (uint16_t)byte;
+uint32_t wide_value = (uint32_t)short_value;
+
+uint16_t wide_sum = a + b;       // evaluated at 16 bits
+uint8_t narrow_sum = (uint8_t)(a + b);  // explicitly 8-bit
 ```
 
 `const` arrays are read-only and live in flash; RAM arrays are mutable.
@@ -173,23 +186,23 @@ gpio_set(EPD_CLK);
 The initializer may be any integer constant expression built from literals,
 other scalar consts, casts, unary `- ~ !`, arithmetic, shifts, bitwise
 operators, and comparisons. Results follow the same width and widening rules
-as runtime code, so `word * word` still truncates to 16 bits. A scalar const
+as runtime code, so `uint16_t * uint16_t` still truncates to 16 bits. A scalar const
 whose initializer is dynamic is rejected; use a normal variable instead.
 Taking `&CONST` is also rejected. Local scalar consts work the same way.
 
 Scalar consts still appear in `--map` and `--map-json`, with `address: null`
 and their folded value.
 
-Native signed types are not implemented. Signed arithmetic is available as
-raw-bit helpers in `lib/signed.badge` (`nibble` = 4-bit signed, `char` =
-8-bit signed, `word` = 16-bit signed) and Q4.4 fixed point in
-`lib/fixed.badge`. This keeps the type system and code generator small while
-a signed-heavy application is evaluated. A native signed type would affect
-coercion, comparison, arithmetic shift, division, literal typing, and
-address/print handling; the helper library is the current prototype for
-deciding whether that cost is justified.
+Native signed types are implemented with two's-complement semantics:
+`i4` nibbles, `i8`/`int8_t`, `i16`/`int16_t`/`int`/`short`, and
+`i32`/`int32_t`/`long`, and `i64`/`int64_t`/`u64`/`uint64_t`. Overflow wraps; signed division truncates toward zero;
+`%` takes the dividend's sign; `>>` is arithmetic; signed comparisons flip the
+sign bit before comparing. 64-bit expression results live in a dedicated
+16-nibble buffer; the compiler saves operands in a small 64-bit temporary
+pool. 64-bit multiply/divide call the helpers in `lib/wide.badge`. `lib/signed.badge` remains as a raw-bit helper
+library for fixed-point and bit-oriented code. See [types.md](types.md).
 
-`char` is unsigned 0..255, `word` is unsigned 0..65535, and `dword` is
+`char` is unsigned 0..255, `uint16_t` is unsigned 0..65535, and `uint32_t` is
 unsigned 0..4294967295. String literals and `const char[]` are flash objects
 with a `0xFF` terminator. `flash_next(&p)` is a compiler intrinsic:
 it loads the 3-nibble cursor, calls the RET-table reader, and writes the
@@ -247,12 +260,13 @@ Each `NIBBLE` is one word, so labels after a table are correct.
   correction for page-aligned arrays.
 - Constant-count `<<`/`>>` are unrolled; variable counts use a small loop.
   All integer widths are supported.
-- `*` widens one step (`nibble*nibble -> char`, `char*char -> word`) and
-  keeps `word*word -> word`, `dword*dword -> dword` (low 32 bits). Constant
-  powers of two become shifts.
-- `/` and `%` use unsigned binary long division; constant powers of two
-  become shifts and masks. Division by zero returns zero.
-- Explicit `(nibble)`, `(char)`, `(word)`, and `(dword)` casts.
+- `*` widens one step (`nibble*nibble -> char`, `char*char -> uint16_t`) and
+  keeps `uint16_t*uint16_t -> uint16_t`, `uint32_t*uint32_t -> uint32_t` (low
+  32 bits). Constant powers of two become shifts.
+- `/` and `%` use unsigned binary long division for unsigned operands and a
+  sign-adjusting wrapper for signed operands; constant powers of two become
+  shifts and masks. Division by zero returns zero.
+- Explicit integer and `(bool)` casts.
 - 32-bit multiply/divide use a 24-nibble scratch block allocated only when
   the program actually uses those operators.
 - Constant-mask `gpio_set`/`gpio_clear`/`gpio_toggle` lower to
@@ -279,8 +293,8 @@ Each `NIBBLE` is one word, so labels after a table are correct.
 The Tetris demo is now around **2577 / 4096 words** and **134 / 176 usable
 RAM nibbles**. That leaves roughly 1500 words for new features. The
 `hello.badge` example is about **146 words** after constant-address lowering,
-small void inlining, and frame overlay. The dword-heavy
-`dword_math.badge` demo is about **2295 words** and **97 RAM nibbles**.
+small void inlining, and frame overlay. The 32-bit-heavy
+`u32_math.badge` demo is about **2295 words** and **97 RAM nibbles**.
 
 `tests/test_examples.py` prevents an example from silently exceeding the
 4096-word limit, and `tests/test_size.py` keeps Tetris under a 2800-word

@@ -8,7 +8,7 @@ import pytest
 
 from badgec.assembler import assemble_file
 from badgec.compiler import Compiler
-from badgec.errors import BadgeCompileError, BadgeSyntaxError, BadgeTypeError
+from badgec.errors import BadgeSyntaxError, BadgeTypeError
 from badgec.emulator import Emulator
 from badgec.loader import load_source
 
@@ -51,7 +51,7 @@ def test_struct_layout_and_field_access(tmp_path: Path) -> None:
         struct Mixed {
             char a;
             nibble b;
-            word c;
+            uint16_t c;
         };
 
         Point origin;
@@ -159,51 +159,12 @@ def test_struct_error_cases(tmp_path: Path) -> None:
         tmp_path,
         """
         struct Point { nibble x; nibble y; };
-        Point a;
-        Point b;
-        fn main() {
-            a = b;
-        }
-        """,
-        BadgeTypeError,
-    )
-    compile_error(
-        tmp_path,
-        """
-        struct Point { nibble x; nibble y; };
-        Point value;
-        fn void take(Point p) {
-        }
-        fn main() {
-            take(value);
-        }
-        """,
-        BadgeTypeError,
-    )
-    compile_error(
-        tmp_path,
-        """
-        struct Point { nibble x; nibble y; };
-        fn Point make() {
-            Point p;
-            return p;
-        }
-        fn main() {
-            make();
-        }
-        """,
-        BadgeTypeError,
-    )
-    compile_error(
-        tmp_path,
-        """
-        struct Point { nibble x; nibble y; };
         Point p = 1;
         fn main() {
             p.x = 1;
         }
         """,
-        BadgeCompileError,
+        BadgeTypeError,
     )
     compile_error(
         tmp_path,
@@ -225,3 +186,85 @@ def test_struct_error_cases(tmp_path: Path) -> None:
         """,
         BadgeSyntaxError,
     )
+
+
+def test_struct_assignment_parameters_and_returns(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        struct Point {
+            nibble x;
+            nibble y;
+        };
+
+        Point original;
+        Point copy;
+        Point made;
+        Point items[2];
+        nibble out[4];
+
+        fn void clobber(Point p) {
+            p.x = 5;
+            p.y = 6;
+        }
+
+        fn Point make() {
+            Point p;
+            p.x = 7;
+            p.y = 8;
+            return p;
+        }
+
+        fn main() {
+            original.x = 1;
+            original.y = 2;
+            copy = original;
+            clobber(original);
+            made = make();
+            items[0] = make();
+            items[1] = copy;
+            Point local = items[1];
+            out[0] = made.x;
+            out[1] = make().y;
+            out[2] = items[0].x;
+            out[3] = local.y;
+        }
+        """,
+    )
+
+    def ram(name: str) -> list[int]:
+        symbol = compiler.globals[name]
+        assert symbol.address is not None
+        size = symbol.type.ram_size * (symbol.array_len or 1)
+        return [emu.ram[symbol.address + index] for index in range(size)]
+
+    assert ram("original") == [1, 2]
+    assert ram("copy") == [1, 2]
+    assert ram("made") == [7, 8]
+    assert ram("items") == [7, 8, 1, 2]
+    assert ram("out") == [7, 8, 7, 2]
+
+
+def test_struct_float_field(tmp_path: Path) -> None:
+    compiler, emu = compile_source(
+        tmp_path,
+        """
+        struct Sample {
+            float value;
+            nibble tag;
+        };
+
+        Sample sample;
+        float out;
+
+        fn main() {
+            sample.value = 1.5;
+            sample.tag = 7;
+            out = sample.value;
+        }
+        """,
+    )
+    out = compiler.globals["out"]
+    assert out.address is not None
+    bits = sum(emu.ram[out.address + index] << (4 * index) for index in range(8))
+    assert bits == 0x3FC00000

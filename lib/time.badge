@@ -92,7 +92,7 @@ fn void time_delay_frames(nibble count) {
 
 // Wait for ms millisecond ticks using Sync=0.  The first tick can be up to
 // one millisecond early because writing Sync does not reset the divider.
-fn void time_delay_ms(word ms) {
+fn void time_delay_ms(uint16_t ms) {
     nibble old;
     old = peek(0xF2);
     poke(0xF2, SYNC_1000HZ);

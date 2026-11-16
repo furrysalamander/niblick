@@ -102,6 +102,52 @@ def _load(
     return merged
 
 
+def _append_wide_if_needed(
+    program: ast.Program,
+    loaded: set[Path],
+    loaded_asm: set[Path],
+    roots: list[Path],
+    overrides: dict[Path, str] | None,
+) -> None:
+    from .inline import _uses_qword
+
+    if not _uses_qword(program):
+        return
+    wide_path = _resolve_import(REPO_ROOT / "__implicit__.badge", "lib/wide.badge", roots)
+    wide = _load(wide_path, [], loaded, loaded_asm, roots, overrides)
+    program.globals.extend(wide.globals)
+    program.functions.extend(wide.functions)
+    program.asm_sources.extend(wide.asm_sources)
+
+
+def _append_float_modules_if_needed(
+    program: ast.Program,
+    loaded: set[Path],
+    loaded_asm: set[Path],
+    roots: list[Path],
+    overrides: dict[Path, str] | None,
+) -> None:
+    from .inline import _uses_float
+
+    modules: list[str] = []
+    if _uses_float(program, 32):
+        modules.append("lib/float32.badge")
+    if _uses_float(program, 16):
+        modules.append("lib/float16.badge")
+    for name in modules:
+        try:
+            path = _resolve_import(REPO_ROOT / "__implicit__.badge", name, roots)
+        except BadgeCompileError:
+            # Optional float modules may be absent on some targets.
+            continue
+        if not path.is_file():
+            continue
+        module = _load(path, [], loaded, loaded_asm, roots, overrides)
+        program.globals.extend(module.globals)
+        program.functions.extend(module.functions)
+        program.asm_sources.extend(module.asm_sources)
+
+
 def load_program(
     path: str | Path,
     search_paths: list[str | Path] | None = None,
@@ -120,7 +166,13 @@ def load_program(
             Path(key).expanduser().resolve(): value
             for key, value in source_overrides.items()
         }
-    return _load(entry, [], set(), set(), _search_roots(search_paths), overrides)
+    loaded: set[Path] = set()
+    loaded_asm: set[Path] = set()
+    roots = _search_roots(search_paths)
+    program = _load(entry, [], loaded, loaded_asm, roots, overrides)
+    _append_wide_if_needed(program, loaded, loaded_asm, roots, overrides)
+    _append_float_modules_if_needed(program, loaded, loaded_asm, roots, overrides)
+    return program
 
 
 def load_source(
@@ -159,4 +211,6 @@ def load_source(
         merged.asm_sources.extend(imported.asm_sources)
     merged.globals.extend(parsed.globals)
     merged.functions.extend(parsed.functions)
+    _append_wide_if_needed(merged, loaded, loaded_asm, roots, overrides)
+    _append_float_modules_if_needed(merged, loaded, loaded_asm, roots, overrides)
     return merged

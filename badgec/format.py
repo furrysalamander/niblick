@@ -16,15 +16,19 @@ from typing import Optional
 from . import ast_nodes as ast
 from .errors import BadgeCompileError, BadgeTypeError, location
 from .types import (
-    CHAR,
-    DWORD,
+    BOOL,
     FLASHPTR,
-    NIBBLE,
-    WORD,
+    I8,
+    U4,
+    U8,
     StructType,
     Type,
+    common_type,
+    fits_value,
+    is_integer,
     promoted_mul_type,
-    wider,
+    smallest_type_for,
+    type_for,
 )
 
 
@@ -312,49 +316,83 @@ class PrintExpander:
         self, spec: str, arg_type: Type, filename: str, line: int
     ) -> tuple[str, Optional[Type]]:
         if spec in ("", "d"):
-            table = {
-                NIBBLE: ("uart_print_dec8", CHAR),
-                CHAR: ("uart_print_dec8", None),
-                WORD: ("uart_print_dec16", None),
-                DWORD: ("uart_print_dec32", None),
-            }
             if arg_type is FLASHPTR:
                 return "uart_puts", None
+            if arg_type is BOOL:
+                return "uart_print_dec8", U8
+            if is_integer(arg_type):
+                width = arg_type.ram_size
+                if width == 1:
+                    return (
+                        ("uart_print_dec8_signed", I8)
+                        if arg_type.signed
+                        else ("uart_print_dec8", U8)
+                    )
+                if width == 2:
+                    return (
+                        ("uart_print_dec8_signed", None)
+                        if arg_type.signed
+                        else ("uart_print_dec8", None)
+                    )
+                if width == 4:
+                    return (
+                        ("uart_print_dec16_signed", None)
+                        if arg_type.signed
+                        else ("uart_print_dec16", None)
+                    )
+                if width == 8:
+                    return (
+                        ("uart_print_dec32_signed", None)
+                        if arg_type.signed
+                        else ("uart_print_dec32", None)
+                    )
+                if width == 16:
+                    return (
+                        ("uart_print_dec64_signed", None)
+                        if arg_type.signed
+                        else ("uart_print_dec64", None)
+                    )
         elif spec == "x":
-            table = {
-                NIBBLE: ("uart_print_nibble", None),
-                CHAR: ("uart_print_hex8", None),
-                WORD: ("uart_print_hex16", None),
-                DWORD: ("uart_print_hex32", None),
-            }
+            if arg_type is BOOL:
+                return "uart_print_nibble", U4
+            if is_integer(arg_type):
+                unsigned = type_for(arg_type.ram_size, False)
+                helper = {
+                    1: "uart_print_nibble",
+                    2: "uart_print_hex8",
+                    4: "uart_print_hex16",
+                    8: "uart_print_hex32",
+                    16: "uart_print_hex64",
+                }.get(arg_type.ram_size)
+                if helper is not None:
+                    return helper, (unsigned if arg_type is not unsigned else None)
         elif spec == "b":
-            table = {
-                NIBBLE: ("uart_print_bin4", None),
-                CHAR: ("uart_print_bin8", None),
-                WORD: ("uart_print_bin16", None),
-                DWORD: ("uart_print_bin32", None),
-            }
+            if arg_type is BOOL:
+                return "uart_print_bin4", U4
+            if is_integer(arg_type):
+                unsigned = type_for(arg_type.ram_size, False)
+                helper = {
+                    1: "uart_print_bin4",
+                    2: "uart_print_bin8",
+                    4: "uart_print_bin16",
+                    8: "uart_print_bin32",
+                    16: "uart_print_bin64",
+                }.get(arg_type.ram_size)
+                if helper is not None:
+                    return helper, (unsigned if arg_type is not unsigned else None)
         elif spec == "c":
-            if arg_type is NIBBLE:
-                return "uart_putc", CHAR
-            if arg_type is CHAR:
-                return "uart_putc", None
-            table = {}
+            if arg_type is BOOL or (is_integer(arg_type) and arg_type.ram_size in (1, 2)):
+                return "uart_putc", U8
         elif spec == "s":
             if arg_type is FLASHPTR:
                 return "uart_puts", None
-            if arg_type is CHAR:
+            if arg_type is U8:
                 return "uart_print_str", None
-            table = {}
-        else:  # pragma: no cover - parse_format rejects these
-            table = {}
 
-        if arg_type not in table:
-            raise BadgeTypeError(
-                f"{location(filename, line)}: cannot format {arg_type} "
-                f"with print specifier {{{':' + spec if spec else ''}}}"
-            )
-        return table[arg_type]
+        raise BadgeTypeError(
+            f"{location(filename, line)}: cannot format {arg_type} "
+            f"with print specifier {{{':' + spec if spec else ''}}}"
+        )
 
     # ------------------------------------------------------------------
     # Type inference
@@ -366,15 +404,74 @@ class PrintExpander:
                 return scope[name]
         return self.globals.get(name)
 
+    @staticmethod
+    def _literal_value(expr: ast.Expr):
+        if isinstance(expr, ast.Number):
+            return int(expr.value)
+        if (
+            isinstance(expr, ast.Unary)
+            and expr.op == "-"
+            and isinstance(expr.operand, ast.Number)
+        ):
+            return -int(expr.operand.value)
+        return None
+
+    def _literal_type_for(self, value: int, context: Type) -> Type:
+        if is_integer(context):
+            if fits_value(context, value):
+                return context
+            if context.signed:
+                for width in (1, 2, 4, 8):
+                    if width >= context.ram_size:
+                        candidate = type_for(width, True)
+                        if fits_value(candidate, value):
+                            return candidate
+                return context
+            if value < 0:
+                return context
+            for width in (2, 4, 8):
+                if width >= context.ram_size:
+                    candidate = type_for(width, False)
+                    if fits_value(candidate, value):
+                        return candidate
+            return context
+        return smallest_type_for(value, signed_hint=False)
+
+    def _common_expr_type(self, left: ast.Expr, right: ast.Expr) -> Type:
+        left_value = self._literal_value(left)
+        right_value = self._literal_value(right)
+        if left_value is not None and right_value is not None:
+            signed = left_value < 0 or right_value < 0
+            for width in (1, 2, 4, 8):
+                candidate = type_for(width, signed)
+                if fits_value(candidate, left_value) and fits_value(candidate, right_value):
+                    return candidate
+            return type_for(8, signed)
+        if left_value is not None:
+            right_type = self.infer_type(right)
+            if right_type is BOOL:
+                right_type = U4
+            if not is_integer(right_type):
+                return right_type
+            return common_type(self._literal_type_for(left_value, right_type), right_type)
+        if right_value is not None:
+            left_type = self.infer_type(left)
+            if left_type is BOOL:
+                left_type = U4
+            if not is_integer(left_type):
+                return left_type
+            return common_type(left_type, self._literal_type_for(right_value, left_type))
+        left_type = self.infer_type(left)
+        right_type = self.infer_type(right)
+        if left_type is BOOL:
+            left_type = U4
+        if right_type is BOOL:
+            right_type = U4
+        return common_type(left_type, right_type)
+
     def infer_type(self, expr: ast.Expr):
         if isinstance(expr, ast.Number):
-            if expr.value <= 15:
-                return NIBBLE
-            if expr.value <= 255:
-                return CHAR
-            if expr.value <= 0xFFFF:
-                return WORD
-            return DWORD
+            return smallest_type_for(int(expr.value), signed_hint=False)
         if isinstance(expr, ast.StringLiteral):
             return FLASHPTR
         if isinstance(expr, ast.Var):
@@ -422,20 +519,33 @@ class PrintExpander:
             return decl.type
         if isinstance(expr, ast.Unary):
             if expr.op == "!":
-                return NIBBLE
-            return self.infer_type(expr.operand)
+                return BOOL
+            if expr.op == "-":
+                literal = self._literal_value(expr)
+                if literal is not None:
+                    return smallest_type_for(literal, signed_hint=True)
+                operand = self.infer_type(expr.operand)
+                if operand is BOOL:
+                    operand = U4
+                if not is_integer(operand):
+                    raise BadgeTypeError(
+                        f"{location(self.filename, expr.line)}: unary - requires an integer operand"
+                    )
+                return type_for(operand.ram_size, True)
+            operand = self.infer_type(expr.operand)
+            return U4 if operand is BOOL else operand
         if isinstance(expr, ast.AddressOf):
-            return CHAR
+            return U8
         if isinstance(expr, ast.Binary):
             if expr.op in ("==", "!=", "<", "<=", ">", ">=", "&&", "||"):
-                return NIBBLE
+                return BOOL
             if expr.op in ("<<", ">>"):
                 return self.infer_type(expr.left)
-            left = self.infer_type(expr.left)
-            right = self.infer_type(expr.right)
             if expr.op == "*":
-                return promoted_mul_type(wider(left, right))
-            return wider(left, right)
+                return promoted_mul_type(
+                    self._common_expr_type(expr.left, expr.right)
+                )
+            return self._common_expr_type(expr.left, expr.right)
         if isinstance(expr, ast.Call):
             if expr.name == "print":
                 raise BadgeCompileError(

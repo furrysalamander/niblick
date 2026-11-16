@@ -11,21 +11,25 @@ hardware return stack has only five entries.
 
 | Type | Representation |
 |---|---|
-| `nibble` | One register or one RAM nibble; `0..15` |
-| `char` | Two nibbles, low first then high; `0..255` |
-| `word` | Four nibbles, low first; `0..65535` |
-| `dword` | Eight nibbles, low first; `0..4294967295` |
+| `nibble`/`u4`/`i4`/`bool` | One register or one RAM nibble |
+| `char`/`u8`/`i8` | Two nibbles, low first then high |
+| `uint16_t`/`u16`/`i16`/`int`/`short` | Four nibbles, low first |
+| `uint32_t`/`u32`/`i32`/`long` | Eight nibbles, low first |
+| `uint64_t`/`u64`/`i64`/`int64_t` | Sixteen nibbles; 64-bit results use a memory buffer |
 | `flashptr` | Three nibbles: low, middle, high (12-bit code address) |
 | `void` | No value |
 
+Signed and unsigned types share the same register layout; signed values are
+two's complement and widening sign-extends.
+
 An expression result is left in fixed registers:
 
-| Type | Registers |
+| Width | Registers |
 |---|---|
-| `nibble` | `R1` |
-| `char` | `R1` = low, `R2` = high |
-| `word` | `R1` = low, `R2`, `R3`, `R4` = high |
-| `dword` | `R1` = low through `R8` = high |
+| 4-bit (`nibble`, `i4`, `bool`) | `R1` |
+| 8-bit (`char`/`u8`, `i8`) | `R1` = low, `R2` = high |
+| 16-bit (`uint16_t`, `i16`, `int`, `short`) | `R1` = low, `R2`, `R3`, `R4` = high |
+| 32-bit (`uint32_t`, `i32`, `long`) | `R1` = low through `R8` = high |
 | `flashptr` | `R1` = low, `R2` = middle, `R3` = high |
 
 `R0` is reserved for instructions that only work through it:
@@ -92,13 +96,15 @@ the same expression-result registers:
 | `__bc_w5500_spi_xfer_fast` | `R1:R2` = char | `R1:R2` = char |
 | `__bc_flash_read_char` | `R1/R2/R3` = flash pointer | `R1/R2` = char |
 | `__bc_flash_read_nibble` | `R1/R2/R3` = flash pointer | `R1` = nibble |
-| `__bc_flash_read_word` | `R1/R2/R3` = flash pointer | `R1..R4` = word |
-| `__bc_flash_read_dword` | `R1/R2/R3` = flash pointer | `R1..R8` = dword |
+| `__bc_flash_read_word` | `R1/R2/R3` = flash pointer | `R1..R4` = 16-bit value |
+| `__bc_flash_read_dword` | `R1/R2/R3` = flash pointer | `R1..R8` = 32-bit value |
 | `__bc_mul4` | `R1` = a, `R2` = b | `R1:R2` = product |
 | `__bc_mul8` | `R1:R2`, `R3:R4` | `R1..R4` = 16-bit product |
-| `__bc_mul16` | `R1..R4`, `R5..R8` | `R1..R4` = low word |
+| `__bc_mul16` | `R1..R4`, `R5..R8` | `R1..R4` = low 16 bits |
 | `__bc_divmod8` | `R1:R2`, `R3:R4` | quotient `R1:R2`, remainder `R3:R4` |
 | `__bc_divmod16` | `R1..R4`, `R5..R8` | quotient `R1..R4`, remainder `R5..R8` |
+| `__bc_sdivmod8` | `R1:R2`, `R3:R4` (signed) | signed quotient `R1:R2`, remainder `R3:R4` |
+| `__bc_sdivmod16` | `R1..R4`, `R5..R8` (signed) | signed quotient `R1..R4`, remainder `R5..R8` |
 | `__bc_mul32` | `R4:R5`, `R6:R7` = operand pointers | `R1..R8` = low 32-bit product |
 | `__bc_divmod32` | `R4:R5`, `R6:R7` = operand pointers | quotient/remainder written to the buffers |
 
@@ -183,8 +189,9 @@ the same slots.
 | `0x00..0x0F` | registers and SFRs |
 | `0x10..0x1F` | hardware subroutine stack (5 × 3 nibbles) |
 | `0x20..0x37` | compile-time expression temporaries |
-| `0x38..0x3F` | word multiply/divide runtime scratch |
-| user RAM | optional 24-nibble dword multiply/divide scratch |
+| `0x38..0x3F` | 16-bit multiply/divide runtime scratch |
+| `0x35..0x37` | signed division sign scratch during a runtime call |
+| user RAM | optional 24-nibble 32-bit multiply/divide scratch |
 | `0x40..0xEF` | globals, parameters, locals, RAM arrays |
 | `0xF0..0xFF` | SFR page |
 
@@ -203,6 +210,7 @@ Runtime stack costs from user code:
 | `flash_next` | 2 |
 | `flash_read_nibble`, `flash_read_char` | 3 |
 | `gpio_set` / `gpio_clear` / `gpio_toggle` / `gpio_test` runtime fallback | 2 |
+| signed 8/16-bit `/` and `%` (`__bc_sdivmod8/16`) | 2 |
 | `delay`, `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | 1 |
 
 `uart_init`, `uart_available`, and `uart_puts` are library functions now, so
@@ -218,7 +226,7 @@ entries.
 ## Flash data
 
 A flash `char[]` is stored as `RET R0,nibble` words: low nibble first, then
-high nibble. A flash `nibble[]` is one `RET` word per element. Strings use
+high nibble. A flash `nibble[]` is one `RET` instruction word per element. Strings use
 `0xFF` as the terminator.
 
 BadgeC emits flash bytes as pairs of `NIBBLE` directives rather than

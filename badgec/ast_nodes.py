@@ -31,6 +31,11 @@ class Number(Expr):
 
 
 @dataclass
+class FloatLiteral(Expr):
+    value: float = 0.0
+
+
+@dataclass
 class StringLiteral(Expr):
     value: str = ""
 
@@ -86,7 +91,7 @@ class ToType(Expr):
 
 @dataclass
 class Cast(Expr):
-    """Explicit ``(word)expr`` style conversion."""
+    """Explicit ``(uint16_t)expr`` style conversion."""
 
     type: Type = None  # type: ignore[assignment]
     operand: Expr = field(default_factory=Expr)

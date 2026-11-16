@@ -53,7 +53,7 @@ hand-written runtime path:
 | `delay` | Hot busy loop used by drivers at deep call sites |
 | `high_nibble`, `low_nibble` | Tiny hot formatting helpers |
 | `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | W5500-specific runtime fast paths, not standard API |
-| `mul*`, `divmod*`, flash word/dword reads | Compiler-generated arithmetic and data access |
+| `mul*`, `divmod*`, flash 16/32-bit reads | Compiler-generated arithmetic and data access |
 
 Everything else is ordinary library code. Overlay shares slots between
 disjoint functions, but the largest active call chain still needs its frames,
@@ -85,7 +85,7 @@ import "lib/uart.badge";
 import "lib/string.badge";
 
 nibble n;
-word w;
+uint16_t w;
 char buf[8];
 
 n = 5;
@@ -105,9 +105,11 @@ print("flash={}\n", "hello");
 | `{:s}` | String: `flashptr` or a RAM string address |
 | `{{` / `}}` | Literal braces |
 
-Numeric formatting is unsigned; use `lib/signed.badge` to reinterpret raw bits
-before printing a signed decimal value. The formatter is expanded at compile
-time into ordinary calls such as `uart_puts`, `uart_print_dec16`, and
+Decimal formatting respects the argument's type: unsigned types print
+unsigned, signed types print with a leading `-` when negative, and `bool`
+prints as 0 or 1. Hex and binary formatting show the raw bits at the
+argument's width. The formatter is expanded at compile time into ordinary
+calls such as `uart_puts`, `uart_print_dec16`, `uart_print_dec16_signed`, and
 `uart_print_hex8`. There is no runtime
 format parser, `va_list`, or argument block, and only the formatters actually
 used by the program are linked. Dynamic format strings are rejected. As with
@@ -267,7 +269,7 @@ Constants: `WR_LEDS_OFF`, `WR_MATRIX_OFF`, `WR_IO_POS`, `WR_RX_TX_POS`,
 |---|---|---|
 | `random()` | `nibble` | Read the hardware PRNG; each read advances it |
 | `seed(n)` / `rand_seed(n)` | `void` | Reseed; `15` requests true random |
-| `rand_byte()` / `rand_word()` | `char` / `word` | Multi-read helpers |
+| `rand_byte()` / `rand_word()` | `char` / `uint16_t` | Multi-read helpers |
 | `rand_below(n)` | `nibble` | Uniform `0..n-1` |
 | `rand_range(lo, hi)` | `nibble` | Inclusive range |
 | `rand_true()` | `nibble` | Request a true-random seed, then read |
@@ -331,11 +333,13 @@ returns the number of digits written and always terminates the buffer with
 | `math_mul`, `math_div`, `math_mod`, `math_div8`, `math_mod8` | various | Nibble/char arithmetic |
 | `math_isqrt(c)` / `math_sqrt16(w)` | `nibble` / `char` | Integer square roots |
 | `math_pow2(n)` | `char` | Power of two |
-| `math_gcd8(a, b)` / `math_lcm8(a, b)` | `char` / `word` | GCD / LCM |
+| `math_gcd8(a, b)` / `math_lcm8(a, b)` | `char` / `uint16_t` | GCD / LCM |
 | `math_sign8(v)` / `math_wrap8(v, mod)` / `math_div_round8(a, b)` | raw sign / wrapped / rounded | Signed and rounding helpers |
 
-`lib/signed.badge` interprets raw bits as two's complement. The `4`, `8`, and
-`16` suffixes select the storage width:
+`lib/signed.badge` interprets raw bits as two's complement. Native signed
+types now cover ordinary signed arithmetic; these helpers remain useful for
+fixed-point storage, masks, and code that wants explicit sign control. The
+`4`, `8`, and `16` suffixes select the storage width:
 
 | Family | Calls |
 |---|---|
@@ -343,7 +347,7 @@ returns the number of digits written and always terminates the buffer with
 | Sign test | `s_is_neg4/8/16` |
 | Comparison | `s_lt4/8/16`, `s_le4/8/16`, `s_gt4/8/16`, `s_ge4/8/16` |
 | Min / max / clamp | `s_min4/8/16`, `s_max4/8/16`, `s_clamp4/8/16` |
-| Sign extension | `s_ext4(v)` -> `char`, `s_ext8(v)` -> `word`, `s_ext16(v)` -> `dword` |
+| Sign extension | `s_ext4(v)` -> `char`, `s_ext8(v)` -> `uint16_t`, `s_ext16(v)` -> `uint32_t` |
 | Arithmetic shift right | `s_sar4/8/16(v, n)` |
 | Multiply | `s_mul4`, `s_mul4_nib`, `s_mul8`, `s_mul16` |
 | Divide / modulo | `s_div4/8/16`, `s_mod4/8/16` |
@@ -452,7 +456,6 @@ a separate device driver under `lib/drivers/`; see
 
 - Dynamic `print()` format strings and non-UART formatting targets
 - General pointer arithmetic, `char *` parameters, and structs
-- Native signed types and 64-bit integers
 - Q8.8 fixed point
 - `malloc` / free
 - Interrupt-driven UART

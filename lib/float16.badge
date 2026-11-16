@@ -1,0 +1,92 @@
+// Native binary16 soft-float helpers.
+//
+// Arithmetic is implemented in lib/float16.asm and does not call the binary32
+// arithmetic helpers.  Conversions reuse the binary32 conversion helpers,
+// which are pure bit-manipulation routines, not arithmetic.
+import "lib/float16.asm";
+import "lib/float32.badge";
+
+extern fn half __bc_f16_add(half a, half b);
+extern fn half __bc_f16_sub(half a, half b);
+extern fn half __bc_f16_mul(half a, half b);
+extern fn half __bc_f16_div(half a, half b);
+extern fn half __bc_f16_core();
+
+fn bool __bc_f16_is_zero(half a) {
+    return (__bc_f16_bits(a) & 0x7FFF) == 0;
+}
+
+fn nibble __bc_f16_cmp(half a, half b) {
+    uint16_t ua;
+    uint16_t ub;
+    uint16_t fa;
+    uint16_t fb;
+
+    ua = __bc_f16_bits(a);
+    ub = __bc_f16_bits(b);
+    fa = ua & 0x7FFF;
+    fb = ub & 0x7FFF;
+    if ((fa > 0x7C00) || (fb > 0x7C00)) {
+        return 2;
+    }
+    if (fa == 0 && fb == 0) {
+        return 0;
+    }
+    if ((ua & 0x8000) != (ub & 0x8000)) {
+        if ((ua & 0x8000) != 0) {
+            return 15;
+        }
+        return 1;
+    }
+    if (fa == fb) {
+        return 0;
+    }
+    if ((ua & 0x8000) != 0) {
+        if (fa > fb) {
+            return 15;
+        }
+        return 1;
+    }
+    if (fa > fb) {
+        return 1;
+    }
+    return 15;
+}
+
+
+extern fn float __bc_f16_to_f32(half a);
+extern fn half __bc_f32_to_f16(float a);
+
+fn half __bc_u32_to_f16(uint32_t v) {
+    return __bc_f32_to_f16(__bc_u32_to_f32(v));
+}
+
+fn half __bc_i32_to_f16(int32_t v) {
+    return __bc_f32_to_f16(__bc_i32_to_f32(v));
+}
+
+fn half __bc_u64_to_f16(uint64_t v) {
+    return __bc_f32_to_f16(__bc_u64_to_f32(v));
+}
+
+fn half __bc_i64_to_f16(int64_t v) {
+    return __bc_f32_to_f16(__bc_i64_to_f32(v));
+}
+
+fn uint32_t __bc_f16_to_u32(half a) {
+    return __bc_f32_to_u32(__bc_f16_to_f32(a));
+}
+
+fn int32_t __bc_f16_to_i32(half a) {
+    return __bc_f32_to_i32(__bc_f16_to_f32(a));
+}
+
+fn uint64_t __bc_f16_to_u64(half a) {
+    __bc_f32_to_u64_asm(__bc_f16_to_f32(a));
+    return __bc_conv64_f32;
+}
+
+fn int64_t __bc_f16_to_i64(half a) {
+    __bc_f32_to_i64_asm(__bc_f16_to_f32(a));
+    return __bc_conv64_f32;
+}

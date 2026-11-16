@@ -15,7 +15,7 @@ import dataclasses
 from . import ast_nodes as ast
 from .asm_link import scan_asm
 from .asm_text import IDENT_RE, asm_function_references, placeholder_names
-from .types import VOID
+from .types import BOOL, F32, VOID, is_integer
 
 
 def _is_pure(expr: ast.Expr) -> bool:
@@ -87,7 +87,7 @@ def _inline_expr(
             # arithmetic after inlining.
             mapping[param.name] = (
                 ast.ToType(param.type, arg, line=getattr(arg, "line", 0))
-                if param.type.name in ("char", "word")
+                if (is_integer(param.type) and param.type.ram_size >= 2) or param.type is BOOL
                 else arg
             )
 
@@ -220,7 +220,398 @@ def _global_has_side_effects(decl: ast.GlobalDecl) -> bool:
     return False
 
 
-def _eliminate_dead(program: ast.Program) -> None:
+QW_FUNCTION_NAMES = {
+    "__bc_mul64",
+    "__bc_div64",
+    "__bc_mod64",
+    "__bc_smul64",
+    "__bc_sdiv64",
+    "__bc_smod64",
+    "uart_print_dec32_digits",
+    "uart_print_dec64",
+    "uart_print_dec64_signed",
+    "uart_print_hex64",
+    "uart_print_bin64",
+}
+QW_GLOBAL_NAMES = {
+    "__bc_w_q",
+    "__bc_w_r",
+    "__bc_conv64_f32",
+}
+
+FLOAT32_FUNCTIONS = {
+    "__bc_f32_add", "__bc_f32_sub", "__bc_f32_mul", "__bc_f32_div",
+    "__bc_f32_cmp", "__bc_f32_eq", "__bc_f32_ne", "__bc_f32_lt",
+    "__bc_f32_le", "__bc_f32_gt", "__bc_f32_ge", "__bc_f32_is_zero",
+    "__bc_u32_to_f32", "__bc_i32_to_f32",
+    "__bc_u64_to_f32", "__bc_i64_to_f32",
+    "__bc_f32_to_i32", "__bc_f32_to_u32",
+    "__bc_f32_to_i64", "__bc_f32_to_u64",
+    "__bc_f32_to_u64_asm", "__bc_f32_to_i64_asm",
+    "__bc_f32_int32_core", "__bc_f32_int64_core", "__bc_f32_core",
+}
+
+FLOAT16_FUNCTIONS = {
+    "__bc_f16_add", "__bc_f16_sub", "__bc_f16_mul", "__bc_f16_div",
+    "__bc_f16_cmp", "__bc_f16_eq", "__bc_f16_ne", "__bc_f16_lt",
+    "__bc_f16_le", "__bc_f16_gt", "__bc_f16_ge", "__bc_f16_is_zero",
+    "__bc_u32_to_f16", "__bc_i32_to_f16",
+    "__bc_u64_to_f16", "__bc_i64_to_f16",
+    "__bc_f16_to_i32", "__bc_f16_to_u32",
+    "__bc_f16_to_i64", "__bc_f16_to_u64",
+    "__bc_f16_to_f32", "__bc_f32_to_f16", "__bc_f16_core",
+}
+
+
+
+def _walk_ast(node) -> None:
+    if not dataclasses.is_dataclass(node):
+        return
+    yield_node[0](node)
+    for data_field in dataclasses.fields(node):
+        value = getattr(node, data_field.name)
+        if dataclasses.is_dataclass(value):
+            _walk_ast(value)
+        elif isinstance(value, list):
+            for item in value:
+                if dataclasses.is_dataclass(item):
+                    _walk_ast(item)
+
+
+yield_node: list = [lambda node: None]
+
+
+def _uses_qword(program: ast.Program) -> bool:
+    """True when a program mentions a 64-bit type or literal."""
+
+    found = [False]
+
+    def visit(node) -> None:
+        if found[0]:
+            return
+        if isinstance(node, ast.Number):
+            if int(node.value) > 0xFFFFFFFF:
+                found[0] = True
+        elif isinstance(node, ast.Unary) and node.op == "-" and isinstance(node.operand, ast.Number):
+            if -int(node.operand.value) < -(1 << 31):
+                found[0] = True
+        elif isinstance(node, (ast.Cast, ast.ToType)):
+            if getattr(node.type, "ram_size", 0) == 16:
+                found[0] = True
+        else:
+            typ = getattr(node, "type", None)
+            if typ is not None and getattr(typ, "ram_size", 0) == 16:
+                found[0] = True
+            if isinstance(node, ast.FunctionDecl) and getattr(node.return_type, "ram_size", 0) == 16:
+                found[0] = True
+
+    yield_node[0] = visit
+    for decl in program.globals:
+        if decl.name in QW_GLOBAL_NAMES:
+            continue
+        _walk_ast(decl)
+        if found[0]:
+            return True
+    excluded = QW_FUNCTION_NAMES | FLOAT32_FUNCTIONS | FLOAT16_FUNCTIONS
+    for fn in program.functions:
+        if fn.name in excluded:
+            continue
+        _walk_ast(fn)
+        if found[0]:
+            return True
+    return False
+
+
+def _collect_binary_ops(program: ast.Program) -> set[str]:
+    ops: set[str] = set()
+
+    def visit(node) -> None:
+        if isinstance(node, ast.Binary):
+            ops.add(node.op)
+
+    yield_node[0] = visit
+    for decl in program.globals:
+        if decl.name in QW_GLOBAL_NAMES:
+            continue
+        _walk_ast(decl)
+    for fn in program.functions:
+        if fn.name in QW_FUNCTION_NAMES:
+            continue
+        _walk_ast(fn)
+    return ops
+
+
+def _uses_signed_qword(program: ast.Program) -> bool:
+    found = [False]
+
+    def visit(node) -> None:
+        if found[0]:
+            return
+        typ = getattr(node, "type", None)
+        if typ is not None and getattr(typ, "ram_size", 0) == 16 and getattr(typ, "signed", False):
+            found[0] = True
+            return
+        if isinstance(node, ast.FunctionDecl) and getattr(node.return_type, "ram_size", 0) == 16 and getattr(node.return_type, "signed", False):
+            found[0] = True
+        elif isinstance(node, ast.Unary) and node.op == "-" and isinstance(node.operand, ast.Number):
+            if -int(node.operand.value) < -(1 << 31):
+                found[0] = True
+
+    yield_node[0] = visit
+    for decl in program.globals:
+        if decl.name in QW_GLOBAL_NAMES:
+            continue
+        _walk_ast(decl)
+        if found[0]:
+            return True
+    for fn in program.functions:
+        if fn.name in QW_FUNCTION_NAMES:
+            continue
+        _walk_ast(fn)
+        if found[0]:
+            return True
+    return False
+
+
+def _qword_helpers_needed(program: ast.Program) -> set[str]:
+    if not _uses_qword(program):
+        return set()
+    ops = _collect_binary_ops(program)
+    signed = _uses_signed_qword(program)
+    needed: set[str] = set()
+    if "*" in ops:
+        needed.add("__bc_mul64")
+        if signed:
+            needed.add("__bc_smul64")
+    if "/" in ops:
+        needed.add("__bc_div64")
+        if signed:
+            needed.add("__bc_sdiv64")
+    if "%" in ops:
+        needed.add("__bc_mod64")
+        if signed:
+            needed.add("__bc_smod64")
+    return needed
+
+
+def _uses_float(program: ast.Program, bits: int) -> bool:
+    found = [False]
+    excluded = FLOAT32_FUNCTIONS | FLOAT16_FUNCTIONS
+
+    def visit(node) -> None:
+        if found[0]:
+            return
+        typ = getattr(node, "type", None)
+        if typ is not None and getattr(typ, "is_float", False) and getattr(typ, "float_bits", 0) == bits:
+            found[0] = True
+            return
+        if isinstance(node, ast.FunctionDecl):
+            rt = node.return_type
+            if getattr(rt, "is_float", False) and getattr(rt, "float_bits", 0) == bits:
+                found[0] = True
+
+    yield_node[0] = visit
+    for decl in program.globals:
+        _walk_ast(decl)
+        if found[0]:
+            return True
+    for fn in program.functions:
+        if fn.name in excluded:
+            continue
+        _walk_ast(fn)
+        if found[0]:
+            return True
+    return False
+
+
+def _float_ops_by_width(program: ast.Program) -> dict[int, set[str]]:
+    """Best-effort type-aware float operation discovery.
+
+    The AST has no type annotations at this stage, so this walks declarations
+    to build a simple name-to-type map and uses it to decide whether an
+    arithmetic or comparison operation belongs to binary16 or binary32.
+    """
+
+    global_types = {decl.name: decl.type for decl in program.globals}
+    returns = {fn.name: fn.return_type for fn in program.functions}
+    result: dict[int, set[str]] = {16: set(), 32: set()}
+
+    def infer(expr: ast.Expr, scope: dict[str, object]):
+        if isinstance(expr, ast.Var):
+            return scope.get(expr.name, global_types.get(expr.name))
+        if isinstance(expr, ast.FloatLiteral):
+            return F32
+        if isinstance(expr, ast.Number):
+            return None
+        if isinstance(expr, (ast.Cast, ast.ToType)):
+            return expr.type if getattr(expr.type, "is_float", False) else None
+        if isinstance(expr, ast.Call):
+            return returns.get(expr.name)
+        if isinstance(expr, ast.Unary):
+            return infer(expr.operand, scope)
+        if isinstance(expr, ast.Binary):
+            left = infer(expr.left, scope)
+            if left is not None and getattr(left, "is_float", False):
+                return left
+            right = infer(expr.right, scope)
+            if right is not None and getattr(right, "is_float", False):
+                return right
+            return None
+        return None
+
+    def walk_expr(expr: ast.Expr, scope: dict[str, object]) -> None:
+        if isinstance(expr, ast.Binary):
+            typ = infer(expr.left, scope) or infer(expr.right, scope)
+            if typ is not None and getattr(typ, "is_float", False):
+                if expr.op in ("+", "-", "*", "/"):
+                    result.setdefault(typ.float_bits, set()).add(expr.op)
+                elif expr.op in ("==", "!=", "<", "<=", ">", ">="):
+                    result.setdefault(typ.float_bits, set()).add(expr.op)
+            walk_expr(expr.left, scope)
+            walk_expr(expr.right, scope)
+            return
+        if isinstance(expr, ast.Unary):
+            walk_expr(expr.operand, scope)
+            return
+        if isinstance(expr, (ast.Cast, ast.ToType)):
+            walk_expr(expr.operand, scope)
+            return
+        for data_field in dataclasses.fields(expr):
+            value = getattr(expr, data_field.name)
+            if isinstance(value, ast.Expr):
+                walk_expr(value, scope)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr):
+                        walk_expr(item, scope)
+
+    def walk_stmt(stmt: ast.Stmt, scope: dict[str, object]) -> None:
+        if isinstance(stmt, ast.VarDecl):
+            scope[stmt.name] = stmt.type
+        if isinstance(stmt, ast.Block):
+            for child in stmt.statements:
+                walk_stmt(child, scope)
+            return
+        if isinstance(stmt, ast.If):
+            walk_expr(stmt.condition, scope)
+            walk_stmt(stmt.then_block, scope)
+            if stmt.else_block is not None:
+                walk_stmt(stmt.else_block, scope)
+            return
+        if isinstance(stmt, ast.While):
+            walk_expr(stmt.condition, scope)
+            walk_stmt(stmt.body, scope)
+            return
+        if isinstance(stmt, ast.For):
+            if stmt.init is not None:
+                walk_stmt(stmt.init, scope)
+            if stmt.condition is not None:
+                walk_expr(stmt.condition, scope)
+            if stmt.update is not None:
+                walk_stmt(stmt.update, scope)
+            walk_stmt(stmt.body, scope)
+            return
+        for data_field in dataclasses.fields(stmt):
+            value = getattr(stmt, data_field.name)
+            if isinstance(value, ast.Expr):
+                walk_expr(value, scope)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.Expr):
+                        walk_expr(item, scope)
+
+    for decl in program.globals:
+        for expr in _initializers(decl):
+            walk_expr(expr, {})
+    for fn in program.functions:
+        scope = {param.name: param.type for param in fn.params}
+        walk_stmt(fn.body, scope)
+    return result
+
+
+def _float_helpers_needed(program: ast.Program, bits: int) -> set[str]:
+    if not _uses_float(program, bits):
+        return set()
+    prefix = f"__bc_f{bits}"
+    excluded = FLOAT32_FUNCTIONS | FLOAT16_FUNCTIONS
+    ops = _float_ops_by_width(program).get(bits, set())
+    cast_float = [False]
+    cast_int = [False]
+    int_targets: set[str] = set()
+
+    def visit(node) -> None:
+        if isinstance(node, (ast.Cast, ast.ToType)):
+            target = node.type
+            if getattr(target, "is_float", False):
+                cast_float[0] = True
+            elif target is BOOL:
+                cast_int[0] = True
+                int_targets.add("zero")
+            elif is_integer(target):
+                cast_int[0] = True
+                int_targets.add(
+                    ("i" if target.signed else "u")
+                    + ("64" if target.ram_size == 16 else "32")
+                )
+
+    yield_node[0] = visit
+    for decl in program.globals:
+        if decl.name in QW_GLOBAL_NAMES:
+            continue
+        _walk_ast(decl)
+    for fn in program.functions:
+        if fn.name in excluded or fn.name in QW_FUNCTION_NAMES:
+            continue
+        _walk_ast(fn)
+
+    needed: set[str] = set()
+    if "+" in ops:
+        needed.add(prefix + "_add")
+    if "-" in ops:
+        needed.add(prefix + "_add")
+        needed.add(prefix + "_sub")
+    if "*" in ops:
+        needed.add(prefix + "_mul")
+    if "/" in ops:
+        needed.add(prefix + "_div")
+    if ops & {"==", "!=", "<", "<=", ">", ">="}:
+        needed.add(prefix + "_cmp")
+    if cast_float[0] or cast_int[0]:
+        use64 = _uses_qword(program)
+        other = 16 if bits == 32 else 32
+        both_floats = _uses_float(program, other)
+        if bits == 32:
+            if cast_float[0]:
+                needed.update({"__bc_u32_to_f32", "__bc_i32_to_f32"})
+                if use64:
+                    needed.update({"__bc_u64_to_f32", "__bc_i64_to_f32"})
+            if cast_int[0]:
+                for key in int_targets:
+                    if key == "zero":
+                        needed.add("__bc_f32_is_zero")
+                    else:
+                        needed.add(f"__bc_f32_to_{key}")
+            if cast_float[0] and both_floats:
+                needed.update({"__bc_f32_to_f16", "__bc_f16_to_f32"})
+        elif bits == 16:
+            if cast_float[0]:
+                needed.update({"__bc_u32_to_f16", "__bc_i32_to_f16"})
+                if use64:
+                    needed.update({"__bc_u64_to_f16", "__bc_i64_to_f16"})
+            if cast_int[0]:
+                for key in int_targets:
+                    if key == "zero":
+                        needed.add("__bc_f16_is_zero")
+                    else:
+                        needed.add(f"__bc_f16_to_{key}")
+            if cast_float[0] and both_floats:
+                needed.update({"__bc_f16_to_f32", "__bc_f32_to_f16"})
+    return needed
+
+
+def _eliminate_dead(
+    program: ast.Program, extra_functions: set[str] | None = None
+) -> None:
     """Remove unreachable functions and unreferenced pure globals.
 
     Functions and globals are analysed together: a kept global's initializer
@@ -268,7 +659,9 @@ def _eliminate_dead(program: ast.Program) -> None:
     kept_globals.update(module_globals)
     reachable: set[str] = set()
     function_worklist: list[str] = (
-        (["main"] if "main" in by_function else []) + sorted(module_functions)
+        (["main"] if "main" in by_function else [])
+        + sorted(module_functions)
+        + sorted((extra_functions or set()) & set(by_function))
     )
     global_worklist: list[str] = list(kept_globals)
 
@@ -400,7 +793,7 @@ def _inline_void_stmt(
             for param, arg in zip(fn.params, call.args):
                 mapping[param.name] = (
                     ast.ToType(param.type, arg, line=getattr(arg, "line", 0))
-                    if param.type.name in ("char", "word")
+                    if (is_integer(param.type) and param.type.ram_size >= 2) or param.type is BOOL
                     else arg
                 )
             body = copy.deepcopy(fn.body)
@@ -467,4 +860,7 @@ def optimize(program: ast.Program) -> None:
 
     # This must run even when there was nothing to inline: imported library
     # modules rely on unused functions and tables disappearing.
-    _eliminate_dead(program)
+    extra = set(_qword_helpers_needed(program))
+    extra.update(_float_helpers_needed(program, 32))
+    extra.update(_float_helpers_needed(program, 16))
+    _eliminate_dead(program, extra)

@@ -456,6 +456,194 @@ __bc_divmod16_zero:
     MOV R8, R0
     RET R0, 0
 
+; Signed char / char.  in: R1:R2=a, R3:R4=b.
+; out: R1:R2=quotient, R3:R4=remainder.  Zero divisor returns zero.
+; Signs are stashed in the shared runtime scratch area (0x35..0x37); these
+; bytes are not used by __bc_divmod8 and are free during a runtime call.
+__bc_sdivmod8:
+    MOV R0, R2
+    AND R0, 8
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod8_a_neg
+    MOV R0, 0
+    MOV [0x36], R0
+    GOTO __bc_sdivmod8_a_done
+__bc_sdivmod8_a_neg:
+    MOV R0, 1
+    MOV [0x36], R0
+    MOV R0, R1
+    CPL R1, R0
+    MOV R0, R2
+    CPL R2, R0
+    MOV R0, 1
+    ADD R1, R0
+    MOV R0, 0
+    ADC R2, R0
+__bc_sdivmod8_a_done:
+    MOV R0, R4
+    AND R0, 8
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod8_b_neg
+    MOV R0, 0
+    MOV [0x35], R0
+    GOTO __bc_sdivmod8_b_done
+__bc_sdivmod8_b_neg:
+    MOV R0, 1
+    MOV [0x35], R0
+    MOV R0, R3
+    CPL R3, R0
+    MOV R0, R4
+    CPL R4, R0
+    MOV R0, 1
+    ADD R3, R0
+    MOV R0, 0
+    ADC R4, R0
+__bc_sdivmod8_b_done:
+    MOV R0, [0x36]
+    MOV R9, R0
+    MOV R0, [0x35]
+    XOR R0, R9
+    MOV [0x37], R0
+    GOSUB __bc_divmod8
+    MOV R0, [0x37]
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod8_q_neg
+    GOTO __bc_sdivmod8_q_done
+__bc_sdivmod8_q_neg:
+    MOV R0, R1
+    CPL R1, R0
+    MOV R0, R2
+    CPL R2, R0
+    MOV R0, 1
+    ADD R1, R0
+    MOV R0, 0
+    ADC R2, R0
+__bc_sdivmod8_q_done:
+    MOV R0, [0x36]
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod8_r_neg
+    GOTO __bc_sdivmod8_r_done
+__bc_sdivmod8_r_neg:
+    MOV R0, R3
+    CPL R3, R0
+    MOV R0, R4
+    CPL R4, R0
+    MOV R0, 1
+    ADD R3, R0
+    MOV R0, 0
+    ADC R4, R0
+__bc_sdivmod8_r_done:
+    RET R0, 0
+
+; Signed word / word.  in: R1..R4=a, R5..R8=b.
+; out: R1..R4=quotient, R5..R8=remainder.  Zero divisor returns zero.
+__bc_sdivmod16:
+    MOV R0, R4
+    AND R0, 8
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod16_a_neg
+    MOV R0, 0
+    MOV [0x36], R0
+    GOTO __bc_sdivmod16_a_done
+__bc_sdivmod16_a_neg:
+    MOV R0, 1
+    MOV [0x36], R0
+    MOV R0, R1
+    CPL R1, R0
+    MOV R0, R2
+    CPL R2, R0
+    MOV R0, R3
+    CPL R3, R0
+    MOV R0, R4
+    CPL R4, R0
+    MOV R0, 1
+    ADD R1, R0
+    MOV R0, 0
+    ADC R2, R0
+    ADC R3, R0
+    ADC R4, R0
+__bc_sdivmod16_a_done:
+    MOV R0, R8
+    AND R0, 8
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod16_b_neg
+    MOV R0, 0
+    MOV [0x35], R0
+    GOTO __bc_sdivmod16_b_done
+__bc_sdivmod16_b_neg:
+    MOV R0, 1
+    MOV [0x35], R0
+    MOV R0, R5
+    CPL R5, R0
+    MOV R0, R6
+    CPL R6, R0
+    MOV R0, R7
+    CPL R7, R0
+    MOV R0, R8
+    CPL R8, R0
+    MOV R0, 1
+    ADD R5, R0
+    MOV R0, 0
+    ADC R6, R0
+    ADC R7, R0
+    ADC R8, R0
+__bc_sdivmod16_b_done:
+    MOV R0, [0x36]
+    MOV R9, R0
+    MOV R0, [0x35]
+    XOR R0, R9
+    MOV [0x37], R0
+    GOSUB __bc_divmod16
+    MOV R0, [0x37]
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod16_q_neg
+    GOTO __bc_sdivmod16_q_done
+__bc_sdivmod16_q_neg:
+    MOV R0, R1
+    CPL R1, R0
+    MOV R0, R2
+    CPL R2, R0
+    MOV R0, R3
+    CPL R3, R0
+    MOV R0, R4
+    CPL R4, R0
+    MOV R0, 1
+    ADD R1, R0
+    MOV R0, 0
+    ADC R2, R0
+    ADC R3, R0
+    ADC R4, R0
+__bc_sdivmod16_q_done:
+    MOV R0, [0x36]
+    CP R0, 0
+    SKIP Z, 2
+    GOTO __bc_sdivmod16_r_neg
+    GOTO __bc_sdivmod16_r_done
+__bc_sdivmod16_r_neg:
+    MOV R0, R5
+    CPL R5, R0
+    MOV R0, R6
+    CPL R6, R0
+    MOV R0, R7
+    CPL R7, R0
+    MOV R0, R8
+    CPL R8, R0
+    MOV R0, 1
+    ADD R5, R0
+    MOV R0, 0
+    ADC R6, R0
+    ADC R7, R0
+    ADC R8, R0
+__bc_sdivmod16_r_done:
+    RET R0, 0
+
 ; Flash word read.  in: R1/R2/R3 = pointer.  out: R1..R4.
 __bc_flash_read_word:
     MOV R6, R1

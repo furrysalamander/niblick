@@ -15,13 +15,18 @@ it is a normal 8-bit machine.
 
 Working today:
 
-- `nibble` (u4), `char` (u8), `word` (u16), `dword` (u32), and `flashptr` (12-bit code address)
+- Explicit-width types: `nibble`/`u4`, `i4`, `char`/`u8`, `i8`, `uint16_t`, `i16`, `uint32_t`, `i32`, `bool`, and `flashptr` (12-bit code address)
+- C/cstdint aliases: `int8_t`, `uint8_t`, `int16_t`, `uint16_t`, `int32_t`, `uint32_t`, `short`, `int`, and `long`
+- Native signed arithmetic, signed division/modulo, arithmetic right shift, and signed comparisons
+- 64-bit integers (`int64_t`, `uint64_t`, `i64`, `u64`) with a memory-based expression convention
+- Destination-width expression typing, so a wider assignment or argument evaluates the expression at that width
+- The old `word`/`dword` type spellings were removed; use `uint16_t`/`int16_t` and `uint32_t`/`int32_t` instead
 - Globals, locals, fixed-size RAM arrays, `const` flash arrays, and scalar `const` values folded to immediates
 - Structs with scalar fields, field access, and arrays of structs
 - Functions, parameters, returns, and tail-call optimization
 - `if`/`else`, `while`, `for`, `break`, `continue`
 - Arithmetic (`+ - * / %`), bitwise operators, constant and variable shifts, comparisons, `&&`, `||`, `!`
-- Explicit casts: `(nibble)`, `(char)`, `(word)`, `(dword)`
+- Explicit casts: `(nibble)`, `(char)`, `(uint16_t)`, `(uint32_t)`, signed types, and `(bool)`
 - `print()` compile-time formatting with typed `{}` / `{:x}` / `{:b}` / `{:c}` / `{:s}` placeholders
 - `import` for the standard modules in `lib/` and device drivers in `lib/drivers/`
 - Imported `.asm` modules with `extern fn` declarations, `${...}` symbol placeholders, call-graph/runtime-linker scanning, and per-file/per-region `no-optimize` markers
@@ -38,8 +43,7 @@ Working today:
 Not implemented yet:
 
 - General (non-tail) recursion
-- 64-bit integers and floating point
-- Native signed types (raw-bit signed helpers live in `lib/signed.badge`)
+- Floating point (`half`, `float`, `double`)
 - General pointers and pointer arithmetic
 - Struct parameters/returns, nested structs, aggregate initializers, varargs, and dynamic allocation
 - Full register allocation and a broader peephole/optimization pipeline
@@ -260,9 +264,9 @@ clamping:
 next_height = sum(neighbours) / 2 - previous_height
 ```
 
-It is about 1027 words and 164 RAM nibbles. This is the small-scale prototype
-for deciding whether native signed types are worth adding; the helpers are
-currently sufficient.
+It is about 1027 words and 164 RAM nibbles. It still uses the raw-bit helpers
+in `lib/signed.badge`, which remain useful for fixed-point and bit-oriented
+code even though native signed types are now available.
 
 ## LED-matrix demo: falling water
 
@@ -380,6 +384,7 @@ W5500 fast SPI path. `docs/stdlib.md` explains why those stay builtins.
 - `docs/serial.md` — UART details and load/save workflow
 - `docs/stdlib.md` — standard library, intrinsics, and module reference
 - `docs/pins.md` — Voja4 I/O pin map and board assignments
+- `docs/types.md` — type spellings, aliases, signed arithmetic, `bool`, and target typing
 - `docs/structs.md` — struct syntax, layout, and current limits
 - `docs/drivers/w5500.md` — W5500 Ethernet driver
 - `docs/runtime-abi.md` — BadgeC calling convention and runtime

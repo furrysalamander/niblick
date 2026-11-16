@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .asm_opt import asm_word_count
 from .assembler import assemble_file, code_words
 from .compiler import Compiler
 from .disasm import decode
@@ -55,6 +56,12 @@ def compile_source(
     hex_path: Path | None = None
     words: int | None = None
     if assemble:
+        words = asm_word_count(asm)
+        if words > 4096:
+            raise BadgeError(
+                f"program is {words} words, but the badge has only 4096 words "
+                "of code space"
+            )
         hex_path = out_dir / (source_path.stem + ".hex")
         assemble_file(asm_path, hex_path)
         words = code_words(hex_path)

@@ -137,11 +137,11 @@ def test_symbols_prints_function_words(tmp_path: Path, capsys) -> None:
 
 
 def test_example_sizes_stay_consistent(tmp_path: Path) -> None:
-    example = ROOT / "examples" / "dword_math.badge"
+    example = ROOT / "examples" / "u32_math.badge"
     compiler = Compiler(load_program(example), str(example))
-    asm_path = tmp_path / "dword_math.asm"
+    asm_path = tmp_path / "u32_math.asm"
     asm_path.write_text(compiler.compile())
-    hex_path = tmp_path / "dword_math.hex"
+    hex_path = tmp_path / "u32_math.hex"
     assemble_file(asm_path, hex_path)
     total = code_words(hex_path)
     sizes = compiler.code_sizes(total)

@@ -28,3 +28,7 @@ dependencies from the repository root:
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[lsp]"
 ```
+
+## License
+
+GPL-3.0-only. See `LICENSE`.

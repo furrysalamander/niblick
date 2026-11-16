@@ -4,7 +4,7 @@
   "description": "Niblick language support for the Hackaday Supercon.6 badge",
   "version": "1.0.0",
   "publisher": "niblick",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "engines": {
     "vscode": "^1.85.0"
   },

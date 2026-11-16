@@ -1,7 +1,8 @@
 # Third-party notices
 
-Niblick is licensed under the GNU General Public License, version 3. It depends
-on the following third-party packages.
+Niblick, including the compiler and the VS Code extension, is licensed under
+the GNU General Public License, version 3. It depends on the following
+third-party packages.
 
 ## supercon6-assembler
 

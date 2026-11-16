@@ -18,6 +18,31 @@ code runs under Pyodide; Monaco provides the source editor.
 - WebSerial flashing at 9600 8N1 in Chromium/Edge, with a download fallback
 - Emulator with run, pause, step, reset, LED matrix, UART, and front-panel keys
 
+## Emulator panel
+
+The emulator tab shows `R0`–`R9` in two columns. Each register has four bit
+indicators, a hex value, and a decimal value. The status strip below the
+registers shows `PC`, `SP`, `C`/`Z`/`V`, instruction and cycle counts, the
+clock rate, the `ALT` state, and the last `KeyReg` code.
+
+The front panel is a subset of the badge panel. Only controls with a
+confirmed `KeyReg` mapping are shown:
+
+| Control | `KeyReg` |
+|---|---:|
+| `ALT` | `KeyStatus.AltPress` |
+| `CLOCK` / `STEP` / `DEP+` | 0 |
+| `OPCODE 8` | 1 |
+| `OPCODE 4` | 2 |
+| `OPCODE 2` | 3 |
+| `OPCODE 1` | 4 |
+
+`MODE`, `DATA IN`, `OPERAND X`, `OPERAND Y`, and the other command buttons
+are omitted because the emulator does not model the badge's front-panel
+controller. The `UART` panel has a clear button; input is sent to the
+emulated serial port. See [`docs/keys.md`](../docs/keys.md) for the hardware
+mapping.
+
 ## Build assets
 
 The web app needs the compiler and assembler wheels plus a runtime archive of

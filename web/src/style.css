@@ -364,37 +364,372 @@ pre {
 
 .emulator-panel {
   display: grid;
-  grid-template-rows: auto minmax(80px, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: start;
   gap: 10px;
-  padding: 12px;
-  min-height: 100%;
+  padding: 10px;
 }
 
-.emulator-main {
+.emu-toolbar {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.emu-toolbar button,
+.emu-uart-head button {
+  background: #232833;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.emu-toolbar button:disabled,
+.emu-uart-head button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.emu-toolbar button:not(:disabled):hover,
+.emu-uart-head button:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.emu-toolbar select {
+  background: #232833;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.emu-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.emu-state {
+  margin-left: auto;
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emu-board {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(216, 166, 87, 0.35);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    #101b28;
+  background-size: 18px 18px;
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.35);
+}
+
+.emu-board-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.emu-registers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(216, 166, 87, 0.28);
+  border-radius: 6px;
+  background: rgba(8, 14, 22, 0.55);
+}
+
+.emu-reg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 4px 18px;
+}
+
+.emu-reg-column {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.emu-reg {
+  display: grid;
+  grid-template-columns: 26px auto 34px 26px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  transition: background 120ms ease;
+}
+
+.emu-reg-head {
+  color: #67798d;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.emu-reg-head span:first-child {
+  color: #67798d;
+}
+
+.emu-reg.changed {
+  animation: emu-register-flash 450ms ease;
+}
+
+@keyframes emu-register-flash {
+  0% { background: rgba(216, 166, 87, 0.28); }
+  100% { background: transparent; }
+}
+
+.reg-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.reg-bits {
+  display: flex;
+  gap: 4px;
+}
+
+.reg-bits i {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border: 1px solid #33465b;
+  border-radius: 2px;
+  background: #0d1620;
+}
+
+.reg-bits i.on {
+  background: #e0685e;
+  border-color: #f08a80;
+  box-shadow: 0 0 6px rgba(224, 104, 94, 0.55);
+}
+
+.reg-hex {
+  color: #eef2f7;
+  text-align: right;
+}
+
+.reg-dec {
+  color: #6f7d8e;
+  text-align: right;
+}
+
+.emu-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid rgba(216, 166, 87, 0.18);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.emu-status-item {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: #6f7d8e;
+}
+
+.emu-status-item b {
+  color: #d7dde6;
+  font-weight: 600;
+}
+
+.emu-matrix-wrap {
+  padding: 8px;
+  border: 1px solid rgba(216, 166, 87, 0.28);
+  border-radius: 6px;
+  background: rgba(8, 14, 22, 0.55);
 }
 
 #emu-matrix {
-  width: 160px;
-  height: 320px;
+  display: block;
+  width: 104px;
+  height: 208px;
   background: #0b0d11;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   image-rendering: pixelated;
 }
 
-.emulator-side {
+.emu-front-panel {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
+  align-items: flex-end;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(216, 166, 87, 0.28);
+  flex-wrap: wrap;
 }
 
-.emulator-side select,
-.emulator-side input[type="text"],
-.emulator-side input:not([type]) {
+.emu-fp-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(216, 166, 87, 0.40);
+  border-radius: 6px;
+  background: rgba(3, 9, 15, 0.28);
+  flex: 0 0 auto;
+}
+
+.emu-fp-command .fp-title {
+  max-width: 120px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.fp-title {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.fp-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.fp-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.fp-key > span {
+  color: #aab6c4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.fp-led {
+  display: block;
+  width: 7px;
+  height: 5px;
+  border-radius: 1px;
+  background: #26313f;
+  box-shadow: inset 0 0 2px #000;
+}
+
+.fp-button {
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  color: #201a16;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  box-shadow:
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    0 2px 3px rgba(0, 0, 0, 0.35);
+}
+
+.fp-button:active,
+.fp-button.pressed {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.fp-red {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #c95a54;
+}
+
+.fp-beige {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #d8cfbb;
+}
+
+.fp-square {
+  border-radius: 7px;
+}
+
+.fp-sub {
+  color: #8d99a8;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.emu-fp-note {
+  margin-left: auto;
+  align-self: flex-end;
+  max-width: 170px;
+  color: #67798d;
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.emu-uart-panel {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #12151b;
+}
+
+.emu-uart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+#emu-uart {
+  height: 120px;
+  overflow: auto;
+  margin: 0;
+  padding: 2px;
+  color: #c8d0dc;
+}
+
+.emu-uart-panel .flash-row {
+  flex-wrap: nowrap;
+}
+
+.emu-uart-panel input:not([type]) {
+  flex: 1;
+  min-width: 120px;
   background: #232833;
   color: var(--text);
   border: 1px solid var(--border);
@@ -403,55 +738,14 @@ pre {
   font: inherit;
 }
 
-.emu-speed {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
+@media (max-width: 1000px) {
+  .emu-board-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.emu-state {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-  color: var(--muted);
-  white-space: pre-wrap;
-  max-width: 340px;
-}
-
-.keypad {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  max-width: 340px;
-}
-
-.keypad button {
-  background: #232833;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 6px 8px;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.keypad button:active {
-  border-color: var(--accent);
-  background: #2d3442;
-}
-
-#emu-uart {
-  min-height: 80px;
-  max-height: 220px;
-  overflow: auto;
-  background: #12151b;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  color: #c8d0dc;
+  .emu-matrix-wrap {
+    justify-self: center;
+  }
 }
 
 .problem {

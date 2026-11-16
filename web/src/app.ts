@@ -65,10 +65,23 @@ const emuStep = document.getElementById("emu-step") as HTMLButtonElement;
 const emuReset = document.getElementById("emu-reset") as HTMLButtonElement;
 const emuSpeed = document.getElementById("emu-speed") as HTMLSelectElement;
 const emuState = document.getElementById("emu-state")!;
+const emuPc = document.getElementById("emu-pc")!;
+const emuSp = document.getElementById("emu-sp")!;
+const emuFlags = document.getElementById("emu-flags")!;
+const emuInstr = document.getElementById("emu-instr")!;
+const emuCycles = document.getElementById("emu-cycles")!;
+const emuClock = document.getElementById("emu-clock")!;
+const emuAlt = document.getElementById("emu-alt")!;
+const emuKey = document.getElementById("emu-key")!;
 const emuUart = document.getElementById("emu-uart")!;
 const emuUartInput = document.getElementById("emu-uart-input") as HTMLInputElement;
 const emuUartNewline = document.getElementById("emu-uart-newline") as HTMLInputElement;
 const emuUartSend = document.getElementById("emu-uart-send") as HTMLButtonElement;
+const emuUartClear = document.getElementById("emu-uart-clear") as HTMLButtonElement;
+const registerRows = Array.from(
+  document.querySelectorAll<HTMLElement>(".emu-reg"),
+);
+let previousRegisters: number[] = [];
 
 const mainModel = monaco.editor.createModel(
   HELLO_SOURCE,
@@ -400,18 +413,69 @@ function renderMatrix(left: number[], right: number[]): void {
   }
 }
 
+function renderRegisters(values: number[], animate: boolean): void {
+  for (const row of registerRows) {
+    const index = Number(row.dataset.reg ?? 0);
+    const value = values[index] ?? 0;
+    const bits = row.querySelectorAll<HTMLElement>(".reg-bits i");
+    for (let bit = 0; bit < 4; bit += 1) {
+      bits[bit]?.classList.toggle(
+        "on",
+        ((value >> (3 - bit)) & 1) !== 0,
+      );
+    }
+    const hex = row.querySelector<HTMLElement>(".reg-hex");
+    const dec = row.querySelector<HTMLElement>(".reg-dec");
+    if (hex !== null) {
+      hex.textContent = `0x${value.toString(16).toUpperCase()}`;
+    }
+    if (dec !== null) {
+      dec.textContent = String(value);
+    }
+    if (animate && previousRegisters[index] !== value) {
+      row.classList.remove("changed");
+      void row.offsetWidth;
+      row.classList.add("changed");
+      window.setTimeout(() => row.classList.remove("changed"), 500);
+    }
+  }
+  previousRegisters = values.slice(0, 10);
+}
+
+function clearRegisters(): void {
+  previousRegisters = [];
+  renderRegisters(Array(10).fill(0), false);
+}
+
+function resetStatus(): void {
+  emuPc.textContent = "0x000";
+  emuSp.textContent = "0";
+  emuFlags.textContent = "C0 Z0 V0";
+  emuInstr.textContent = "0";
+  emuCycles.textContent = "0";
+  emuClock.textContent = "250000 Hz";
+  emuAlt.textContent = "0";
+  emuKey.textContent = "—";
+}
+
 function renderEmulator(state: EmulatorState): void {
   emulatorState = state;
   renderMatrix(state.display_left, state.display_right);
-  const registers = state.registers
-    .slice(0, 10)
-    .map((value, index) => `R${index}=${value}`)
-    .join(" ");
-  emuState.textContent =
-    `PC=0x${state.pc.toString(16).padStart(3, "0")} SP=${state.sp} ` +
-    `C=${state.C ? 1 : 0} Z=${state.Z ? 1 : 0} V=${state.V ? 1 : 0}\n` +
-    `instructions=${state.instructions} cycles=${state.cycles} ` +
-    `clock=${state.clock_hz} Hz\n${registers}`;
+  renderRegisters(state.registers.slice(0, 10), true);
+  emuPc.textContent = `0x${state.pc.toString(16).padStart(3, "0")}`;
+  emuSp.textContent = String(state.sp);
+  emuFlags.textContent =
+    `C${state.C ? 1 : 0} Z${state.Z ? 1 : 0} V${state.V ? 1 : 0}`;
+  emuInstr.textContent = String(state.instructions);
+  emuCycles.textContent = String(state.cycles);
+  emuClock.textContent = `${state.clock_hz} Hz`;
+  emuAlt.textContent = state.alt_down ? "1" : "0";
+  emuKey.textContent = state.last_key === null ? "—" : String(state.last_key);
+  emuState.textContent = state.halted
+    ? "halted"
+    : emulatorRunning
+      ? "running"
+      : "ready";
   const text = new TextDecoder().decode(new Uint8Array(state.uart_tx));
   if (emuUart.textContent !== text) {
     emuUart.textContent = text;
@@ -441,12 +505,16 @@ async function loadEmulator(): Promise<void> {
     emuState.textContent = "not loaded";
     emuUart.textContent = "";
     renderMatrix([], []);
+    clearRegisters();
+    resetStatus();
     setEmulatorControls(false);
     return;
   }
 
   setEmulatorControls(false);
   emuState.textContent = "loading";
+  clearRegisters();
+  resetStatus();
   try {
     const result = await runtime.emulatorLoad(program.hex);
     if (generation !== emulatorGeneration) {
@@ -463,6 +531,8 @@ async function loadEmulator(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     emulatorState = null;
     emuState.textContent = `error: ${message}`;
+    clearRegisters();
+    resetStatus();
     setEmulatorControls(false);
   }
 }
@@ -847,6 +917,7 @@ emuRun.addEventListener("click", () => {
   }
   emulatorRunning = !emulatorRunning;
   emuRun.textContent = emulatorRunning ? "Pause" : "Run";
+  emuState.textContent = emulatorRunning ? "running" : "ready";
   if (emulatorRunning) {
     void emulatorFrame();
   }
@@ -867,38 +938,61 @@ emuReset.addEventListener("click", () => {
   void loadEmulator();
 });
 
+function wireMomentary(
+  button: HTMLButtonElement,
+  set: (down: boolean) => Promise<void>,
+): void {
+  let queue: Promise<void> = Promise.resolve();
+  const enqueue = (down: boolean): void => {
+    queue = queue.then(() => set(down));
+  };
+  const setPressed = (pressed: boolean): void => {
+    button.classList.toggle("pressed", pressed);
+  };
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    setPressed(true);
+    enqueue(true);
+  });
+  button.addEventListener("pointerup", () => {
+    setPressed(false);
+    enqueue(false);
+  });
+  button.addEventListener("pointerleave", () => {
+    setPressed(false);
+    enqueue(false);
+  });
+  button.addEventListener("pointercancel", () => {
+    setPressed(false);
+    enqueue(false);
+  });
+  button.addEventListener("click", (event) => {
+    if (event.detail !== 0) {
+      return;
+    }
+    setPressed(true);
+    enqueue(true);
+    enqueue(false);
+    window.setTimeout(() => setPressed(false), 120);
+  });
+}
+
 for (const button of document.querySelectorAll<HTMLButtonElement>(
   "#tab-emulator [data-key]",
 )) {
   const key = Number(button.dataset.key);
-  const press = (event: PointerEvent) => {
-    event.preventDefault();
-    void sendKey(key, true);
-  };
-  const release = () => {
-    void sendKey(key, false);
-  };
-  button.addEventListener("pointerdown", press);
-  button.addEventListener("pointerup", release);
-  button.addEventListener("pointerleave", release);
-  button.addEventListener("pointercancel", release);
+  wireMomentary(button, (down) => sendKey(key, down));
 }
 
 for (const button of document.querySelectorAll<HTMLButtonElement>(
   "#tab-emulator [data-alt]",
 )) {
-  const press = (event: PointerEvent) => {
-    event.preventDefault();
-    void sendAlt(true);
-  };
-  const release = () => {
-    void sendAlt(false);
-  };
-  button.addEventListener("pointerdown", press);
-  button.addEventListener("pointerup", release);
-  button.addEventListener("pointerleave", release);
-  button.addEventListener("pointercancel", release);
+  wireMomentary(button, (down) => sendAlt(down));
 }
+
+emuUartClear.addEventListener("click", () => {
+  emuUart.textContent = "";
+});
 
 emuUartSend.addEventListener("click", async () => {
   const text =

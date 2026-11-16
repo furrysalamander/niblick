@@ -165,38 +165,159 @@
           </div>
           <div class="tab-body hidden" id="tab-emulator">
             <div class="emulator-panel">
-              <div class="emulator-main">
-                <canvas id="emu-matrix" width="160" height="320"></canvas>
-                <div class="emulator-side">
-                  <div class="flash-row">
-                    <button id="emu-run">Run</button>
-                    <button id="emu-step">Step</button>
-                    <button id="emu-reset">Reset</button>
+              <div class="emu-toolbar">
+                <button id="emu-run">Run</button>
+                <button id="emu-step">Step</button>
+                <button id="emu-reset">Reset</button>
+                <label class="emu-speed">Speed
+                  <select id="emu-speed">
+                    <option value="50">slow</option>
+                    <option value="200" selected>normal</option>
+                    <option value="1000">fast</option>
+                  </select>
+                </label>
+                <span id="emu-state" class="emu-state">not loaded</span>
+              </div>
+
+              <div class="emu-board">
+                <div class="emu-board-top">
+                  <section class="emu-registers" aria-label="Registers">
+                    <div class="emu-reg-grid">
+                    <div class="emu-reg-column">
+                      <div class="emu-reg emu-reg-head"><span>REG</span><span>BITS</span><span>HEX</span><span>DEC</span></div>
+                      <div class="emu-reg" data-reg="0">
+                        <span class="reg-name">R0</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="1">
+                        <span class="reg-name">R1</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="2">
+                        <span class="reg-name">R2</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="3">
+                        <span class="reg-name">R3</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="4">
+                        <span class="reg-name">R4</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                    </div>
+                    <div class="emu-reg-column">
+                      <div class="emu-reg emu-reg-head"><span>REG</span><span>BITS</span><span>HEX</span><span>DEC</span></div>
+                      <div class="emu-reg" data-reg="5">
+                        <span class="reg-name">R5</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="6">
+                        <span class="reg-name">R6</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="7">
+                        <span class="reg-name">R7</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="8">
+                        <span class="reg-name">R8</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                      <div class="emu-reg" data-reg="9">
+                        <span class="reg-name">R9</span>
+                        <span class="reg-bits"><i></i><i></i><i></i><i></i></span>
+                        <span class="reg-hex">0x0</span>
+                        <span class="reg-dec">0</span>
+                      </div>
+                    </div>
+                    </div>
+                    <div class="emu-status" aria-label="CPU status">
+                      <div class="emu-status-item"><span>PC</span><b id="emu-pc">0x000</b></div>
+                      <div class="emu-status-item"><span>SP</span><b id="emu-sp">0</b></div>
+                      <div class="emu-status-item"><span>FLAGS</span><b id="emu-flags">C0 Z0 V0</b></div>
+                      <div class="emu-status-item"><span>INSTR</span><b id="emu-instr">0</b></div>
+                      <div class="emu-status-item"><span>CYCLES</span><b id="emu-cycles">0</b></div>
+                      <div class="emu-status-item"><span>CLOCK</span><b id="emu-clock">250000 Hz</b></div>
+                      <div class="emu-status-item"><span>ALT</span><b id="emu-alt">0</b></div>
+                      <div class="emu-status-item"><span>KEY</span><b id="emu-key">—</b></div>
+                    </div>
+                  </section>
+
+                  <section class="emu-matrix-wrap" aria-label="LED matrix">
+                    <canvas id="emu-matrix" width="160" height="320"></canvas>
+                  </section>
+                </div>
+
+                <div class="emu-front-panel">
+                  <div class="emu-fp-group emu-fp-alt">
+                    <div class="fp-title">ALT</div>
+                    <button class="fp-button fp-beige fp-square" data-alt="true" aria-label="ALT"></button>
                   </div>
-                  <label class="emu-speed">Speed
-                    <select id="emu-speed">
-                      <option value="50">slow</option>
-                      <option value="200" selected>normal</option>
-                      <option value="1000">fast</option>
-                    </select>
-                  </label>
-                  <div id="emu-state" class="emu-state">not loaded</div>
-                  <div class="keypad">
-                    <button data-key="1">OPCODE 8</button>
-                    <button data-key="2">OPCODE 4</button>
-                    <button data-key="3">OPCODE 2</button>
-                    <button data-key="4">OPCODE 1</button>
-                    <button data-key="0">DEP / CLOCK</button>
-                    <button data-alt="true">ALT</button>
+                  <div class="emu-fp-group emu-fp-command">
+                    <div class="fp-title">CLOCK / STEP / DEP+</div>
+                    <button class="fp-button fp-beige" data-key="0" aria-label="CLOCK, STEP, or DEP+"></button>
                   </div>
-                  <div class="flash-row">
-                    <input id="emu-uart-input" placeholder="UART input" />
-                    <label><input id="emu-uart-newline" type="checkbox" checked /> newline</label>
-                    <button id="emu-uart-send">Send</button>
+                  <div class="emu-fp-group emu-fp-opcode">
+                    <div class="fp-title">OPCODE</div>
+                    <div class="fp-buttons">
+                        <div class="fp-key">
+                          <i class="fp-led"></i>
+                          <span>8</span>
+                          <button class="fp-button fp-red" data-key="1" aria-label="OPCODE 8"></button>
+                        </div>
+                        <div class="fp-key">
+                          <i class="fp-led"></i>
+                          <span>4</span>
+                          <button class="fp-button fp-red" data-key="2" aria-label="OPCODE 4"></button>
+                        </div>
+                        <div class="fp-key">
+                          <i class="fp-led"></i>
+                          <span>2</span>
+                          <button class="fp-button fp-red" data-key="3" aria-label="OPCODE 2"></button>
+                        </div>
+                        <div class="fp-key">
+                          <i class="fp-led"></i>
+                          <span>1</span>
+                          <button class="fp-button fp-red" data-key="4" aria-label="OPCODE 1"></button>
+                        </div>
+                    </div>
+                    <div class="fp-sub">SYNC &nbsp; / &nbsp; DIR: DIM</div>
                   </div>
+                  <div class="emu-fp-note">Only mapped front-panel keys are shown.</div>
                 </div>
               </div>
-              <pre id="emu-uart"></pre>
+
+              <div class="emu-uart-panel">
+                <div class="emu-uart-head">
+                  <span>UART</span>
+                  <button id="emu-uart-clear">Clear</button>
+                </div>
+                <pre id="emu-uart"></pre>
+                <div class="flash-row">
+                  <input id="emu-uart-input" placeholder="UART input" />
+                  <label><input id="emu-uart-newline" type="checkbox" checked /> newline</label>
+                  <button id="emu-uart-send">Send</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>

@@ -164,7 +164,7 @@ Caveats:
   do not send the same program to both, and do not assume `ttyUSB1` is spare.
 * Program load waits for a valid header, so sender/LOAD timing matters. A
   one-shot send that finishes before LOAD is pressed does nothing; retrying the
-  file is the simplest robust fix. Appending about 1 KiB of NUL bytes helps
+  file handles this case. Appending about 1 KiB of NUL bytes helps
   flush adapters that buffer the tail.
 * After a successful LOAD the badge remains in DIR mode and the matrix stays
   blank. Switch to RUN and press RUN to execute the program.

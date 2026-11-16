@@ -75,7 +75,7 @@ the remaining 7680 block bytes are air.
   message would not.
 - One connection at a time.
 - Placement is always stone and is limited to positions representable by the
-  simple packed-byte adjustment (this demo supports x/z up to 255 and y up to
+  packed-byte adjustment (this demo supports x/z up to 255 and y up to
   4095; negative north/west targets are skipped).
 - Block changes are client-authoritative until reconnect; the platform is
   regenerated from the chunk packet on each login. The client may keep

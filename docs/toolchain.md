@@ -258,8 +258,8 @@ These are the details that most often waste a flashing attempt:
    program `.hex`. A slow blink means stop and exit/reset the bootloader.
 3. **Timing matters.** The loader ignores bytes until it sees a valid header.
    Start the sender and press LOAD close together; if the sender finishes before
-   LOAD, nothing is loaded. A sender that retries the whole file is more robust
-   than a single one-shot write.
+   LOAD, nothing is loaded. A sender that retries the whole file handles this case; a single one-shot
+   write does not.
 4. **The badge stays in DIR mode after loading.** The matrix is blank in DIR
    mode. Select **RUN** and press **RUN** to execute the new program.
 5. **Pad the transfer.** Some FTDI/Tigard adapters buffer the tail. Appending

@@ -25,7 +25,7 @@ Then open a `.nbl` file and press F5.
 The extension also contributes a **Niblick: Launch Program** configuration
 snippet in the debug configuration picker.
 
-## What works
+## Supported operations
 
 - stop on entry;
 - line breakpoints in `.nbl` and `.asm` source files;
@@ -36,11 +36,11 @@ snippet in the debug configuration picker.
 - globals and locals with their types and addresses;
 - watch expressions, including registers, locals, globals, array elements, and
   arithmetic such as `x + 1` or `peek(0x40)`;
-- evaluate simple expressions (`x`, `R1`, `arr[2]`, `peek(0x40)`);
+- evaluate scalar expressions (`x`, `R1`, `arr[2]`, `peek(0x40)`);
 - UART output in the Debug Console;
 - a basic source-level stack trace using the hardware return addresses.
 
-## How the source map works
+## Source map
 
 The compiler emits source markers into the generated assembly:
 

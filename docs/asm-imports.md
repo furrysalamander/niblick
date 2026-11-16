@@ -25,7 +25,7 @@ appended to the generated assembly in import order.
 
 ## Extern declarations
 
-Only function declarations are currently supported:
+Only function declarations are supported:
 
 ```c
 extern fn void spi_init();

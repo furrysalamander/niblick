@@ -79,7 +79,7 @@ Use the `hex` launch field instead of `program`:
 ```
 
 If the map is omitted, breakpoints and source-level stepping are unavailable,
-but registers and execution still work.
+but registers and execution work.
 
 ## Python requirements
 

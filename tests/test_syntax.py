@@ -111,6 +111,44 @@ def test_ternary_type_width_and_nesting(tmp_path: Path) -> None:
     assert value(compiler, emu, "nested") == 2
 
 
+def test_ternary_64bit_and_flashptr(tmp_path: Path) -> None:
+    compiler, emu = build(
+        tmp_path,
+        """
+        const char msg[] = "A";
+        uint64_t x;
+        uint64_t y;
+        flashptr p;
+
+        fn main() {
+            x = 1 ? 0x100000000 : 0;
+            y = 0 ? 0x100000000 : 0x200000000;
+            p = 1 ? msg : msg;
+        }
+        """,
+    )
+    assert value(compiler, emu, "x") == 0x100000000
+    assert value(compiler, emu, "y") == 0x200000000
+
+
+def test_const_array_length_expression(tmp_path: Path) -> None:
+    compiler, _ = build(
+        tmp_path,
+        """
+        const nibble N = 2;
+        const char msg[N] = {'a', 'b'};
+        char sink;
+
+        fn main() {
+            sink = msg[0];
+        }
+        """,
+    )
+    item = next(item for item in compiler.flash if item.string_value is None and item.values == [97, 98])
+    assert item.values == [97, 98]
+    assert compiler.globals["msg"].array_len == 2
+
+
 def test_ternary_in_print_argument(tmp_path: Path) -> None:
     _, emu = build(
         tmp_path,

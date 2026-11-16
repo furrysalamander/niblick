@@ -164,7 +164,7 @@ the server. Compiler and project knowledge stays in Python.
 
 ## Known limitations
 
-- The parser and compiler still stop at the first error, so the editor
+- The parser and compiler stop at the first error, so the editor
   publishes one diagnostic per analysis pass.
 - The language server analyzes the open file as its entry point, using open
   buffers as source overrides.

@@ -213,7 +213,7 @@ Runtime stack costs from user code:
 | signed 8/16-bit `/` and `%` (`__nib_sdivmod8/16`) | 2 |
 | `delay`, `w5500_spi_tx_fast`, `w5500_spi_xfer_fast` | 1 |
 
-`uart_init`, `uart_available`, and `uart_puts` are library functions now, so
+`uart_init`, `uart_available`, and `uart_puts` are library functions, so
 they add a normal user call frame around the runtime byte primitive.
 
 These costs are why deep user call chains should use tail calls or

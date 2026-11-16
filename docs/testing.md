@@ -32,7 +32,7 @@ hardware.
 | Optimizer proofs | `tests/test_peephole_z3.py` | Z3 proofs for constant-address lowering and peephole identities |
 | Property tests | `tests/test_hypothesis_compiler.py` | Generated nibble expressions versus a Python reference |
 | CLI/assembler wrapper | `tests/test_cli.py` | Output paths, error reporting, `.hex` generation |
-| Examples | `tests/test_examples.py` | Every checked-in example still compiles and fits |
+| Examples | `tests/test_examples.py` | Every checked-in example compiles and fits |
 
 The LSP tests are skipped when `pygls` is not installed. Install the optional
 extra with `pip install -e ".[lsp]"` to run them.

@@ -47,7 +47,7 @@ exposes `KeyReg` and `KeyStatus`; `ALT` is reported through
 | DEP+ / CLOCK / STEP | 0 |
 
 Only these five have been confirmed so far. The scanner exposes codes `0..13`;
-codes `5..13` are not mapped yet, and several command buttons can share a code
+codes `5..13` are not mapped, and several command buttons can share a code
 (the measured `DEP+` / `CLOCK` / `STEP` group is code `0`). `key_op1()`,
 `key_op2()`, `key_op4()`, `key_op8()`, and `key_dep()` return the confirmed
 codes; use `key_name(code)` for a flash string label.

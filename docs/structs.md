@@ -73,7 +73,7 @@ are unused.
 - structs in flash tables
 - struct names declared in one file and used in another
 
-Struct declarations are currently file-local: a struct must be declared before
+Struct declarations are file-local: a struct must be declared before
 it is used in the same source file. Functions in imported modules can use their
 own structs internally.
 

@@ -291,7 +291,7 @@ budget.
 
 ## Size and stack reports
 
-`--symbols` now reports per-function word counts, linked runtime routine
+`--symbols` reports per-function word counts, linked runtime routine
 sizes, flash-data size, startup overhead, and the total:
 
 ```text

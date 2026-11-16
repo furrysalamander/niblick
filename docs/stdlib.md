@@ -336,7 +336,7 @@ returns the number of digits written and always terminates the buffer with
 | `math_sign8(v)` / `math_wrap8(v, mod)` / `math_div_round8(a, b)` | raw sign / wrapped / rounded | Signed and rounding helpers |
 
 `lib/signed.nbl` interprets raw bits as two's complement. Native signed
-types now cover ordinary signed arithmetic; these helpers remain useful for
+types cover ordinary signed arithmetic; these helpers remain useful for
 fixed-point storage, masks, and code that wants explicit sign control. The
 `4`, `8`, and `16` suffixes select the storage width:
 

@@ -29,7 +29,7 @@ the usual choice for 16-bit C targets. The `int_least*_t`, `int_fast*_t`,
 types. `intptr_t`/`uintptr_t` are not defined because Niblick has no general
 pointers.
 
-The old `word` and `dword` type spellings have been removed. The ISA still
+The old `word` and `dword` type spellings have been removed. The ISA
 uses "word" for a 12-bit instruction word and describes the data word as 4
 bits; neither is a 16-bit data type. Use `uint16_t`/`int16_t` (or `u16`/`i16`)
 and `uint32_t`/`int32_t` (or `u32`/`i32`) instead.

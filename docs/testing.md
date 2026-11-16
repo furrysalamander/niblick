@@ -224,5 +224,3 @@ pre-commit install
 - The CI workflow runs the full matrix, Ruff/mypy, coverage, the extension
   build and package, the wheel smoke test, and dependency audits for Python,
   the web editor, and the extension.
-- `.github/dependabot.yml` checks the Python, web, extension, and GitHub Actions
-  dependencies weekly.

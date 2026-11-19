@@ -12,7 +12,7 @@
 | Line comment | `//` to end of line |
 | Block comment | `/* ... */`; does not nest |
 
-A decimal integer literal with a leading zero is rejected. Integer and float
+Integer literal with leading zeroes are not allowed. Integer and float
 literals have no suffixes.
 
 ## Program
@@ -113,6 +113,6 @@ import    = "import" string ";" ;
 extern_fn = "extern" "fn" type ident "(" [ params ] ")" ";" ;
 ```
 
-A `.nbl` import merges a source file. A `.asm` import links an assembly module
-and requires `extern fn` declarations for its entry points. See {doc}`imports`,
+`.nbl` imports are merged with the source file. `.asm` imports link assembly modules
+and require `extern fn` declarations for their entry points. See {doc}`imports`,
 {doc}`inline-asm`, and {doc}`asm-modules`.

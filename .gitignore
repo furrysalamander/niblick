@@ -8,6 +8,7 @@ venv/
 .env
 build/
 dist/
+docs/_build/
 *.egg-info/
 *.whl
 

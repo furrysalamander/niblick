@@ -32,6 +32,7 @@ jobs:
       - name: Build Python assets
         run: |
           python -m pip install --upgrade pip build
+          python -m pip install -e ".[docs]"
           python tools/build_web_assets.py
       - name: Build web app
         working-directory: web
@@ -40,6 +41,8 @@ jobs:
           npm run build
         env:
           VITE_BASE: ${{ steps.pages.outputs.base_path }}/
+      - name: Build documentation
+        run: python -m sphinx -W --keep-going -b html docs web/dist/docs
       - uses: actions/upload-pages-artifact@v5
         with:
           path: web/dist

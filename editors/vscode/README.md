@@ -2,10 +2,7 @@
 
 Language support for Niblick and the Supercon.6 (Voja4) badge.
 
-See the repository's `docs/vscode.md` for installation, configuration,
-troubleshooting, and development instructions.
-
-Quick development loop:
+## Development
 
 ```bash
 cd editors/vscode
@@ -13,9 +10,9 @@ npm install
 npm run compile
 ```
 
-Then open this folder in VS Code and press F5.
+Open this folder in VS Code and press F5.
 
-The extension starts the Python language server with:
+The extension starts the language server with:
 
 ```bash
 python3 -m niblick.lsp --stdio
@@ -28,6 +25,8 @@ dependencies from the repository root:
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[lsp]"
 ```
+
+Full documentation is in `../../docs/toolchain/vscode.md`.
 
 ## License
 

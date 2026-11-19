@@ -1,5 +1,5 @@
-// Front-panel key helpers.  The measured KeyReg values are documented in
-// docs/keys.md; these wrappers keep call sites readable.
+// Front-panel key helpers.  KeyReg values are documented in
+// docs/standard-library/keys.md; these wrappers keep call sites readable.
 //
 // Reading KeyStatus clears the JustPress bit.  The convenience helpers below
 // read it for you; the *_of helpers take an already-read status nibble when

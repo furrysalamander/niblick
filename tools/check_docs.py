@@ -87,6 +87,8 @@ def check_prose(path: Path, errors: list[str]) -> None:
         return
     text = strip_code(path.read_text(encoding="utf-8"))
     for number, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith(">"):
+            continue
         for pattern, label in PROHIBITED:
             if re.search(pattern, line, flags=re.IGNORECASE):
                 errors.append(f"{path.relative_to(ROOT)}:{number}: {label}: {line.strip()}")

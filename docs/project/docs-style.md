@@ -88,7 +88,9 @@ linked page.
 
 ## Automated checks
 
-`tools/check_docs.py` rejects prohibited prose outside code blocks.
+`tools/check_docs.py` rejects prohibited prose outside code blocks. Blockquotes
+are excluded and may contain editorial notes.
+
 `tests/test_docs.py` checks links, duplicate headings, CLI coverage, intrinsic
 coverage, and public library function coverage.
 

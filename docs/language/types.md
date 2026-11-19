@@ -1,9 +1,12 @@
 # Types
 
 Niblick has explicit-width integer types. There are no general pointers.
+
 `bool`, `flashptr`, `half`, and `float` are distinct types.
 
 ## Type spellings
+
+> If you're wondering why the signed vs unsigned stuff is a little inconsistent, that's primarily because signed types were a later addition to the language, and also I figure most people probably won't want to use signed types for the smaller types, and so it felt unwieldy to make signed the default. But for larger types, I'm used to specifying the exact size and signedness when working in other languages anyways, so if you're like me in that regard then you'll probably be fine.
 
 | Canonical | Width | RAM | Signed | Aliases |
 |---|---:|---:|---|---|
@@ -25,8 +28,6 @@ Niblick has explicit-width integer types. There are no general pointers.
 
 `char` is unsigned. `int` is signed 16-bit and `long` is signed 32-bit.
 `intptr_t` and `uintptr_t` are not defined.
-
-`word` and `dword` are not type names. Use the fixed-width spellings.
 
 ## Value ranges
 

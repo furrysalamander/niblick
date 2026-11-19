@@ -1,42 +1,30 @@
 document.addEventListener("DOMContentLoaded", () => {
   const SCROLL_KEY = "niblick.sidebar.scroll";
-  const CLICK_KEY = "niblick.sidebar.click";
   const sidebar = document.querySelector(".wy-side-scroll");
   if (!sidebar) {
     return;
   }
 
-  const saveScroll = () => {
-    sessionStorage.setItem(SCROLL_KEY, String(sidebar.scrollTop));
+  let userScrolled = false;
+  const markUserScroll = () => {
+    userScrolled = true;
   };
-
-  sidebar.addEventListener("scroll", saveScroll, { passive: true });
-
-  const menu = document.querySelector(".wy-menu-vertical");
-  menu?.addEventListener(
-    "click",
-    (event) => {
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
-      if (event.target.closest("a")) {
-        saveScroll();
-        sessionStorage.setItem(CLICK_KEY, "1");
-      }
-    },
-    true
-  );
-
-  if (sessionStorage.getItem(CLICK_KEY) !== "1") {
-    return;
-  }
-  sessionStorage.removeItem(CLICK_KEY);
+  sidebar.addEventListener("wheel", markUserScroll, { passive: true });
+  sidebar.addEventListener("touchstart", markUserScroll, { passive: true });
+  sidebar.addEventListener("pointerdown", markUserScroll, { passive: true });
+  sidebar.addEventListener("keydown", markUserScroll);
+  sidebar.addEventListener("scroll", () => {
+    sessionStorage.setItem(SCROLL_KEY, String(sidebar.scrollTop));
+  }, { passive: true });
 
   const saved = sessionStorage.getItem(SCROLL_KEY);
   if (saved === null) {
+    sessionStorage.setItem(SCROLL_KEY, String(sidebar.scrollTop));
     return;
   }
 
+  // The theme calls scrollIntoView() on the active sidebar link after every
+  // navigation. Keep the sidebar where the reader left it instead.
   const originalScrollIntoView = Element.prototype.scrollIntoView;
   Element.prototype.scrollIntoView = function (...args) {
     if (this.closest && this.closest(".wy-side-scroll")) {
@@ -46,9 +34,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const restore = () => {
-    sidebar.scrollTop = Number(saved);
+    if (!userScrolled) {
+      sidebar.scrollTop = Number(saved);
+    }
   };
   restore();
   requestAnimationFrame(restore);
+  window.addEventListener("pageshow", restore);
   window.addEventListener("load", restore);
 });

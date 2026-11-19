@@ -36,6 +36,7 @@ html_baseurl = "https://furrysalamander.github.io/niblick/docs/"
 html_show_sourcelink = False
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = ["sidebar-scroll.js"]
 
 html_theme_options = {
     "collapse_navigation": False,

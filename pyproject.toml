@@ -12,9 +12,7 @@ license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [{ name = "Mike Abbott" }]
 keywords = ["badge", "supercon6", "voja4", "4-bit", "compiler", "niblick"]
-dependencies = [
-    "supercon6-assembler @ git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git@c576ebd08d4916909c89497fba1e1158eb540685#subdirectory=assembler",
-]
+dependencies = []
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -62,11 +60,12 @@ niblick-lsp = "niblick.lsp:main"
 
 [project.urls]
 Homepage = "https://furrysalamander.github.io/niblick/"
+Documentation = "https://furrysalamander.github.io/niblick/docs/"
 Repository = "https://github.com/furrysalamander/niblick"
 Issues = "https://github.com/furrysalamander/niblick/issues"
 
 [tool.setuptools]
-packages = ["niblick", "niblick.runtime"]
+packages = ["niblick", "niblick._vendor", "niblick.runtime"]
 
 [tool.setuptools.package-data]
 niblick = ["runtime/*.asm"]

@@ -11,10 +11,10 @@ third-party packages.
 - License: MIT
 - Copyright: 2022 Mike Szczys
 
-The assembler is installed as a Python dependency rather than vendored into
-this repository. The packaged version includes two fixes: unexpected
-parser exceptions are reported with line information, and `BYTE` pseudo-ops
-advance the symbol address by two words.
+The assembler is vendored at `niblick/_vendor/assemble.py`. The vendored
+version includes two fixes: unexpected parser exceptions are reported with
+line information, and `BYTE` pseudo-ops advance the symbol address by two
+words. The MIT license text is retained in the vendored file.
 
 ## supercon6-emulator (optional)
 

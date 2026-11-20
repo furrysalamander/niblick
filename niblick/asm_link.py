@@ -1,6 +1,6 @@
 """Scan imported assembly for symbols, calls and forbidden constructs.
 
-The generated program still goes through the supercon6-assembler package, so this is
+The generated program still goes through the vendored assembler, so this is
 not a full assembler parser.  It only needs the parts that affect the
 compiler: labels, ``GOSUB``/``GOTO`` targets, placeholders, and the set
 of constructs that would bypass the call-graph or stack model.

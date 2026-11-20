@@ -47,7 +47,7 @@ function pythonExecutable(cwd: string, configured?: string): string {
       return candidate;
     }
   }
-  return "python3";
+  return process.platform === "win32" ? "python" : "python3";
 }
 
 function pythonEnvironment(cwd: string): NodeJS.ProcessEnv {

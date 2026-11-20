@@ -1,35 +1,27 @@
 # VS Code language support
 
-The repository includes a VS Code extension under `editors/vscode/`. It
-provides Niblick and Voja4 assembly syntax highlighting plus a language server
-for diagnostics and document symbols.
+The VS Code extension ID is `furrysalamander.niblick`. It provides Niblick and
+Voja4 assembly syntax highlighting plus a language server for diagnostics and
+document symbols. The source is under `editors/vscode/`.
 
-## Prerequisites
+## Install
 
-For the language server, either create a project `.venv` (the extension
-auto-detects `.venv/bin/python` and `venv/bin/python`):
-
-```bash
-cd /path/to/niblick
-python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[lsp]"
-```
-
-or install the `lsp` extra into the interpreter selected by
-`niblick.pythonPath`:
+Install the extension from the VS Code Marketplace and the Python backend:
 
 ```bash
-python3 -m pip install -e ".[lsp]"
+python -m pip install "niblick[lsp]"
 ```
 
-The `lsp` extra installs `pygls`.
-
-For building the extension:
-
-- Node.js 22 or newer
-- VS Code 1.146 or newer
+The extension auto-detects a workspace `.venv` or `venv`. Set
+`niblick.pythonPath` to use a specific interpreter. If the language server
+cannot start, run `Niblick: Install Python Backend` from the command palette.
 
 ## Run from source
+
+For development:
+
+- Node.js 22 or newer
+- VS Code 1.91 or newer
 
 ```bash
 cd editors/vscode
@@ -54,7 +46,7 @@ npm run package
 Then install it:
 
 ```bash
-code --install-extension niblick-vscode-1.0.0.vsix
+code --install-extension niblick-1.0.0.vsix
 ```
 
 Or use `Extensions: Install from VSIX...` in the command palette.
@@ -109,7 +101,7 @@ For another project, add:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `niblick.pythonPath` | auto-detect | Python interpreter used to launch the server; empty means auto-detect `.venv`/`venv`, then `python3` |
+| `niblick.pythonPath` | auto-detect | Python interpreter used to launch the server; empty means auto-detect `.venv`/`venv`, then `python3` or `python` on Windows |
 | `niblick.includePaths` | `[]` | Extra import roots, also passed through `NIBLICK_PATH` |
 
 ## Commands
@@ -119,6 +111,8 @@ For another project, add:
 - `Niblick: Run Current File in Emulator`: compile and run the active `.nbl`
   file with the headless emulator.
 - `Niblick: Restart Language Server`
+- `Niblick: Install Python Backend`: run `pip install "niblick[lsp]"` in a
+  terminal.
 
 Debugging uses the normal VS Code Run and Debug view with a `niblick` launch
 configuration. See {doc}`debugging`.

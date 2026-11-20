@@ -4,6 +4,7 @@
 |---|---|
 | `niblick/` | Compiler, parser, lexer, loader, optimizer, assembler wrapper, emulator, debugger, LSP |
 | `niblick/runtime/` | Hand-written runtime assembly |
+| `niblick/_vendor/` | Vendored third-party assembler |
 | `lib/` | Standard library modules |
 | `lib/boards/` | Board pin and wiring constants |
 | `lib/drivers/` | Device drivers |

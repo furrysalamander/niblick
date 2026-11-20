@@ -35,7 +35,11 @@ function pythonExecutable(): string {
       return candidate;
     }
   }
-  return "python3";
+  return process.platform === "win32" ? "python" : "python3";
+}
+
+function shellQuote(value: string): string {
+  return /\s/.test(value) ? `"${value}"` : value;
 }
 
 function pythonEnvironment(): { [key: string]: string | undefined } {
@@ -198,6 +202,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("niblick.installBackend", () => {
+      const python = pythonExecutable();
+      const terminal = vscode.window.createTerminal("Niblick Python Backend");
+      terminal.show();
+      terminal.sendText(
+        `${shellQuote(python)} -m pip install "niblick[lsp]"`,
+      );
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
       if (event.affectsConfiguration("niblick")) {
         try {
@@ -214,11 +229,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   } catch (error) {
     const message =
       "Niblick language server failed to start. " +
-      "Install the Python extra with `pip install -e \".[lsp]\"` " +
-      "or set `niblick.pythonPath` to the right interpreter.";
+      "Install the Python backend with `python -m pip install \"niblick[lsp]\"` " +
+      "or set `niblick.pythonPath` to the correct interpreter.";
     outputChannel.appendLine(message);
     outputChannel.appendLine(String(error));
-    void vscode.window.showErrorMessage(message);
+    const action = await vscode.window.showErrorMessage(
+      message,
+      "Install Backend",
+      "Open Settings",
+    );
+    if (action === "Install Backend") {
+      await vscode.commands.executeCommand("niblick.installBackend");
+    } else if (action === "Open Settings") {
+      await vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "niblick.pythonPath",
+      );
+    }
   }
 }
 

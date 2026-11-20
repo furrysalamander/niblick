@@ -1,19 +1,30 @@
 {
-  "name": "niblick-vscode",
+  "name": "niblick",
   "displayName": "Niblick",
   "description": "Niblick language support for the Hackaday Supercon.6 badge",
   "version": "1.0.0",
-  "publisher": "niblick",
+  "publisher": "furrysalamander",
   "license": "GPL-3.0-only",
+  "author": {
+    "name": "Mike Abbott"
+  },
   "engines": {
-    "vscode": "^1.146.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Languages",
     "Other"
   ],
+  "keywords": [
+    "niblick",
+    "supercon6",
+    "voja4",
+    "badge",
+    "compiler",
+    "assembly",
+    "4-bit"
+  ],
   "activationEvents": [
-    "onStartupFinished",
     "onLanguage:niblick",
     "onLanguage:voja4-asm"
   ],
@@ -76,7 +87,7 @@
         "niblick.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Python executable used to launch the Niblick language server. Leave empty to auto-detect .venv/venv, then fall back to python3."
+          "description": "Python executable used to launch the Niblick language server. Leave empty to auto-detect .venv/venv, then fall back to python3 or python on Windows."
         },
         "niblick.includePaths": {
           "type": "array",
@@ -100,6 +111,10 @@
       {
         "command": "niblick.restartServer",
         "title": "Niblick: Restart Language Server"
+      },
+      {
+        "command": "niblick.installBackend",
+        "title": "Niblick: Install Python Backend"
       }
     ],
     "debuggers": [
@@ -166,7 +181,8 @@
   "scripts": {
     "compile": "tsc -p .",
     "watch": "tsc -w -p .",
-    "package": "vsce package"
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "dependencies": {
     "@vscode/debugadapter": "^1.68.0",
@@ -174,7 +190,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@types/vscode": "^1.146.0",
+    "@types/vscode": "^1.91.0",
     "@vscode/vsce": "^4.1.1",
     "typescript": "^7.0.2"
   },
@@ -185,5 +201,9 @@
     "type": "git",
     "url": "https://github.com/furrysalamander/niblick.git",
     "directory": "editors/vscode"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/furrysalamander/niblick/issues"
+  },
+  "homepage": "https://furrysalamander.github.io/niblick/"
 }

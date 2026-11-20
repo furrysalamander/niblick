@@ -1,4 +1,4 @@
-"""Thin wrapper around the ``supercon6-assembler`` package."""
+"""Thin wrapper around the vendored Supercon.6 assembler."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pathlib import Path
 from .errors import NiblickCompileError
 
 try:
-    import assemble as _assemble
-except ImportError:  # pragma: no cover - exercised only when the dependency is missing
+    from ._vendor import assemble as _assemble
+except ImportError:  # pragma: no cover - exercised only with a broken installation
     _assemble = None
 
 _SOURCE_MARKER_RE = re.compile(
@@ -19,12 +19,7 @@ _SOURCE_MARKER_RE = re.compile(
 )
 _ASSEMBLER_LINE_RE = re.compile(r"Line\s+(\d+):")
 
-_ASSEMBLER_HINT = (
-    "install the supercon6-assembler package, for example: "
-    "pip install 'supercon6-assembler @ "
-    "git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git"
-    "#subdirectory=assembler'"
-)
+_ASSEMBLER_HINT = "reinstall the niblick package"
 
 
 def _assembler_module():

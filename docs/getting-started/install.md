@@ -5,7 +5,7 @@
 - Python 3.11 or newer
 - `pip`
 
-The assembler is installed automatically as a dependency.
+The assembler is bundled with the compiler.
 
 ## From a checkout
 

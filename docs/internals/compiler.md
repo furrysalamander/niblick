@@ -12,7 +12,7 @@
   -> niblick/asm_link.py     scan imported assembly for calls and symbols
   -> niblick/asm_opt.py      peepholes, copy propagation, branch relaxation
   -> .asm
-  -> supercon6-assembler     .hex
+  -> bundled assembler       .hex
   -> niblick/emulator.py     headless execution and tests
 ```
 

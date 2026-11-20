@@ -7,9 +7,9 @@ From lowest to highest:
 | Precedence | Operators | Associativity |
 |---:|---|---|
 | 1 | `?:` | right |
-| 2 | `||` | left |
+| 2 | `\|\|` | left |
 | 3 | `&&` | left |
-| 4 | `|` | left |
+| 4 | `\|` | left |
 | 5 | `^` | left |
 | 6 | `&` | left |
 | 7 | `==` `!=` | left |

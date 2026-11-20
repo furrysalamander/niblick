@@ -6,7 +6,8 @@ document symbols. The source is under `editors/vscode/`.
 
 ## Install
 
-Install the extension from the VS Code Marketplace and the Python backend:
+Install `furrysalamander.niblick` from the VS Code Marketplace and install the
+Python backend:
 
 ```bash
 python -m pip install "niblick[lsp]"

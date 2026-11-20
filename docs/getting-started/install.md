@@ -7,6 +7,18 @@
 
 The assembler is bundled with the compiler.
 
+## From PyPI
+
+```bash
+python3 -m pip install niblick
+```
+
+For the VS Code language server:
+
+```bash
+python3 -m pip install "niblick[lsp]"
+```
+
 ## From a checkout
 
 ```bash

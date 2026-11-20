@@ -21,10 +21,21 @@ includes a headless emulator.
 
 ## Install
 
+From PyPI:
+
+```bash
+python3 -m pip install niblick
+```
+
+From a checkout:
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 ```
+
+VS Code extension:
+[furrysalamander.niblick](https://marketplace.visualstudio.com/items?itemName=furrysalamander.niblick)
 
 ## Quick start
 

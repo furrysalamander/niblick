@@ -29,23 +29,6 @@ Niblick has explicit-width integer types. There are no general pointers.
 `char` is unsigned. `int` is signed 16-bit and `long` is signed 32-bit.
 `intptr_t` and `uintptr_t` are not defined.
 
-## Value ranges
-
-| Type | Range |
-|---|---|
-| `nibble` | 0 to 15 |
-| `i4` | -8 to 7 |
-| `char` | 0 to 255 |
-| `i8` | -128 to 127 |
-| `uint16_t` | 0 to 65535 |
-| `i16` | -32768 to 32767 |
-| `uint32_t` | 0 to 4294967295 |
-| `i32` | -2147483648 to 2147483647 |
-| `uint64_t` | 0 to 2^64 - 1 |
-| `i64` | -2^63 to 2^63 - 1 |
-
-Signed integers use two's complement. Arithmetic overflow wraps.
-
 ## `bool`
 
 `bool` is a logical type with one nibble of storage.

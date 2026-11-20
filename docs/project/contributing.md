@@ -4,7 +4,8 @@
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[dev,lsp,fidelity,docs]"
+.venv/bin/python -m pip install -e ".[dev,lsp,docs]"
+.venv/bin/python -m pip install -r requirements-fidelity.txt
 ```
 
 ## Checks

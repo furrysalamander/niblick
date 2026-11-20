@@ -26,8 +26,14 @@ python3 -m pip install -e .
 |---|---|
 | `dev` | Test suite, type checking, coverage, property tests, dependency audit |
 | `lsp` | VS Code language server |
-| `fidelity` | Headless emulator for cross-checks |
 | `docs` | Sphinx, MyST, Read the Docs theme, live rebuild |
+
+The optional upstream emulator cross-check uses the direct Git dependency in
+`requirements-fidelity.txt`:
+
+```bash
+python3 -m pip install -r requirements-fidelity.txt
+```
 
 ```bash
 python3 -m pip install -e ".[docs]"

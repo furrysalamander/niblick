@@ -1,8 +1,8 @@
 """Optional cross-checks against the upstream headless emulator.
 
-These tests run only when the ``fidelity`` extra is installed::
+These tests run only when the optional fidelity dependency is installed::
 
-    python3 -m pip install -e ".[fidelity]"
+    python3 -m pip install -r requirements-fidelity.txt
     python3 -m pytest tests/test_upstream_emulator.py
 """
 

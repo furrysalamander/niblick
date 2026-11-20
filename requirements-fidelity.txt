@@ -1,0 +1,1 @@
+supercon6-emulator @ git+https://github.com/furrysalamander/2022-Supercon6-Badge-Tools.git@c576ebd08d4916909c89497fba1e1158eb540685#subdirectory=emulator

@@ -2,7 +2,7 @@
   "name": "niblick",
   "displayName": "Niblick",
   "description": "Niblick language support for the Hackaday Supercon.6 badge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "furrysalamander",
   "license": "GPL-3.0-only",
   "author": {
@@ -179,20 +179,19 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p .",
-    "watch": "tsc -w -p .",
-    "package": "vsce package",
-    "publish": "vsce publish"
-  },
-  "dependencies": {
-    "@vscode/debugadapter": "^1.68.0",
-    "vscode-languageclient": "^11.0.0"
+    "compile": "tsc --noEmit -p . && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "npm run compile && vsce package --no-dependencies",
+    "publish": "npm run compile && vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.91.0",
+    "@vscode/debugadapter": "^1.68.0",
     "@vscode/vsce": "^4.1.1",
-    "typescript": "^7.0.2"
+    "esbuild": "^0.25.12",
+    "typescript": "^7.0.2",
+    "vscode-languageclient": "^11.0.0"
   },
   "overrides": {
     "minimatch": "11.0.8"

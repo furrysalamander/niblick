@@ -1400,7 +1400,7 @@ class Compiler:
         return self._init_target(
             base,
             type_,
-            array_len if is_array else 0,
+            array_len if array_len is not None else 0,
             initializer,
             name,
             line,
@@ -3978,7 +3978,7 @@ class Compiler:
         left_type = self.infer_type(left, scope)
         right_type = self.infer_type(right, scope)
         if isinstance(left_type, StructType) or isinstance(right_type, StructType):
-            if left_type is not right_type:
+            if not isinstance(left_type, StructType) or left_type is not right_type:
                 raise NiblickTypeError(
                     f"{location(self.filename, expr.line)}: cannot compare "
                     f"{left_type} and {right_type}"

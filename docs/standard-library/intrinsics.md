@@ -50,7 +50,7 @@ single-bit constant mask lowers to `BIT`.
 |---|---|
 | `delay(n)` | Busy loop; `n` is a `nibble` |
 
-The duration depends on the `Clock` SFR. `lib/time.nbl` provides Sync-based
+The duration depends on the `Clock` SFR. `lib/time.nbl` implements Sync-based
 delays.
 
 ## W5500 fast path

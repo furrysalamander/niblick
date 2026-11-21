@@ -1,7 +1,8 @@
 # GPIO
 
 Bank-aware GPIO port access. The constant-mask bit operations are compiler
-intrinsics; this module provides whole-port reads, writes, and bank selection.
+intrinsics; this module implements whole-port reads, writes, and bank
+selection.
 
 ```c
 import "lib/gpio.nbl";

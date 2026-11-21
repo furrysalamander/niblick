@@ -1,6 +1,6 @@
 # Structs
 
-Niblick supports RAM-resident structs with scalar fields.
+A struct declares a RAM-resident aggregate with scalar fields.
 
 ```c
 struct Point {
@@ -20,8 +20,8 @@ fn main() {
 ```
 
 Fields are accessed with `.`. Struct values can be assigned, passed to
-functions by value, and returned from functions. A returned struct can be used
-through a field:
+functions by value, and returned from functions. A returned struct allows
+direct field access:
 
 ```c
 make_point().x

@@ -126,8 +126,8 @@ any data address directly when a raw access is needed.
 
 Page 0's fixed registers are different: `OUT`/`IN` at `0x0A`/`0x0B` are
 reached through `out()`, `in()`, `gpio_read`, and `gpio_write`; `JSR`, `PCL`,
-`PCM`, and `PCH` are driven by calls, jumps, and returns rather than by a
-typed API. Inline assembly can access them when needed.
+`PCM`, and `PCH` are driven by calls, jumps, and returns. Inline assembly can
+access them when needed.
 
 #### `WrFlags` (`0xF3`)
 

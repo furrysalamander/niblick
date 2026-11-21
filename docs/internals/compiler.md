@@ -190,6 +190,6 @@ User-facing errors carry `file:line:column` where possible. The CLI catches
 indicate a compiler bug.
 
 Editor tooling reuses the front end through `niblick/analysis.py` and
-`niblick/symbols.py`. The LSP server in `niblick/lsp.py` provides diagnostics,
+`niblick/symbols.py`. The LSP server in `niblick/lsp.py` implements diagnostics,
 document symbols, hover, completion, go-to-definition, references, and rename.
 See {doc}`../toolchain/vscode`.

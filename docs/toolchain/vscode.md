@@ -1,6 +1,6 @@
 # VS Code language support
 
-The VS Code extension ID is `furrysalamander.niblick`. It provides Niblick and
+The VS Code extension ID is `furrysalamander.niblick`. It adds Niblick and
 Voja4 assembly syntax highlighting plus a language server for diagnostics and
 document symbols. The source is under `editors/vscode/`.
 
@@ -146,6 +146,5 @@ the server. Compiler and project knowledge stays in Python.
   publishes one diagnostic per analysis pass.
 - The language server analyzes the open file as its entry point, using open
   buffers as source overrides.
-- A file without `main` is checked with all of its functions active, so a
-  very large library can report RAM pressure that a real entry point would
-  prune away.
+- A file without `main` is checked with all of its functions active, so a large
+  library can report RAM pressure that a real entry point would prune away.

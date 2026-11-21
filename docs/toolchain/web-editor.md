@@ -1,7 +1,7 @@
 # Web editor
 
 The web editor compiles and runs Niblick programs in the browser. Python runs
-under Pyodide; Monaco provides the source editor.
+under Pyodide; Monaco is the source editor.
 
 Hosted build: <https://furrysalamander.github.io/niblick/>
 

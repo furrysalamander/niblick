@@ -1,7 +1,7 @@
 # 64-bit arithmetic
 
-64-bit values occupy sixteen nibbles. Results use a dedicated memory buffer
-rather than the register result convention.
+64-bit values occupy sixteen nibbles. Results use a dedicated memory buffer,
+not the register result convention.
 
 ## Representation
 
@@ -15,7 +15,7 @@ result buffer and temporary slots while a 64-bit expression is evaluated.
 
 ## Helpers
 
-`lib/wide.nbl` provides the runtime helpers. The loader adds the module when a
+The runtime helpers are in `lib/wide.nbl`. The loader adds the module when a
 program uses 64-bit arithmetic.
 
 | Helper | Operation |

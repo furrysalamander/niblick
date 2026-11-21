@@ -46,11 +46,11 @@ flash string such as `"OPCODE 8"` or `"UNKNOWN"`.
 | `key_last()` | `nibble` | Read status and test `LastPress` |
 | `key_just()` | `nibble` | Read status and test `JustPress` |
 | `key_down(code)` | `nibble` | 1 when `KeyReg` equals `code` and `LastPress` is set |
-| `key_op8()` | `nibble` | Return key code 1 |
-| `key_op4()` | `nibble` | Return key code 2 |
-| `key_op2()` | `nibble` | Return key code 3 |
-| `key_op1()` | `nibble` | Return key code 4 |
-| `key_dep()` | `nibble` | Return key code 0 |
+| `key_op8()` | `nibble` | Key code for `OPCODE 8` |
+| `key_op4()` | `nibble` | Key code for `OPCODE 4` |
+| `key_op2()` | `nibble` | Key code for `OPCODE 2` |
+| `key_op1()` | `nibble` | Key code for `OPCODE 1` |
+| `key_dep()` | `nibble` | Key code for `DEP+` / `CLOCK` / `STEP` |
 | `key_wait()` | `nibble` | Block until `JustPress`, then return `KeyReg` |
 | `key_wait_release()` | `nibble` | Block for a press, then for its release; return the code |
 | `key_wait_any()` | `nibble` | Block until `AnyPress`, then return `KeyReg` |

@@ -22,8 +22,8 @@ From lowest to highest:
 
 ## Expression typing
 
-Niblick has no C integer promotions. The result type of an expression comes
-from its operands, its expected destination type, and explicit casts.
+There are no implicit integer promotions. The result type of an expression
+comes from its operands, its expected destination type, and explicit casts.
 
 ### Result width
 

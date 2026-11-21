@@ -10,13 +10,6 @@ A glyph is five columns wide and eight rows tall. `font5x8_column(c, col)`
 returns one column with the top pixel in bit 7. `text_draw_char` draws at the
 top-left pixel and clips to the 8x16 display.
 
-## Constants
-
-| Name | Type | Value |
-|---|---|---|
-| `font5x8_lo` | `char[]` | table |
-| `font5x8_hi` | `char[]` | table |
-
 ## Functions
 
 | Call | Returns | Notes |

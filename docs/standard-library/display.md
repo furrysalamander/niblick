@@ -17,12 +17,6 @@ array's nibble address as `base`, normally `&screen`.
 - `base` must be page-aligned.
 - Bit 3 is the leftmost pixel in each nibble; bit 0 is the rightmost.
 
-## Constants
-
-| Name | Type | Value |
-|---|---|---|
-| `disp_masks` | `nibble[]` | table |
-
 ## Functions
 
 | Call | Returns | Notes |

@@ -19,7 +19,6 @@ Timing depends on `Clock` and the instruction mix.
 |---|---|---|
 | `AUDIO_MASK` | `nibble` | `1` |
 | `NOTE_REST` | `char` | `0xFE` |
-| `audio_note_half_periods` | `uint16_t[]` | table |
 
 ## Functions
 

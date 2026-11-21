@@ -51,12 +51,9 @@ same time. An uninitialized local may contain a value left by another function.
 
 ## Arrays
 
-Arrays have a fixed length known at compile time. Index expressions are not
-range-checked. An out-of-range index reads or writes another data-memory
-location.
-
-`&array` yields the base nibble address. A `char` element occupies two nibbles,
-so byte arrays advance by two addresses per element.
+Arrays have a fixed length known at compile time. `&array` yields the base
+nibble address. A `char` element occupies two nibbles, so byte arrays advance
+by two addresses per element.
 
 ## Calls and recursion
 
@@ -64,8 +61,3 @@ Non-tail calls use the five-entry hardware stack. Tail calls compile to `GOTO`
 and consume no stack entry. Recursion is permitted only when every edge in the
 cycle is a tail call. The compiler rejects deeper than four non-tail user call
 levels from `main`, leaving one stack entry for runtime helpers.
-
-## Unsupported operations
-
-General pointers, pointer arithmetic, dynamic allocation, and runtime code
-modification are not available. See {doc}`limitations`.

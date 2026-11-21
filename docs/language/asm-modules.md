@@ -106,7 +106,7 @@ Calls must be inside a `fn_*` block. `GOSUB` to a local label is rejected.
 
 Functions and globals referenced only from imported assembly are kept alive
 during dead-declaration elimination. Conversely, a `fn_*` section whose
-extern function is not reachable from `main`, a kept C function, or another
+extern function is not reachable from `main`, a kept Niblick function, or another
 kept assembly routine is stripped along with its parameter slots, like
 an unused Niblick function. A source file without any `fn_*` label is treated
 as data and kept whole; data before the first `fn_*` label is always kept.

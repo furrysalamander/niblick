@@ -1,6 +1,6 @@
 # Niblick
 
-Niblick compiles a C-like language to the 12-bit instruction set of the
+Niblick compiles the Niblick language to the 12-bit instruction set of the
 Hackaday Supercon.6 2022 (Voja4) badge. The compiler emits assembly and a
 `.hex` image, and includes a headless emulator for tests.
 

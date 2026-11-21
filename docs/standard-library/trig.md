@@ -13,7 +13,6 @@ Results are Q4.4 values; `0x10` is 1.0.
 
 | Name | Type | Value |
 |---|---|---|
-| `sin_q4_4_table` | `char[]` | table |
 | `TRIG_STEPS` | `char` | `32` |
 | `TRIG_90` | `nibble` | `8` |
 

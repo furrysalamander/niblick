@@ -60,7 +60,6 @@ software implementations.
 - Float-to-integer conversion truncates toward zero and saturates on overflow.
   NaN converts to 0. Negative values converted to unsigned types become 0.
 - `half` and `float` convert to and from integer and 64-bit integer types.
-- `double`, `f64`, and `_Float64` are not supported.
 
 The implementation notes are in {doc}`../internals/soft-float`.
 

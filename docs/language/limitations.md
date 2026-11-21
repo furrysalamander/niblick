@@ -1,75 +1,17 @@
 # Limitations
 
-## Unsupported syntax
-
-| Construct | Status |
+| Constraint | Effect |
 |---|---|
-| `switch` | Rejected |
-| `do` / `while` | Rejected |
-| `enum` | Rejected |
-| `typedef` | Rejected |
-| `sizeof` | Rejected |
-| `static` | Rejected |
-| `volatile` | Rejected |
-| `goto` | Rejected |
-| Preprocessor directives | Not implemented |
-| C-style function definitions | Rejected; use `fn` |
-| Variadic functions | Not supported |
-| Multiple return values | Not supported |
-| Default or named arguments | Not supported |
-| Compound literals | Not supported |
-| Designated initializers | Not supported |
+| General pointers and pointer arithmetic | Rejected. `&array` yields a nibble address or `flashptr`. |
+| Non-tail recursion | Maximum four non-tail user call levels. Tail-call cycles are allowed. |
+| Dynamic allocation | Not available. All storage is static RAM. |
+| Bounds checking | Not performed. An out-of-range index accesses another data address. |
+| Local initialization | Locals are not zeroed. Frame reuse can expose values from another function. |
+| Code memory | Read-only at runtime. |
+| `double` | Not available. Use `half` or `float`. |
+| Struct fields | Scalar fields only. Arrays and nested structs are rejected. |
+| Struct storage | `const` and flash structs are rejected. |
+| Struct comparison | Whole-struct comparison is rejected. |
+| Initializers | Aggregate initializers do not nest. Local `const` arrays are rejected. |
 
-## Types and data
-
-| Construct | Status |
-|---|---|
-| General pointers | Not supported |
-| Pointer arithmetic | Not supported |
-| `char *` parameters | Not supported |
-| `double`, `f64`, `_Float64` | Not supported |
-| `intptr_t`, `uintptr_t` | Not defined |
-| Variable-length arrays | Not supported |
-| Dynamic allocation | Not supported |
-| Runtime code modification | Not possible |
-| Array bounds checking | Not performed |
-
-## Aggregates
-
-| Construct | Status |
-|---|---|
-| Struct fields that are arrays | Not supported |
-| Nested struct fields | Not supported |
-| Whole-struct comparison | Not supported |
-| Nested aggregate initializers | Not supported |
-| `const` structs | Not supported |
-| Structs in flash tables | Not supported |
-| Struct names shared across files | Not supported |
-| Local `const` arrays | Not supported |
-
-## Control flow and storage
-
-| Construct | Status |
-|---|---|
-| General recursion | Rejected |
-| Non-tail recursion | Rejected |
-| More than four non-tail user call levels | Rejected |
-| Uninitialized local values | Indeterminate |
-| Out-of-range array indices | Unchecked |
-
-Tail-call cycles are permitted. See {doc}`functions` and {doc}`semantics`.
-
-## Library scope
-
-The standard library does not provide:
-
-- dynamic `print()` format strings
-- non-UART formatting targets
-- Q8.8 fixed point
-- interrupt-driven UART
-- I2C or 1-Wire helpers
-- display circles, sprites, or right/up/down scrolling
-- key repeat and multi-key combinations
-- a calibrated millisecond or audio timing model
-
-See {doc}`../standard-library/index` for the available modules.
+See {doc}`types`, {doc}`structs`, and {doc}`semantics`.

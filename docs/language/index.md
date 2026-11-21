@@ -1,7 +1,7 @@
 # Language
 
-Niblick is a statically typed, C-like language with explicit-width integer
-types and no pointer type.
+The Niblick language is statically typed, with explicit-width integer types
+and no pointer type.
 
 ## Source file
 

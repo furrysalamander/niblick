@@ -12,12 +12,6 @@ Addresses are nibble addresses. A byte occupies two consecutive nibbles, so
 overlapping ranges; `mem_copy8` does not. `mem_search8` returns the address of
 the first match, or 0. `mem_crc8` uses CRC-8/ATM with polynomial `0x07`.
 
-## Constants
-
-| Name | Type | Value |
-|---|---|---|
-| `mem_bit_masks` | `nibble[]` | table |
-
 ## Functions
 
 | Call | Returns | Notes |

@@ -108,4 +108,3 @@ An `asm` block emits its text at the current statement position. See
 
 - {doc}`expressions` for operators and lvalues.
 - {doc}`functions` for parameters, returns, and tail calls.
-- {doc}`limitations` for unsupported control-flow constructs.

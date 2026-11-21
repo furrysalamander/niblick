@@ -27,7 +27,7 @@ hardware.
 | Standard library | `tests/test_library.py`, `tests/test_stdlib.py`, `tests/test_signed_lib.py` | UART, GPIO, display, keys, time, power, system, random, memory, strings, math, trig, audio, PDM |
 | Inlining and overlay | `tests/test_compiler.py`, `tests/test_overlay.py` | Single-statement inlining, side-effect guards, frame interference, slot reuse |
 | Print formatting | `tests/test_print.py` | Literal format parsing, typed placeholders, generated UART helpers, errors |
-| Structs | `tests/test_structs.py` | Layout, field access, arrays of structs, rejected forms |
+| Structs | `tests/test_structs.py` | Layout, array and nested fields, value semantics, flash structs, rejected forms |
 | Board constants | `tests/test_board.py` | Output and input masks, default SPI and W5500 assignments |
 | Optimizer proofs | `tests/test_peephole_z3.py` | Z3 proofs for address lowering and peephole identities |
 | Property tests | `tests/test_hypothesis_compiler.py` | Generated nibble expressions against a Python reference |

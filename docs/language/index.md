@@ -63,8 +63,8 @@ Block comments do not nest.
 resolved relative to the importing file, then the repository root and
 `NIBLICK_PATH` entries. Each file is parsed once. Import cycles are rejected.
 
-Struct names are file-local. A struct must be declared before use in the same
-source file.
+Struct names share one namespace across imported files. A struct must be
+declared before use.
 
 See {doc}`syntax`, {doc}`types`, {doc}`expressions`, {doc}`semantics`,
 {doc}`declarations`, {doc}`statements`, {doc}`functions`, {doc}`structs`,

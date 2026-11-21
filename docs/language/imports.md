@@ -25,8 +25,8 @@ An absolute import path is used as written.
 - Global variables, functions, and extern declarations are merged.
 - Imported declarations share one global namespace.
 - Duplicate global or function names are rejected.
-- Struct declarations are file-local. A struct declared in an imported file is
-  not visible to the importer.
+- Struct declarations share the program-wide namespace. A struct declared in an
+  imported file is visible to the importer.
 
 ## Dead declarations
 

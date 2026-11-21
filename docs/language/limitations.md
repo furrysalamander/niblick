@@ -9,9 +9,7 @@
 | Local initialization | Locals are not zeroed. Frame reuse can expose values from another function. |
 | Code memory | Read-only at runtime. |
 | `double` | Not available. Use `half` or `float`. |
-| Struct fields | Scalar fields only. Arrays and nested structs are rejected. |
-| Struct storage | `const` and flash structs are rejected. |
-| Struct comparison | Whole-struct comparison is rejected. |
-| Initializers | Aggregate initializers do not nest. Local `const` arrays are rejected. |
+| Array fields | Scalar elements only. Arrays of structs inside a struct are rejected. |
+| Local `const` | Local `const` arrays and local `const` structs are rejected. |
 
 See {doc}`types`, {doc}`structs`, and {doc}`semantics`.

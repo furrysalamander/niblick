@@ -15,7 +15,9 @@ from pathlib import Path
 
 from . import ast_nodes as ast
 from .errors import NiblickCompileError
+from .lexer import tokenize
 from .parser import parse
+from .types import StructType
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -61,6 +63,24 @@ def _resolve_import(
     )
 
 
+def _scan_imports(text: str, filename: str) -> list[str]:
+    """Return top-level import paths without parsing declarations."""
+    paths: list[str] = []
+    depth = 0
+    tokens = tokenize(text, filename)
+    for index, token in enumerate(tokens):
+        if token.kind == "punct":
+            if token.value == "{":
+                depth += 1
+            elif token.value == "}":
+                depth = max(0, depth - 1)
+            continue
+        if depth == 0 and token.kind == "keyword" and token.value == "import":
+            if index + 1 < len(tokens) and tokens[index + 1].kind == "string":
+                paths.append(str(tokens[index + 1].value))
+    return paths
+
+
 def _load(
     path: Path,
     stack: list[Path],
@@ -68,6 +88,7 @@ def _load(
     loaded_asm: set[Path],
     roots: list[Path],
     source_overrides: dict[Path, str] | None = None,
+    struct_types: dict[str, StructType] | None = None,
 ) -> ast.Program:
     if path in stack:
         chain = " -> ".join(str(item) for item in stack + [path])
@@ -78,15 +99,16 @@ def _load(
     text = source_overrides.get(path) if source_overrides else None
     if not path.is_file() and text is None:
         raise NiblickCompileError(f"source file not found: {path}")
-
     if text is None:
         text = path.read_text()
-    parsed = parse(text, str(path))
+
+    if struct_types is None:
+        struct_types = {}
     stack.append(path)
 
     merged = ast.Program()
-    for declaration in parsed.imports:
-        target = _resolve_import(path, declaration.path, roots, source_overrides)
+    for import_path in _scan_imports(text, str(path)):
+        target = _resolve_import(path, import_path, roots, source_overrides)
         if target.suffix.lower() == ".asm":
             if target not in loaded_asm:
                 loaded_asm.add(target)
@@ -95,11 +117,20 @@ def _load(
                     asm_text = target.read_text()
                 merged.asm_sources.append(ast.AsmSource(str(target), asm_text))
             continue
-        imported = _load(target, stack, loaded, loaded_asm, roots, source_overrides)
+        imported = _load(
+            target,
+            stack,
+            loaded,
+            loaded_asm,
+            roots,
+            source_overrides,
+            struct_types,
+        )
         merged.globals.extend(imported.globals)
         merged.functions.extend(imported.functions)
         merged.asm_sources.extend(imported.asm_sources)
 
+    parsed = parse(text, str(path), struct_types)
     stack.pop()
     merged.globals.extend(parsed.globals)
     merged.functions.extend(parsed.functions)
@@ -113,6 +144,7 @@ def _append_wide_if_needed(
     loaded_asm: set[Path],
     roots: list[Path],
     overrides: dict[Path, str] | None,
+    struct_types: dict[str, StructType],
 ) -> None:
     from .inline import _uses_qword
 
@@ -121,7 +153,9 @@ def _append_wide_if_needed(
     wide_path = _resolve_import(
         REPO_ROOT / "__implicit__.nbl", "lib/wide.nbl", roots, overrides
     )
-    wide = _load(wide_path, [], loaded, loaded_asm, roots, overrides)
+    wide = _load(
+        wide_path, [], loaded, loaded_asm, roots, overrides, struct_types
+    )
     program.globals.extend(wide.globals)
     program.functions.extend(wide.functions)
     program.asm_sources.extend(wide.asm_sources)
@@ -133,6 +167,7 @@ def _append_float_modules_if_needed(
     loaded_asm: set[Path],
     roots: list[Path],
     overrides: dict[Path, str] | None,
+    struct_types: dict[str, StructType],
 ) -> None:
     from .inline import _uses_float
 
@@ -151,7 +186,9 @@ def _append_float_modules_if_needed(
             continue
         if not path.is_file():
             continue
-        module = _load(path, [], loaded, loaded_asm, roots, overrides)
+        module = _load(
+            path, [], loaded, loaded_asm, roots, overrides, struct_types
+        )
         program.globals.extend(module.globals)
         program.functions.extend(module.functions)
         program.asm_sources.extend(module.asm_sources)
@@ -178,9 +215,16 @@ def load_program(
     loaded: set[Path] = set()
     loaded_asm: set[Path] = set()
     roots = _search_roots(search_paths)
-    program = _load(entry, [], loaded, loaded_asm, roots, overrides)
-    _append_wide_if_needed(program, loaded, loaded_asm, roots, overrides)
-    _append_float_modules_if_needed(program, loaded, loaded_asm, roots, overrides)
+    struct_types: dict[str, StructType] = {}
+    program = _load(
+        entry, [], loaded, loaded_asm, roots, overrides, struct_types
+    )
+    _append_wide_if_needed(
+        program, loaded, loaded_asm, roots, overrides, struct_types
+    )
+    _append_float_modules_if_needed(
+        program, loaded, loaded_asm, roots, overrides, struct_types
+    )
     return program
 
 
@@ -192,11 +236,11 @@ def load_source(
 ) -> ast.Program:
     """Parse in-memory source, resolving imports relative to *filename*."""
 
-    parsed = parse(source, filename)
     base = Path(filename)
     roots = _search_roots(search_paths)
     loaded: set[Path] = set()
     loaded_asm: set[Path] = set()
+    struct_types: dict[str, StructType] = {}
     overrides: dict[Path, str] | None = None
     if source_overrides:
         overrides = {
@@ -204,8 +248,8 @@ def load_source(
             for key, value in source_overrides.items()
         }
     merged = ast.Program()
-    for declaration in parsed.imports:
-        target = _resolve_import(base, declaration.path, roots, overrides)
+    for import_path in _scan_imports(source, filename):
+        target = _resolve_import(base, import_path, roots, overrides)
         if target.suffix.lower() == ".asm":
             if target not in loaded_asm:
                 loaded_asm.add(target)
@@ -214,12 +258,25 @@ def load_source(
                     asm_text = target.read_text()
                 merged.asm_sources.append(ast.AsmSource(str(target), asm_text))
             continue
-        imported = _load(target, [], loaded, loaded_asm, roots, overrides)
+        imported = _load(
+            target,
+            [],
+            loaded,
+            loaded_asm,
+            roots,
+            overrides,
+            struct_types,
+        )
         merged.globals.extend(imported.globals)
         merged.functions.extend(imported.functions)
         merged.asm_sources.extend(imported.asm_sources)
+    parsed = parse(source, filename, struct_types)
     merged.globals.extend(parsed.globals)
     merged.functions.extend(parsed.functions)
-    _append_wide_if_needed(merged, loaded, loaded_asm, roots, overrides)
-    _append_float_modules_if_needed(merged, loaded, loaded_asm, roots, overrides)
+    _append_wide_if_needed(
+        merged, loaded, loaded_asm, roots, overrides, struct_types
+    )
+    _append_float_modules_if_needed(
+        merged, loaded, loaded_asm, roots, overrides, struct_types
+    )
     return merged

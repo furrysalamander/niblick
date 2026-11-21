@@ -61,11 +61,18 @@ COMPOUND_OPS = {
 
 
 class Parser:
-    def __init__(self, tokens: list[Token], filename: str = "<input>") -> None:
+    def __init__(
+        self,
+        tokens: list[Token],
+        filename: str = "<input>",
+        struct_types: dict[str, StructType] | None = None,
+    ) -> None:
         self.tokens = tokens
         self.filename = filename
         self.pos = 0
-        self.struct_types: dict[str, StructType] = {}
+        self.struct_types: dict[str, StructType] = (
+            struct_types if struct_types is not None else {}
+        )
 
     # ------------------------------------------------------------------
     # Token helpers
@@ -191,11 +198,22 @@ class Parser:
         offset = 0
         while not self.check("}"):
             field_type = self.expect_type()
-            if isinstance(field_type, StructType) or field_type.name == "void":
-                raise self.error("struct fields must use scalar types")
-            if self.check("["):
-                raise self.error("struct fields cannot be arrays")
+            if field_type.name == "void":
+                raise self.error("struct fields cannot have type void")
             field_token = self.expect_ident_token()
+            array_len = 0
+            if self.check("["):
+                self.expect("[")
+                length = self.current()
+                if length.kind != "number":
+                    raise self.error("struct field array length must be an integer literal")
+                array_len = int(length.value)
+                self.advance()
+                self.expect("]")
+                if array_len <= 0:
+                    raise self.error("struct field array length must be positive")
+                if isinstance(field_type, StructType):
+                    raise self.error("struct fields cannot be arrays of structs")
             if any(item.name == field_token.value for item in fields):
                 raise self.error(
                     f"duplicate field {field_token.value!r} in struct {name!r}",
@@ -207,20 +225,18 @@ class Parser:
                     name=str(field_token.value),
                     type=field_type,
                     offset=offset,
+                    array_len=array_len,
                 )
             )
-            offset += field_type.ram_size
+            offset += field_type.ram_size * (array_len or 1)
         self.expect("}")
         self.expect(";")
         if not fields:
             raise self.error(f"struct {name!r} must have at least one field", name_token)
-        size = 1
-        while size < offset:
-            size <<= 1
         self.struct_types[name] = StructType(
             name=name,
-            ram_size=size,
-            flash_size=0,
+            ram_size=offset,
+            flash_size=1,
             is_scalar=False,
             fields=tuple(fields),
         )
@@ -321,20 +337,33 @@ class Parser:
             parts.append(str(self.advance().value))
         return "".join(parts)
 
+    def parse_init_list(self) -> list[ast.Expr]:
+        self.expect("{")
+        values: list[ast.Expr] = []
+        if not self.check("}"):
+            while True:
+                if self.check("{"):
+                    values.append(
+                        ast.InitList(
+                            self.parse_init_list(),
+                            line=self.current().line,
+                            column=self.current().column,
+                        )
+                    )
+                else:
+                    values.append(self.parse_expression())
+                if not self.match(","):
+                    break
+                if self.check("}"):
+                    break
+        self.expect("}")
+        return values
+
     def parse_initializer(
         self, type_: Type
     ) -> tuple[Optional[ast.Expr], Optional[list[ast.Expr]], Optional[str]]:
         if self.check("{"):
-            self.advance()
-            init_list: list[ast.Expr] = []
-            if not self.check("}"):
-                while True:
-                    init_list.append(self.parse_expression())
-                    if not self.match(","):
-                        break
-                    if self.check("}"):
-                        break
-            self.expect("}")
+            init_list = self.parse_init_list()
             return None, init_list, None
         if self.current().kind == "string":
             value = self.parse_string_value()
@@ -351,7 +380,7 @@ class Parser:
         line = name_token.line
         column = name_token.column
 
-        if not self.check("["):
+        if not self.check("[") and not isinstance(type_, StructType):
             # Scalar constant, e.g. ``const nibble PIN = 1;``.
             self.expect("=")
             scalar_init = self.parse_expression()
@@ -360,6 +389,21 @@ class Parser:
                 name=name,
                 type=type_,
                 init=scalar_init,
+                is_const=True,
+                line=line,
+                column=column,
+            )
+
+        if not self.check("["):
+            self.expect("=")
+            init, init_list, init_string = self.parse_initializer(type_)
+            self.expect(";")
+            return ast.GlobalDecl(
+                name=name,
+                type=type_,
+                init=init,
+                init_list=init_list,
+                init_string=init_string,
                 is_const=True,
                 line=line,
                 column=column,
@@ -860,6 +904,10 @@ def _annotate_program(program: ast.Program, filename: str) -> None:
         _annotate_file(node, filename)
 
 
-def parse(source: str, filename: str = "<input>") -> ast.Program:
+def parse(
+    source: str,
+    filename: str = "<input>",
+    struct_types: dict[str, StructType] | None = None,
+) -> ast.Program:
     tokens = tokenize(source, filename)
-    return Parser(tokens, filename).parse_program()
+    return Parser(tokens, filename, struct_types).parse_program()

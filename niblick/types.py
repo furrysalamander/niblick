@@ -70,15 +70,16 @@ class StructField:
     name: str
     type: Type
     offset: int
+    # Zero for a scalar field; the declared length otherwise.
+    array_len: int = 0
 
 
 @dataclass(frozen=True)
 class StructType(Type):
-    """A RAM-only aggregate with scalar fields.
+    """An aggregate of scalar, array, and nested-struct fields.
 
-    ``ram_size`` is padded to a power of two so existing array-address
-    arithmetic (which shifts by the element size) can index arrays of
-    structs.
+    ``ram_size`` is the exact sum of the field sizes. Array indexing uses a
+    shift for power-of-two sizes and a constant multiply otherwise.
     """
 
     fields: tuple[StructField, ...] = ()

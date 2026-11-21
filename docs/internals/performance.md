@@ -30,7 +30,7 @@
 - A 64-bit variable costs 16 nibbles. 64-bit expressions also reserve a result
   buffer and temporary slots. See {doc}`wide-arithmetic`.
 - A `half` costs 4 nibbles; a `float` costs 8 nibbles. See {doc}`soft-float`.
-- Struct size is padded to the next power of two. See
+- Struct size is the exact sum of its fields. See
   {doc}`../language/structs`.
 - Runtime helpers are stripped when unreachable.
 - Function parameter and local slots are overlaid across functions that cannot

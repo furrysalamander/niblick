@@ -111,6 +111,13 @@ class Cast(Expr):
     operand: Expr = field(default_factory=Expr)
 
 
+@dataclass
+class InitList(Expr):
+    """Nested brace initializer."""
+
+    values: list[Expr] = field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Statements
 # ---------------------------------------------------------------------------

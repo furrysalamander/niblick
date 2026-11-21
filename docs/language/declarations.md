@@ -32,14 +32,16 @@ wrapping rules match runtime expressions.
 A scalar `const` with a dynamic initializer is rejected. Taking `&CONST` is
 rejected. Local scalar consts follow the same rules.
 
-A `const` array is stored in flash and is read-only.
+A `const` array or `const` struct is stored in flash and is read-only.
 
 ```c
 const char message[] = "ready\n";
 const nibble digits[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+const Point origin = { 3, 4 };
 ```
 
-Local `const` arrays and `const` structs are rejected. See {doc}`limitations`.
+Local `const` arrays and local `const` structs are rejected. See
+{doc}`limitations`.
 
 ## Array lengths
 
@@ -66,7 +68,7 @@ char buffer[4] = "ab";
 ```
 
 A string initializer includes its NUL terminator and must fit in the array.
-Initializers do not nest. See {doc}`limitations`.
+Struct and array initializers can nest.
 
 ## Literals
 
@@ -117,5 +119,5 @@ struct Point {
 };
 ```
 
-Struct declarations are file-local and must appear before use. See
-{doc}`structs`.
+Struct declarations share one namespace across imported files and must appear
+before use. See {doc}`structs`.

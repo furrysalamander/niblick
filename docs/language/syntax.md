@@ -21,14 +21,14 @@ literals have no suffixes.
 program      = { top_level } EOF ;
 top_level    = import | struct_decl | global_decl | function | extern_fn ;
 import       = "import" string ";" ;
-struct_decl  = "struct" ident "{" { type ident ";" } "}" ";" ;
+struct_decl  = "struct" ident "{" { type ident [ "[" number "]" ] ";" } "}" ";" ;
 global_decl  = [ "const" ] type ident [ array_suffix ] [ "=" initializer ] ";" ;
 function     = "fn" type ident "(" [ params ] ")" block ;
 extern_fn    = "extern" "fn" type ident "(" [ params ] ")" ";" ;
 params       = param { "," param } ;
 param        = type ident ;
 array_suffix = "[" [ const_expr ] "]" ;
-initializer  = expr | "{" [ expr { "," expr } ] "}" | string ;
+initializer  = expr | "{" [ initializer { "," initializer } ] "}" | string ;
 ```
 
 Global declarations and functions may appear in any order.

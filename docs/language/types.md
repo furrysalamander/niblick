@@ -75,5 +75,5 @@ expression.
 
 ## Struct types
 
-`struct` declares a RAM-only aggregate with scalar fields. Struct layout and
-limits are in {doc}`structs`.
+`struct` declares an aggregate with scalar, array, or nested-struct fields.
+Struct layout and limits are in {doc}`structs`.

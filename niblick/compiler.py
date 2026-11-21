@@ -1393,58 +1393,165 @@ class Compiler:
                 "an array or struct"
             )
 
-        if isinstance(type_, StructType) and not is_array:
-            fields = type_.fields
-            if len(init_list) > len(fields):
-                raise NiblickCompileError(
-                    f"{location(self.filename, line)}: too many initializers "
-                    f"for struct {name!r}"
-                )
-            values = list(init_list)
-            while len(values) < len(fields):
-                values.append(ast.Number(0, line=line, column=column))
-            return [
-                ast.Assign(
-                    ast.Member(base, field.name, line=line, column=column),
-                    value,
-                    line=line,
-                    column=column,
-                )
-                for field, value in zip(fields, values)
-            ]
-
-        if not is_array:
-            raise NiblickTypeError(
-                f"{location(self.filename, line)}: brace initializer requires "
-                "an array or struct"
-            )
-
-        if array_len is None:
+        if is_array and array_len is None:
             array_len = len(init_list)
-        if len(init_list) > array_len:
-            raise NiblickCompileError(
-                f"{location(self.filename, line)}: too many initializers for "
-                f"{name!r}"
-            )
 
-        values = list(init_list)
-        if isinstance(type_, StructType):
-            if len(values) != array_len:
-                raise NiblickCompileError(
-                    f"{location(self.filename, line)}: array of structs "
-                    f"{name!r} requires all elements initialized"
+        initializer = ast.InitList(init_list, line=line, column=column)
+        return self._init_target(
+            base,
+            type_,
+            array_len if is_array else 0,
+            initializer,
+            name,
+            line,
+            column,
+        )
+
+    def _zero_target(
+        self, target: ast.Expr, type_: Type, array_len: int, line: int, column: int
+    ) -> list[ast.Stmt]:
+        if array_len > 0:
+            assignments: list[ast.Stmt] = []
+            for index in range(array_len):
+                assignments.extend(
+                    self._zero_target(
+                        ast.Index(
+                            target,
+                            ast.Number(index, line=line, column=column),
+                            line=line,
+                            column=column,
+                        ),
+                        type_,
+                        0,
+                        line,
+                        column,
+                    )
                 )
-        else:
-            while len(values) < array_len:
-                values.append(ast.Number(0, line=line, column=column))
+            return assignments
+        if isinstance(type_, StructType):
+            assignments = []
+            for struct_field in type_.fields:
+                assignments.extend(
+                    self._zero_target(
+                        ast.Member(
+                            target, struct_field.name, line=line, column=column
+                        ),
+                        struct_field.type,
+                        struct_field.array_len,
+                        line,
+                        column,
+                    )
+                )
+            return assignments
         return [
             ast.Assign(
-                ast.Index(base, ast.Number(index, line=line, column=column)),
-                value,
+                target,
+                ast.Number(0, line=line, column=column),
                 line=line,
                 column=column,
             )
-            for index, value in enumerate(values)
+        ]
+
+    def _init_target(
+        self,
+        target: ast.Expr,
+        type_: Type,
+        array_len: int,
+        initializer: ast.Expr,
+        name: str,
+        line: int,
+        column: int,
+    ) -> list[ast.Stmt]:
+        if array_len > 0:
+            if not isinstance(initializer, ast.InitList):
+                if isinstance(initializer, ast.Number) and initializer.value == 0:
+                    return self._zero_target(
+                        target, type_, array_len, line, column
+                    )
+                raise NiblickTypeError(
+                    f"{location(self.filename, line)}: array field {name!r} "
+                    "requires a brace initializer"
+                )
+            values = initializer.values
+            if len(values) > array_len:
+                raise NiblickCompileError(
+                    f"{location(self.filename, line)}: too many initializers "
+                    f"for {name!r}"
+                )
+            assignments = []
+            for index in range(array_len):
+                value = (
+                    values[index]
+                    if index < len(values)
+                    else ast.Number(0, line=line, column=column)
+                )
+                assignments.extend(
+                    self._init_target(
+                        ast.Index(
+                            target,
+                            ast.Number(index, line=line, column=column),
+                            line=line,
+                            column=column,
+                        ),
+                        type_,
+                        0,
+                        value,
+                        f"{name}[{index}]",
+                        line,
+                        column,
+                    )
+                )
+            return assignments
+
+        if isinstance(type_, StructType):
+            if not isinstance(initializer, ast.InitList):
+                if isinstance(initializer, ast.Number) and initializer.value == 0:
+                    return self._zero_target(target, type_, 0, line, column)
+                raise NiblickTypeError(
+                    f"{location(self.filename, line)}: struct field {name!r} "
+                    "requires a brace initializer"
+                )
+            values = initializer.values
+            fields = type_.fields
+            if len(values) > len(fields):
+                raise NiblickCompileError(
+                    f"{location(self.filename, line)}: too many initializers "
+                    f"for {name!r}"
+                )
+            assignments = []
+            for index, struct_field in enumerate(fields):
+                value = (
+                    values[index]
+                    if index < len(values)
+                    else ast.Number(0, line=line, column=column)
+                )
+                assignments.extend(
+                    self._init_target(
+                        ast.Member(
+                            target, struct_field.name, line=line, column=column
+                        ),
+                        struct_field.type,
+                        struct_field.array_len,
+                        value,
+                        f"{name}.{struct_field.name}",
+                        line,
+                        column,
+                    )
+                )
+            return assignments
+
+        if isinstance(initializer, ast.InitList):
+            raise NiblickTypeError(
+                f"{location(self.filename, line)}: scalar field {name!r} "
+                "cannot use a brace initializer"
+            )
+        return [
+            ast.Assign(
+                target,
+                initializer,
+                line=line,
+                column=column,
+            )
         ]
 
     def prepare_globals(self) -> None:
@@ -1471,10 +1578,24 @@ class Compiler:
 
             if isinstance(decl.type, StructType):
                 if decl.is_const:
-                    raise NiblickTypeError(
-                        f"{location(self.filename, decl.line)}: const struct "
-                        f"{decl.name!r} is not supported"
+                    if decl.init_string is not None:
+                        raise NiblickCompileError(
+                            f"{location(self.filename, decl.line)}: string "
+                            "initializer requires a char array"
+                        )
+                    label = self.new_flash_label()
+                    values = self.constant_struct_values(decl)
+                    self.flash.append(FlashItem(label, decl.type, values))
+                    self.globals[decl.name] = VarSymbol(
+                        name=decl.name,
+                        type=decl.type,
+                        array_len=decl.array_len,
+                        is_const=True,
+                        flash_label=label,
+                        is_global=True,
+                        line=decl.line,
                     )
+                    continue
                 if decl.init_string is not None:
                     raise NiblickCompileError(
                         f"{location(self.filename, decl.line)}: string initializer "
@@ -1596,6 +1717,152 @@ class Compiler:
                 )
             values.extend([0] * (decl.array_len - len(values)))
         return values
+
+    def constant_struct_values(self, decl: ast.GlobalDecl) -> list[int]:
+        values: list[int] = []
+        if decl.is_array:
+            length = decl.array_len or 0
+            items = decl.init_list or []
+            if len(items) > length:
+                raise NiblickCompileError(
+                    f"{location(self.filename, decl.line)}: too many "
+                    f"initializers for {decl.name!r}"
+                )
+            for index in range(length):
+                initializer = (
+                    items[index]
+                    if index < len(items)
+                    else ast.Number(0, line=decl.line, column=decl.column)
+                )
+                self._flatten_struct(
+                    decl.type,
+                    initializer,
+                    values,
+                    f"{decl.name}[{index}]",
+                    decl.line,
+                    decl.column,
+                )
+            expected = length * decl.type.ram_size
+        else:
+            initializer = (
+                ast.InitList(decl.init_list, line=decl.line, column=decl.column)
+                if decl.init_list is not None
+                else ast.Number(0, line=decl.line, column=decl.column)
+            )
+            self._flatten_struct(
+                decl.type, initializer, values, decl.name, decl.line, decl.column
+            )
+            expected = decl.type.ram_size
+        if len(values) != expected:
+            raise NiblickCompileError(
+                f"{location(self.filename, decl.line)}: struct initializer for "
+                f"{decl.name!r} has the wrong size"
+            )
+        return values
+
+    def _flatten_struct(
+        self,
+        type_: StructType,
+        initializer: ast.Expr,
+        values: list[int],
+        name: str,
+        line: int,
+        column: int,
+    ) -> None:
+        if not isinstance(initializer, ast.InitList):
+            if isinstance(initializer, ast.Number) and initializer.value == 0:
+                values.extend([0] * type_.ram_size)
+                return
+            raise NiblickTypeError(
+                f"{location(self.filename, line)}: struct {name!r} requires "
+                "a brace initializer"
+            )
+        items = initializer.values
+        if len(items) > len(type_.fields):
+            raise NiblickCompileError(
+                f"{location(self.filename, line)}: too many initializers for "
+                f"{name!r}"
+            )
+        for index, struct_field in enumerate(type_.fields):
+            value = (
+                items[index]
+                if index < len(items)
+                else ast.Number(0, line=line, column=column)
+            )
+            field_name = f"{name}.{struct_field.name}"
+            if struct_field.array_len > 0:
+                if isinstance(value, ast.StringLiteral) and struct_field.type is U8:
+                    raw: list[int] = []
+                    for character in value.value:
+                        code = ord(character) & 0xFF
+                        raw.extend([code & 0xF, (code >> 4) & 0xF])
+                    raw.extend([0, 0])
+                    limit = struct_field.array_len * struct_field.type.ram_size
+                    if len(raw) > limit:
+                        raise NiblickCompileError(
+                            f"{location(self.filename, line)}: string "
+                            f"initializer for {field_name!r} is too long"
+                        )
+                    raw.extend([0] * (limit - len(raw)))
+                    values.extend(raw)
+                    continue
+                if not isinstance(value, ast.InitList):
+                    if isinstance(value, ast.Number) and value.value == 0:
+                        values.extend([0] * (struct_field.array_len * struct_field.type.ram_size))
+                        continue
+                    raise NiblickTypeError(
+                        f"{location(self.filename, line)}: array field "
+                        f"{field_name!r} requires a brace initializer"
+                    )
+                if len(value.values) > struct_field.array_len:
+                    raise NiblickCompileError(
+                        f"{location(self.filename, line)}: too many initializers "
+                        f"for {field_name!r}"
+                    )
+                for item_index in range(struct_field.array_len):
+                    item = (
+                        value.values[item_index]
+                        if item_index < len(value.values)
+                        else ast.Number(0, line=line, column=column)
+                    )
+                    values.extend(
+                        self._flatten_scalar(item, struct_field.type, field_name, line)
+                    )
+                continue
+            if isinstance(struct_field.type, StructType):
+                self._flatten_struct(
+                    struct_field.type, value, values, field_name, line, column
+                )
+                continue
+            values.extend(
+                self._flatten_scalar(value, struct_field.type, field_name, line)
+            )
+
+    def _flatten_scalar(
+        self, expr: ast.Expr, type_: Type, name: str, line: int
+    ) -> list[int]:
+        if isinstance(expr, ast.InitList):
+            raise NiblickTypeError(
+                f"{location(self.filename, line)}: scalar field {name!r} "
+                "cannot use a brace initializer"
+            )
+        folded = self.eval_const(expr, None, type_)
+        if folded is None:
+            raise NiblickTypeError(
+                f"{location(self.filename, line)}: initializer for {name!r} "
+                "must be a compile-time constant"
+            )
+        value, typ = folded
+        if not (is_integer(typ) or typ is BOOL):
+            raise NiblickTypeError(
+                f"{location(self.filename, line)}: initializer for {name!r} "
+                "must be an integer"
+            )
+        value = self._wrap_value(value, type_) & self._width_mask(type_)
+        return [
+            (value >> (4 * index)) & 0xF
+            for index in range(max(type_.ram_size, 1))
+        ]
 
     def prepare_functions(self) -> None:
         self.resolve_local_array_lengths()
@@ -2900,8 +3167,22 @@ class Compiler:
 
         if isinstance(expr, ast.Member):
             field = self.member_info(expr, scope)
-            self.compile_member_addr(expr, scope)
-            self.load_indirect(field.type, expr.line)
+            if field.array_len > 0:
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: field {expr.field!r} "
+                    "is an array and requires an index"
+                )
+            if isinstance(field.type, StructType):
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: struct field "
+                    f"{expr.field!r} must be used through a field"
+                )
+            if self._struct_is_flash(expr, scope):
+                self.compile_flash_member_addr(expr, scope)
+                self.load_flash_indirect(field.type, expr.line)
+            else:
+                self.compile_member_addr(expr, scope)
+                self.load_indirect(field.type, expr.line)
             return field.type
 
         if isinstance(expr, ast.Var):
@@ -3696,6 +3977,20 @@ class Compiler:
 
         left_type = self.infer_type(left, scope)
         right_type = self.infer_type(right, scope)
+        if isinstance(left_type, StructType) or isinstance(right_type, StructType):
+            if left_type is not right_type:
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: cannot compare "
+                    f"{left_type} and {right_type}"
+                )
+            if op not in ("==", "!="):
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: struct comparison "
+                    "supports only == and !="
+                )
+            return self.compile_struct_comparison(
+                left, right, left_type, op, scope, expr.line
+            )
         if left_type.is_float or right_type.is_float:
             if left_type.is_float and right_type.is_float and left_type is not right_type:
                 raise NiblickTypeError(
@@ -3821,6 +4116,85 @@ class Compiler:
         }[materialize]
         self.emit(f"SKIP {inverse}, 1")
         self.emit("INC R1")
+        self.temp.reset(mark)
+        return BOOL
+
+    def compile_struct_comparison(
+        self,
+        left: ast.Expr,
+        right: ast.Expr,
+        typ: StructType,
+        op: str,
+        scope: Scope,
+        line: int,
+    ) -> Type:
+        size = typ.ram_size
+        mark = self.temp.mark()
+        left_slot = self.temp.alloc(
+            size if isinstance(left, ast.Call) else 2,
+            "struct comparison",
+            self.filename,
+            line,
+        )
+        if isinstance(left, ast.Call):
+            self.compile_struct_expr(left, scope)
+            self._emit_addr(left_slot)
+            self.emit("MOV R6, R4")
+            self.emit("MOV R7, R5")
+            self._emit_struct_copy_indirect(size)
+            self._emit_addr(left_slot)
+        else:
+            self.compile_struct_expr(left, scope)
+            self.emit("MOV R0, R4")
+            self.emit(f"MOV [{left_slot}], R0")
+            self.emit("MOV R0, R5")
+            self.emit(f"MOV [{left_slot + 1}], R0")
+
+        self.compile_struct_expr(right, scope)
+        self.emit("MOV R6, R4")
+        self.emit("MOV R7, R5")
+        if isinstance(left, ast.Call):
+            self._emit_addr(left_slot)
+        else:
+            self.emit(f"MOV R0, [{left_slot}]")
+            self.emit("MOV R4, R0")
+            self.emit(f"MOV R0, [{left_slot + 1}]")
+            self.emit("MOV R5, R0")
+
+        loop = self.new_label("struct_eq")
+        mismatch = self.new_label("struct_ne")
+        done = self.new_label("struct_eq_done")
+        self.emit("MOV R1, 1")
+        self.emit(f"MOV R8, {size & 0xF}")
+        self.emit(f"MOV R9, {(size >> 4) & 0xF}")
+        self.emit(f"{loop}:")
+        self.emit("MOV R0, [R4:R5]")
+        self.emit("MOV R2, R0")
+        self.emit("MOV R0, [R6:R7]")
+        self.emit("XOR R0, R2")
+        self.emit("SKIP Z, 1")
+        self.emit(f"JR {mismatch}")
+        self.emit("INC R5")
+        self.emit("SKIP NC, 1")
+        self.emit("INC R4")
+        self.emit("INC R7")
+        self.emit("SKIP NC, 1")
+        self.emit("INC R6")
+        self.emit("DEC R8")
+        self.emit("SKIP C, 1")
+        self.emit("DEC R9")
+        self.emit("MOV R0, R8")
+        self.emit("OR R0, R9")
+        self.emit("CP R0, 0")
+        self.emit("SKIP Z, 1")
+        self.emit(f"JR {loop}")
+        self.emit(f"JR {done}")
+        self.emit(f"{mismatch}:")
+        self.emit("MOV R1, 0")
+        self.emit(f"{done}:")
+        if op == "!=":
+            self.emit("MOV R0, 1")
+            self.emit("XOR R1, R0")
         self.temp.reset(mark)
         return BOOL
 
@@ -4568,6 +4942,105 @@ class Compiler:
         return result_type
 
     def compile_index(self, expr: ast.Index, scope: Scope) -> Type:
+        if isinstance(expr.base, ast.Member):
+            field = self.member_info(expr.base, scope)
+            if field.array_len <= 0:
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: field "
+                    f"{expr.base.field!r} is not an array"
+                )
+            if isinstance(field.type, StructType):
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: struct array fields "
+                    "are not supported"
+                )
+            if self._struct_is_flash(expr.base, scope):
+                self.compile_flash_member_addr(expr.base, scope)
+                if isinstance(expr.index, ast.Number):
+                    index = int(expr.index.value)
+                    if index < 0 or index >= field.array_len:
+                        raise NiblickCompileError(
+                            f"{location(self.filename, expr.line)}: index {index} "
+                            f"out of bounds for field {expr.base.field}"
+                            f"[{field.array_len}]"
+                        )
+                    self._add_flash_offset(index * field.type.ram_size)
+                else:
+                    mark = self.temp.mark()
+                    base_slot = self.temp.alloc(
+                        3, "flash array base", self.filename, expr.line
+                    )
+                    self.emit("MOV R0, R1")
+                    self.emit(f"MOV [{base_slot}], R0")
+                    self.emit("MOV R0, R2")
+                    self.emit(f"MOV [{base_slot + 1}], R0")
+                    self.emit("MOV R0, R3")
+                    self.emit(f"MOV [{base_slot + 2}], R0")
+                    index_type = self.compile_expr(expr.index, scope)
+                    if not (
+                        is_integer(index_type) and index_type.ram_size in (1, 2)
+                    ):
+                        raise NiblickTypeError(
+                            f"{location(self.filename, expr.line)}: array index "
+                            "must be a nibble or char"
+                        )
+                    self._emit_scaled_index(field.type.ram_size, index_type)
+                    self.emit(f"MOV R0, [{base_slot}]")
+                    self.emit("MOV R1, R0")
+                    self.emit(f"MOV R0, [{base_slot + 1}]")
+                    self.emit("MOV R2, R0")
+                    self.emit(f"MOV R0, [{base_slot + 2}]")
+                    self.emit("MOV R3, R0")
+                    self._add_flash_offset_regs()
+                    self.temp.reset(mark)
+                self.load_flash_indirect(field.type, expr.line)
+                return field.type
+            if isinstance(expr.index, ast.Number):
+                index = int(expr.index.value)
+                if index < 0 or index >= field.array_len:
+                    raise NiblickCompileError(
+                        f"{location(self.filename, expr.line)}: index {index} out "
+                        f"of bounds for field {expr.base.field}[{field.array_len}]"
+                    )
+                self.compile_member_addr(expr.base, scope)
+                offset = index * field.type.ram_size
+                if offset:
+                    self.emit(f"MOV R0, {offset & 0xF}")
+                    self.emit("ADD R5, R0")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R4")
+                    if offset >> 4:
+                        self.emit(f"MOV R0, {(offset >> 4) & 0xF}")
+                        self.emit("ADD R4, R0")
+            else:
+                mark = self.temp.mark()
+                base_slot = self.temp.alloc(
+                    2, "array base", self.filename, expr.line
+                )
+                self.compile_member_addr(expr.base, scope)
+                self.emit("MOV R0, R4")
+                self.emit(f"MOV [{base_slot}], R0")
+                self.emit("MOV R0, R5")
+                self.emit(f"MOV [{base_slot + 1}], R0")
+                index_type = self.compile_expr(expr.index, scope)
+                if not (
+                    is_integer(index_type) and index_type.ram_size in (1, 2)
+                ):
+                    raise NiblickTypeError(
+                        f"{location(self.filename, expr.line)}: array index must "
+                        "be a nibble or char"
+                    )
+                self._emit_scaled_index(field.type.ram_size, index_type)
+                self.emit(f"MOV R0, [{base_slot + 1}]")
+                self.emit("ADD R5, R0")
+                self.emit("SKIP NC, 1")
+                self.emit("INC R4")
+                self.emit(f"MOV R0, [{base_slot}]")
+                self.emit("ADD R4, R0")
+                self.temp.reset(mark)
+            self.load_indirect(field.type, expr.line)
+            return field.type
+
         if not isinstance(expr.base, ast.Var):
             raise NiblickTypeError(
                 f"{location(self.filename, expr.line)}: only named arrays can be indexed"
@@ -4587,10 +5060,18 @@ class Compiler:
 
         if isinstance(symbol.type, StructType):
             if symbol.flash_label is not None:
-                raise NiblickTypeError(
-                    f"{location(self.filename, expr.line)}: struct arrays cannot be "
-                    "stored in flash"
+                self.compile_flash_struct_addr(symbol, expr.index, scope, expr.line)
+                dest = self.temp.alloc(
+                    symbol.type.ram_size,
+                    "flash struct element",
+                    self.filename,
+                    expr.line,
                 )
+                self._copy_flash_struct_to_ram(
+                    dest, symbol.type.ram_size, expr.line
+                )
+                self._emit_addr(dest)
+                return symbol.type
             self.compile_ram_addr(symbol, expr.index, scope, expr.line)
             return symbol.type
 
@@ -4673,6 +5154,29 @@ class Compiler:
     # Address helpers
     # ------------------------------------------------------------------
 
+    def _is_const_struct_write(self, expr: ast.Expr, scope: Scope) -> bool:
+        if isinstance(expr, ast.Var):
+            symbol = self.lookup(expr.name, scope, expr.line)
+            return (
+                symbol.is_const
+                and symbol.flash_label is not None
+                and isinstance(symbol.type, StructType)
+            )
+        if isinstance(expr, (ast.Member, ast.Index)):
+            return self._is_const_struct_write(expr.base, scope)
+        return False
+
+    def _struct_is_flash(self, expr: ast.Expr, scope: Scope) -> bool:
+        if isinstance(expr, ast.Var):
+            symbol = self.lookup(expr.name, scope, expr.line)
+            return (
+                symbol.flash_label is not None
+                and isinstance(symbol.type, StructType)
+            )
+        if isinstance(expr, ast.Member):
+            return self._struct_is_flash(expr.base, scope)
+        return False
+
     def member_info(self, expr: ast.Member, scope: Scope):
         base_type = self.infer_type(expr.base, scope)
         if not isinstance(base_type, StructType):
@@ -4686,14 +5190,164 @@ class Compiler:
                 f"{location(self.filename, expr.line)}: struct {base_type.name} has "
                 f"no field {expr.field!r}"
             )
-        if isinstance(field.type, StructType):
-            raise NiblickTypeError(
-                f"{location(self.filename, expr.line)}: nested struct field "
-                f"{expr.field!r} is not supported"
-            )
         return field
 
+    def _add_flash_offset(self, offset: int) -> None:
+        if offset:
+            self.emit(f"MOV R0, {offset & 0xF}")
+            self.emit("ADD R1, R0")
+            self.emit("MOV R0, 0")
+            self.emit("ADC R2, R0")
+            self.emit("ADC R3, R0")
+            high = (offset >> 4) & 0xF
+            if high:
+                self.emit(f"MOV R0, {high}")
+                self.emit("ADD R2, R0")
+                self.emit("MOV R0, 0")
+                self.emit("ADC R3, R0")
+
+    def compile_flash_member_addr(self, expr: ast.Member, scope: Scope) -> None:
+        field = self.member_info(expr, scope)
+        base = expr.base
+        if isinstance(base, ast.Var):
+            symbol = self.lookup(base.name, scope, base.line)
+            if symbol.flash_label is None:
+                raise NiblickTypeError(
+                    f"{location(self.filename, base.line)}: {base.name!r} "
+                    "is not in flash"
+                )
+            self.emit_flashptr(symbol.flash_label)
+        elif isinstance(base, ast.Member):
+            self.compile_flash_member_addr(base, scope)
+        else:
+            raise NiblickTypeError(
+                f"{location(self.filename, base.line)}: unsupported flash "
+                "struct field base"
+            )
+        self._add_flash_offset(field.offset)
+
+    def _add_flash_offset_regs(self) -> None:
+        self.emit("MOV R0, R5")
+        self.emit("ADD R1, R0")
+        self.emit("MOV R0, 0")
+        self.emit("ADC R2, R0")
+        self.emit("ADC R3, R0")
+        self.emit("MOV R0, R4")
+        self.emit("ADD R2, R0")
+        self.emit("MOV R0, 0")
+        self.emit("ADC R3, R0")
+
+    def load_flash_indirect(self, typ: Type, line: int) -> None:
+        if typ is U8:
+            self.use_runtime("__nib_flash_read_char", line)
+            self.emit("GOSUB __nib_flash_read_char")
+            return
+        if typ is U16:
+            self.use_runtime("__nib_flash_read_word", line)
+            self.emit("GOSUB __nib_flash_read_word")
+            return
+        if typ is U32:
+            self.ensure_d32_scratch()
+            self.use_runtime("__nib_flash_read_dword", line)
+            self.emit("GOSUB __nib_flash_read_dword")
+            return
+        if is_integer(typ) and typ.ram_size == 1:
+            self.use_runtime("__nib_flash_read_nibble", line)
+            self.emit("GOSUB __nib_flash_read_nibble")
+            return
+        raise NiblickTypeError(
+            f"{location(self.filename, line)}: cannot read {typ} from a flash struct"
+        )
+
+    def _copy_flash_struct_to_ram(
+        self, dest: int, size: int, line: int
+    ) -> None:
+        mark = self.temp.mark()
+        source = self.temp.alloc(3, "flash struct source", self.filename, line)
+        dest_slot = self.temp.alloc(2, "flash struct destination", self.filename, line)
+        count = self.temp.alloc(2, "flash struct count", self.filename, line)
+        self.emit("MOV R0, R1")
+        self.emit(f"MOV [{source}], R0")
+        self.emit("MOV R0, R2")
+        self.emit(f"MOV [{source + 1}], R0")
+        self.emit("MOV R0, R3")
+        self.emit(f"MOV [{source + 2}], R0")
+        self.emit(f"MOV R0, {(dest >> 4) & 0xF}")
+        self.emit(f"MOV [{dest_slot}], R0")
+        self.emit(f"MOV R0, {dest & 0xF}")
+        self.emit(f"MOV [{dest_slot + 1}], R0")
+        self.emit(f"MOV R0, {size & 0xF}")
+        self.emit(f"MOV [{count}], R0")
+        self.emit(f"MOV R0, {(size >> 4) & 0xF}")
+        self.emit(f"MOV [{count + 1}], R0")
+
+        loop = self.new_label("flash_struct_copy")
+        self.emit(f"{loop}:")
+        self.emit(f"MOV R0, [{source}]")
+        self.emit("MOV R1, R0")
+        self.emit(f"MOV R0, [{source + 1}]")
+        self.emit("MOV R2, R0")
+        self.emit(f"MOV R0, [{source + 2}]")
+        self.emit("MOV R3, R0")
+        self.use_runtime("__nib_flash_read_nibble", line)
+        self.emit("GOSUB __nib_flash_read_nibble")
+
+        self.emit(f"MOV R0, [{dest_slot}]")
+        self.emit("MOV R4, R0")
+        self.emit(f"MOV R0, [{dest_slot + 1}]")
+        self.emit("MOV R5, R0")
+        self.emit("MOV R0, R1")
+        self.emit("MOV [R4:R5], R0")
+        self.emit("INC R5")
+        self.emit("SKIP NC, 1")
+        self.emit("INC R4")
+        self.emit("MOV R0, R4")
+        self.emit(f"MOV [{dest_slot}], R0")
+        self.emit("MOV R0, R5")
+        self.emit(f"MOV [{dest_slot + 1}], R0")
+
+        self.emit(f"MOV R0, [{source}]")
+        self.emit("MOV R1, R0")
+        self.emit(f"MOV R0, [{source + 1}]")
+        self.emit("MOV R2, R0")
+        self.emit(f"MOV R0, [{source + 2}]")
+        self.emit("MOV R3, R0")
+        self.emit("INC R1")
+        self.emit("SKIP NC, 1")
+        self.emit("INC R2")
+        self.emit("SKIP NC, 1")
+        self.emit("INC R3")
+        self.emit("MOV R0, R1")
+        self.emit(f"MOV [{source}], R0")
+        self.emit("MOV R0, R2")
+        self.emit(f"MOV [{source + 1}], R0")
+        self.emit("MOV R0, R3")
+        self.emit(f"MOV [{source + 2}], R0")
+
+        self.emit(f"MOV R0, [{count}]")
+        self.emit("MOV R1, R0")
+        self.emit(f"MOV R0, [{count + 1}]")
+        self.emit("MOV R2, R0")
+        self.emit("DEC R1")
+        self.emit("SKIP C, 1")
+        self.emit("DEC R2")
+        self.emit("MOV R0, R1")
+        self.emit(f"MOV [{count}], R0")
+        self.emit("MOV R0, R2")
+        self.emit(f"MOV [{count + 1}], R0")
+        self.emit("MOV R0, R1")
+        self.emit("OR R0, R2")
+        self.emit("CP R0, 0")
+        self.emit("SKIP Z, 1")
+        self.emit(f"JR {loop}")
+        self.temp.reset(mark)
+
     def compile_member_addr(self, expr: ast.Member, scope: Scope) -> None:
+        if self._struct_is_flash(expr, scope):
+            raise NiblickTypeError(
+                f"{location(self.filename, expr.line)}: const struct field "
+                "is read-only"
+            )
         field = self.member_info(expr, scope)
         base = expr.base
         if isinstance(base, ast.Var):
@@ -4764,6 +5418,28 @@ class Compiler:
                 f"{location(self.filename, getattr(expr, 'line', 0))}: "
                 f"{typ} is not a struct value"
             )
+        if self._struct_is_flash(expr, scope):
+            if isinstance(expr, ast.Var):
+                symbol = self.lookup(expr.name, scope, expr.line)
+                if symbol.flash_label is None or symbol.array_len is not None:
+                    raise NiblickTypeError(
+                        f"{location(self.filename, expr.line)}: {expr.name!r} "
+                        "is not a single flash struct"
+                    )
+                self.emit_flashptr(symbol.flash_label)
+            elif isinstance(expr, ast.Member):
+                self.compile_flash_member_addr(expr, scope)
+            else:
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: unsupported flash "
+                    "struct expression"
+                )
+            dest = self.temp.alloc(
+                typ.ram_size, "flash struct copy", self.filename, expr.line
+            )
+            self._copy_flash_struct_to_ram(dest, typ.ram_size, expr.line)
+            self._emit_addr(dest)
+            return typ
         if isinstance(expr, ast.Var):
             symbol = self.lookup(expr.name, scope, expr.line)
             if symbol.array_len is not None:
@@ -4942,11 +5618,6 @@ class Compiler:
             )
 
         scale = symbol.type.ram_size
-        if scale & (scale - 1):
-            raise NiblickCompileError(
-                f"{location(self.filename, line)}: unsupported array element size {scale}"
-            )
-
         if scale == 1 and (base & 0xF) == 0:
             # The array starts on a 16-nibble page boundary, so a nibble
             # index never carries into the high address nibble.  A char
@@ -4957,24 +5628,70 @@ class Compiler:
                 self.emit("ADD R4, R2")
             return
 
-        # Offset = index * scale in R4:R5.  scale is a power of two.
-        self.emit("MOV R5, R1")
-        if index_type.ram_size == 2:
-            self.emit("MOV R4, R2")
-        else:
-            self.emit("MOV R4, 0")
-        for _ in range(scale.bit_length() - 1):
-            self.emit("ADD R4, R4")
-            self.emit("ADD R5, R5")
-            self.emit("SKIP NC, 1")
-            self.emit("INC R4")
-
+        self._emit_scaled_index(scale, index_type)
         self.emit(f"MOV R0, {base & 0xF}")
         self.emit("ADD R5, R0")
         self.emit("SKIP NC, 1")
         self.emit("INC R4")
         self.emit(f"MOV R0, {(base >> 4) & 0xF}")
         self.emit("ADD R4, R0")
+
+    def _emit_scaled_index(self, scale: int, index_type: Type) -> None:
+        """Put index * scale in R4:R5.
+
+        The product for an in-bounds access fits in one data address, so this
+        uses 8-bit arithmetic. Shift/add sequences handle non-power-of-two
+        struct sizes.
+        """
+        if scale < 1:
+            raise NiblickCompileError(f"invalid array element size {scale}")
+
+        self.emit("MOV R5, R1")
+        if index_type.ram_size == 2:
+            self.emit("MOV R4, R2")
+        else:
+            self.emit("MOV R4, 0")
+
+        if scale == 1:
+            return
+        if scale & (scale - 1) == 0:
+            for _ in range(scale.bit_length() - 1):
+                self.emit("ADD R4, R4")
+                self.emit("ADD R5, R5")
+                self.emit("SKIP NC, 1")
+                self.emit("INC R4")
+            return
+
+        # R6:R7 = index, R8:R9 = shifted index, R4:R5 = accumulator.
+        self.emit("MOV R6, R5")
+        self.emit("MOV R7, R4")
+        self.emit("MOV R4, 0")
+        self.emit("MOV R5, 0")
+        self.emit("MOV R8, R6")
+        self.emit("MOV R9, R7")
+        bit = 1
+        while bit <= scale:
+            if scale & bit:
+                self.emit("ADD R5, R8")
+                self.emit("ADC R4, R9")
+            if bit != 1 << (scale.bit_length() - 1):
+                self.emit("ADD R8, R8")
+                self.emit("ADC R9, R9")
+            bit <<= 1
+
+    def compile_flash_struct_addr(
+        self, symbol: VarSymbol, index: ast.Expr, scope: Scope, line: int
+    ) -> None:
+        assert symbol.flash_label is not None
+        index_type = self.compile_expr(index, scope)
+        if not (is_integer(index_type) and index_type.ram_size in (1, 2)):
+            raise NiblickTypeError(
+                f"{location(self.filename, line)}: flash array index must be "
+                "a nibble or char"
+            )
+        self._emit_scaled_index(symbol.type.ram_size, index_type)
+        self.emit_flashptr(symbol.flash_label)
+        self._add_flash_offset_regs()
 
     def compile_flash_addr(self, symbol: VarSymbol, index: ast.Expr, scope: Scope, line: int) -> None:
         assert symbol.flash_label is not None
@@ -5439,6 +6156,19 @@ class Compiler:
                 )
             return symbol.type
         if isinstance(target, ast.Index):
+            if isinstance(target.base, ast.Member):
+                field = self.member_info(target.base, scope)
+                if field.array_len <= 0:
+                    raise NiblickTypeError(
+                        f"{location(self.filename, target.line)}: field "
+                        f"{target.base.field!r} is not an array"
+                    )
+                if self._is_const_struct_write(target.base, scope):
+                    raise NiblickTypeError(
+                        f"{location(self.filename, target.line)}: cannot assign "
+                        "to a const struct field"
+                    )
+                return field.type
             if not isinstance(target.base, ast.Var):
                 raise NiblickTypeError(
                     f"{location(self.filename, target.line)}: only named arrays can be indexed"
@@ -5455,6 +6185,16 @@ class Compiler:
             return symbol.type
         if isinstance(target, ast.Member):
             field = self.member_info(target, scope)
+            if field.array_len > 0:
+                raise NiblickTypeError(
+                    f"{location(self.filename, target.line)}: cannot assign to "
+                    f"array field {target.field!r}"
+                )
+            if self._is_const_struct_write(target, scope):
+                raise NiblickTypeError(
+                    f"{location(self.filename, target.line)}: cannot assign to "
+                    "a const struct field"
+                )
             return field.type
         raise NiblickTypeError(
             f"{location(self.filename, target.line)}: invalid assignment target"
@@ -5498,14 +6238,19 @@ class Compiler:
             self.store_symbol(symbol, line)
             return
         if isinstance(target, ast.Index):
-            assert isinstance(target.base, ast.Var)
-            symbol = self.lookup(target.base.name, scope, target.line)
+            if isinstance(target.base, ast.Member):
+                field = self.member_info(target.base, scope)
+                typ = field.type
+            else:
+                assert isinstance(target.base, ast.Var)
+                symbol = self.lookup(target.base.name, scope, target.line)
+                typ = symbol.type
             mark = self.temp.mark()
             temp_addr = self.temp.alloc(
-                symbol.type.ram_size, "assignment", self.filename, line
+                typ.ram_size, "assignment", self.filename, line
             )
-            self.store_temp(symbol.type, temp_addr)
-            self.store_index_from_temp(target, scope, symbol.type, temp_addr, line)
+            self.store_temp(typ, temp_addr)
+            self.store_index_from_temp(target, scope, typ, temp_addr, line)
             self.temp.reset(mark)
             return
         raise NiblickTypeError(
@@ -5520,6 +6265,55 @@ class Compiler:
         temp_addr: int,
         line: int,
     ) -> None:
+        if isinstance(target.base, ast.Member):
+            field = self.member_info(target.base, scope)
+            if isinstance(target.index, ast.Number):
+                index = int(target.index.value)
+                if index < 0 or index >= field.array_len:
+                    raise NiblickCompileError(
+                        f"{location(self.filename, target.line)}: index {index} "
+                        f"out of bounds for field {target.base.field}"
+                        f"[{field.array_len}]"
+                    )
+                self.compile_member_addr(target.base, scope)
+                offset = index * typ.ram_size
+                if offset:
+                    self.emit(f"MOV R0, {offset & 0xF}")
+                    self.emit("ADD R5, R0")
+                    self.emit("SKIP NC, 1")
+                    self.emit("INC R4")
+                    if offset >> 4:
+                        self.emit(f"MOV R0, {(offset >> 4) & 0xF}")
+                        self.emit("ADD R4, R0")
+            else:
+                mark = self.temp.mark()
+                base_slot = self.temp.alloc(
+                    2, "array base", self.filename, target.line
+                )
+                self.compile_member_addr(target.base, scope)
+                self.emit("MOV R0, R4")
+                self.emit(f"MOV [{base_slot}], R0")
+                self.emit("MOV R0, R5")
+                self.emit(f"MOV [{base_slot + 1}], R0")
+                index_type = self.compile_expr(target.index, scope)
+                if not (
+                    is_integer(index_type) and index_type.ram_size in (1, 2)
+                ):
+                    raise NiblickTypeError(
+                        f"{location(self.filename, target.line)}: array index "
+                        "must be a nibble or char"
+                    )
+                self._emit_scaled_index(typ.ram_size, index_type)
+                self.emit(f"MOV R0, [{base_slot + 1}]")
+                self.emit("ADD R5, R0")
+                self.emit("SKIP NC, 1")
+                self.emit("INC R4")
+                self.emit(f"MOV R0, [{base_slot}]")
+                self.emit("ADD R4, R0")
+                self.temp.reset(mark)
+            self._store_temp_indirect(typ, temp_addr, line)
+            return
+
         assert isinstance(target.base, ast.Var)
         symbol = self.lookup(target.base.name, scope, target.line)
         if isinstance(target.index, ast.Number) and symbol.address is not None:
@@ -5534,6 +6328,9 @@ class Compiler:
             return
 
         self.compile_ram_addr(symbol, target.index, scope, target.line)
+        self._store_temp_indirect(typ, temp_addr, line)
+
+    def _store_temp_indirect(self, typ: Type, temp_addr: int, line: int) -> None:
         if is_integer(typ) and typ.ram_size == 16:
             self._emit_qword_store_indirect(temp_addr)
             return
@@ -6365,6 +7162,14 @@ class Compiler:
                 )
             return symbol.type
         if isinstance(expr, ast.Index):
+            if isinstance(expr.base, ast.Member):
+                field = self.member_info(expr.base, scope)
+                if field.array_len <= 0:
+                    raise NiblickTypeError(
+                        f"{location(self.filename, expr.line)}: field "
+                        f"{expr.base.field!r} is not an array"
+                    )
+                return field.type
             if not isinstance(expr.base, ast.Var):
                 raise NiblickTypeError(
                     f"{location(self.filename, expr.line)}: only named arrays can be indexed"
@@ -6376,7 +7181,13 @@ class Compiler:
                 )
             return symbol.type
         if isinstance(expr, ast.Member):
-            return self.member_info(expr, scope).type
+            field = self.member_info(expr, scope)
+            if field.array_len > 0:
+                raise NiblickTypeError(
+                    f"{location(self.filename, expr.line)}: field {expr.field!r} "
+                    "is an array and requires an index"
+                )
+            return field.type
         if isinstance(expr, ast.Unary):
             if expr.op == "&":
                 return U8
@@ -6496,7 +7307,10 @@ class Compiler:
         self.emit("__nib_flash_data:")
         for item in self.flash:
             self.emit(f"{item.label}:")
-            if item.type.ram_size == 1:
+            if isinstance(item.type, StructType):
+                for value in item.values:
+                    self.emit(f"NIBBLE 0x{value & 0xF:X}")
+            elif item.type.ram_size == 1:
                 for value in item.values:
                     self.emit(f"NIBBLE 0x{value & 0xF:X}")
             elif item.type.ram_size == 2:

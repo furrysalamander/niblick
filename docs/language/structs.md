@@ -1,6 +1,6 @@
 # Structs
 
-Niblick supports RAM-resident structs with scalar fields.
+A struct declares an aggregate of scalar, array, or nested-struct fields.
 
 ```c
 struct Point {
@@ -27,18 +27,30 @@ direct field access:
 make_point().x
 ```
 
-Scalar fields can be initialized in declaration order. Missing fields are
-zero-initialized.
+Fields can be initialized in declaration order. Missing fields and array
+elements are zero-initialized.
 
 ```c
 Point origin = { 3, 4 };
 ```
 
+Nested structs and array fields use nested braces:
+
+```c
+struct Packet {
+    nibble header;
+    char payload[4];
+    Point point;
+};
+
+Packet packet = { 1, { 'A', 'B' }, { 3, 4 } };
+```
+
 ## Layout
 
 Fields are laid out in declaration order, low nibble first. Each field starts
-immediately after the previous field. The total size is padded to the next power
-of two.
+immediately after the previous field. Struct size is the exact sum of the field
+sizes; there is no trailing padding.
 
 ```c
 struct Mixed {
@@ -48,34 +60,53 @@ struct Mixed {
 };
 ```
 
-`Mixed` uses seven nibbles of fields and is padded to eight nibbles. Padding
-nibbles are unused.
+`Mixed` occupies seven nibbles.
+
+Array fields occupy `length * element size` nibbles. Nested struct fields
+occupy the nested struct's exact size.
+
+```c
+struct Packet {
+    nibble header;
+    char payload[4];
+    Point point;
+};
+```
 
 ## Operations
 
-- struct declarations with scalar fields
+- scalar fields and nested struct fields
 - global and local struct variables
 - arrays of structs
 - field reads and writes
 - `arr[index].field`
+- `obj.array[index]`
+- `obj.inner.field`
 - whole-struct assignment, including array elements
 - struct parameters, copied by value
 - struct return values
-- direct field access on a returned struct, such as `make_point().x`
+- whole-struct `==` and `!=`
+- `const` structs and const struct arrays stored in flash
 - struct fields in `print()` placeholders
 
 ## Limits
 
-Struct fields are scalar. Struct declarations are file-local and must appear
-before use in the same source file. Functions in imported modules can use their
-own structs internally.
+Struct names share one namespace across imported files. A struct must be
+declared before it is used.
 
-See {doc}`limitations` for unsupported aggregate forms.
+Array fields have scalar elements. Arrays of structs inside a struct are
+rejected. Local `const` structs are rejected.
+
+See {doc}`limitations` for remaining constraints.
 
 ## Memory
 
-A struct occupies its padded size in RAM, whether it is a single variable or an
+A struct occupies its exact size in RAM, whether it is a single variable or an
 array element. Struct parameters are copied into the callee's frame. Struct
 returns use a shared result buffer sized to the largest struct in the program.
 Struct size is limited by the 176 usable nibbles of data RAM after globals and
 function frames.
+
+A `const` struct is stored in flash and occupies no RAM. A const struct array
+uses `array_len * struct_size` nibbles of flash. Passing or returning a const
+struct copies the value into RAM.

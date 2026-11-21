@@ -1,6 +1,6 @@
 # Inline assembly
 
-Raw assembly blocks are allowed inside functions:
+Niblick supports raw assembly blocks inside functions:
 
 ```c
 fn main() {

@@ -1,6 +1,6 @@
 # Structs
 
-A struct declares a RAM-resident aggregate with scalar fields.
+Niblick supports RAM-resident structs with scalar fields.
 
 ```c
 struct Point {

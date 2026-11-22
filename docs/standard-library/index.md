@@ -8,9 +8,7 @@ The standard library has three layers:
 | Standard modules | `lib/*.nbl` | `import "lib/<name>.nbl";` |
 | Drivers | `lib/drivers/*.nbl` | Explicit import |
 
-Each module is an ordinary Niblick source file. The compiler removes functions
-and globals that are not reachable, so an unused module contributes no code or
-RAM.
+Each module is a Niblick source file. The compiler's dead code elimination will clean up anything that's not used.
 
 ## Module index
 
@@ -41,8 +39,7 @@ RAM.
 
 ## Public and internal modules
 
-The pages above document the public library. `lib/wide.nbl`,
-`lib/float16.nbl`, and `lib/float32.nbl` are compiler implementation modules.
+`lib/wide.nbl`, `lib/float16.nbl`, and `lib/float32.nbl` aren't included above because they're compiler implementation modules.
 They are loaded automatically when a program uses 64-bit arithmetic or a float
 type. Their interfaces are documented in {doc}`../internals/wide-arithmetic`
 and {doc}`../internals/soft-float`.

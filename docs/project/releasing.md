@@ -20,15 +20,5 @@
    python -m niblick examples/hello.nbl --run
    ```
 
-6. Check the repository history for removed paths, credentials, and personal
-   paths:
-
-   ```bash
-   git log --all --oneline
-   git rev-list --objects --all | grep -E 'epaper_badge|photobooth|tritone|blue_noise|vendor/'
-   git grep -I -n -E 'furrysalamander|/home/mike|password|token|secret' $(git rev-list --all) -- . ':!tests/test_upstream_emulator.py'
-   ```
-
-7. Check the font data license in `lib/font.nbl`.
-8. Push `main` and verify the rendered README, documentation site, and
+6. Push `main` and verify the rendered README, documentation site, and
    dependency URLs.

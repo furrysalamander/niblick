@@ -3,22 +3,12 @@
 Niblick is a compiler for the Niblick language, a statically typed language
 targeting the Hackaday Supercon.6 2022 (Voja4) badge. It emits assembly and a
 `.hex` image for the badge's 12-bit instruction set and includes a headless
-emulator.
+emulator (forked and vendored from the upstream [Supercon 6 Badge Tools](https://github.com/Hack-a-Day/2022-Supercon6-Badge-Tools/) repo)
 
 [Open the live editor](https://furrysalamander.github.io/niblick/) |
-[Read the documentation](https://furrysalamander.github.io/niblick/docs/)
+[Read the docs](https://furrysalamander.github.io/niblick/docs/)
 
-## Target
-
-| Item | Value |
-|---|---|
-| Data width | 4 bits |
-| Code space | 4096 12-bit words |
-| Data RAM | 256 nibbles |
-| General registers | 10 |
-| Hardware call stack | 5 entries |
-| Display | 8x16 LED matrix |
-| Serial | 9600 8N1 UART |
+![Screenshot of the live editor](images/web_compiler.png)
 
 ## Install
 
